@@ -466,14 +466,172 @@ Input (320×320 or 416×416)
 
 ---
 
-## 9. Open Questions for You
+## 9. Open Questions — Design Decisions That Shape Everything
 
-1. **Primary deployment target?** (MCU/Raspberry Pi/Jetson Nano/Mobile/Browser?)
-2. **Target task?** (Detection only, or also segmentation/pose?)
-3. **Dataset?** (COCO, custom domain like medical/aerial/industrial?)
-4. **Input resolution preference?** (224/320/416?)
-5. **Framework preference?** (PyTorch from scratch, or extend Ultralytics?)
-6. **Quantization?** (INT8/FP16 support needed?)
+Each question below directly impacts the architecture, training strategy, and deployment pipeline of our tinyYOLO. I've broken down **why each matters**, the **trade-offs involved**, and **what changes** based on your answer.
+
+---
+
+### Q1. Primary Deployment Target
+
+**Question:** Where will this model ultimately run?
+
+| Target | Compute Budget | Memory | Typical FPS Goal | Architecture Impact |
+|--------|---------------|--------|------------------|-------------------|
+| **MCU** (STM32, ESP32, Arduino) | ≤100 MOPS | ≤512KB RAM | 1–5 FPS | Must use INT8, no attention, ≤0.5M params, no dynamic ops |
+| **Raspberry Pi 4/5** | ~13 GFLOPS (CPU) | 2–8GB | 10–30 FPS | Can use FP32/INT8, moderate backbone, depthwise conv OK |
+| **Jetson Nano/Orin** | 472 GFLOPS (GPU) | 4–8GB | 30–120 FPS | GPU-optimized, can use attention, TensorRT export critical |
+| **Mobile** (Android/iOS) | ~5 TOPS (NPU) | 3–8GB | 30–60 FPS | Must export TFLite/CoreML, channel counts must be NPU-friendly (multiples of 8/16) |
+| **Browser** (WebAssembly/WebGL) | Variable | Limited | 15–30 FPS | ONNX.js or TF.js, no custom ops, must be ≤5MB model file |
+| **Drone/Robotics** | Mixed | Limited | 15–60 FPS | Low power draw matters, latency consistency critical |
+
+> [!IMPORTANT]
+> **Why this matters:** An MCU target means we strip the model to bare bones — no attention, no complex necks, possibly single-scale detection only. A Jetson target lets us keep lightweight attention and multi-scale features. This single choice can change the parameter budget by **10×**.
+
+**Impact on architecture:**
+- **MCU** → We'd need to go below 500K params, use only 3×3/1×1 convs, and design for static memory allocation. Think "MobileNet-v1 backbone + single-scale head."
+- **Mobile NPU** → We can use Ghost modules, depthwise separable convs, and channel-wise attention, but channels must align to hardware tile sizes (8/16/32).
+- **GPU (Jetson)** → We can afford Area Attention (from v12), GELAN blocks, and multi-scale detection — the full blueprint from Section 8.
+
+---
+
+### Q2. Target Task
+
+**Question:** What vision tasks does the model need to perform?
+
+| Task | Head Complexity | Extra Params | Impact on Tiny Model |
+|------|----------------|-------------|---------------------|
+| **Detection only** | Simplest — cls + bbox regression | Baseline | Maximum efficiency, all budget goes to backbone |
+| **+ Instance Segmentation** | Adds mask prediction branch (proto-masks) | +15–25% params | Neck must preserve spatial detail, need higher-res features |
+| **+ Pose Estimation** | Adds keypoint regression head | +10–20% params | Need fine-grained spatial accuracy, higher input resolution helps |
+| **+ Oriented BBox (OBB)** | Adds angle regression | +5–10% params | Useful for aerial/satellite imagery |
+| **+ Classification** | Trivial addition | Minimal | Backbone does the work |
+
+> [!WARNING]
+> **Critical trade-off:** Every additional task steals parameter budget from the backbone. For a 1.5M param budget:
+> - Detection-only → ~1.3M params for backbone/neck, ~0.2M for head
+> - Detection + Segmentation + Pose → ~0.9M for backbone/neck, ~0.6M for heads
+> 
+> This means the backbone becomes **30% weaker** in the multi-task version, directly impacting feature quality for ALL tasks.
+
+**My recommendation:** Start with **detection-only** to maximize backbone quality, then explore adding tasks via task-specific lightweight heads once the base model is validated.
+
+---
+
+### Q3. Training & Evaluation Dataset
+
+**Question:** What data domain will the model primarily operate in?
+
+| Domain | Object Characteristics | Architecture Implications |
+|--------|----------------------|--------------------------|
+| **COCO (general)** | 80 classes, mixed sizes, cluttered scenes | Need multi-scale detection, diverse augmentation |
+| **Medical imaging** | Few classes, tiny anomalies, high precision needed | High resolution critical, recall > precision, may need specialized loss |
+| **Aerial/Satellite** | Small dense objects, oriented, uniform backgrounds | OBB helpful, need P2 (very high-res) detection layer, STAL essential |
+| **Industrial/Manufacturing** | Few defect classes, controlled lighting, texture-based | Can use smaller input, fewer scales, domain-specific augmentation |
+| **Autonomous driving** | Pedestrians/vehicles, varying weather/lighting | Need robustness augmentation, real-time critical, 3D context helps |
+| **Wildlife/Agriculture** | Camouflaged objects, natural backgrounds | Attention mechanisms more valuable, color augmentation critical |
+
+> [!IMPORTANT]
+> **Why this matters deeply:**
+> - **COCO** has objects ranging from 10×10 to 500×500 pixels — our model MUST handle multi-scale. This forces a 3-scale neck (P3/P4/P5) even in a tiny model.
+> - **Medical/Aerial** often has objects at ≤16×16 pixels — we'd need a **P2 detection head** (1/4 resolution), which adds significant compute but is essential for these domains.
+> - **Industrial** often has ≤5 classes with consistent scale — we could simplify to a **single-scale** detector and save 40% of neck compute.
+> 
+> The dataset choice also determines whether **knowledge distillation** is viable (COCO has abundant teacher models) vs. needing **self-supervised pretraining** (niche medical data).
+
+---
+
+### Q4. Input Resolution
+
+**Question:** What input image size should the model process?
+
+| Resolution | Pixels | Compute Scale | Small Object Quality | Use Case Fit |
+|-----------|--------|---------------|---------------------|-------------|
+| **160×160** | 25.6K | 0.06× baseline | Very poor | MCU only, large objects only |
+| **224×224** | 50.2K | 0.12× baseline | Poor | Classification-like, few large objects |
+| **320×320** | 102.4K | 0.25× baseline | Moderate | Balanced edge deployment |
+| **416×416** | 173.1K | 0.42× baseline | Good | Standard tiny YOLO |
+| **640×640** | 409.6K | 1.0× baseline | Best | Standard YOLO (but too heavy for "tiny") |
+
+> [!NOTE]
+> **The math:** FLOPs scale **quadratically** with resolution. Going from 320→640 means **4× more compute**. Our 2.0 GFLOP budget at 640×640 becomes only **0.5 GFLOPs** of effective backbone compute at 320×320.
+> 
+> **The catch:** Reducing resolution directly harms small object detection. A 32×32 pixel object at 640px input becomes just 16×16 at 320px — potentially below the detection threshold.
+
+**Trade-off framework:**
+- If your objects are **≥50px** in the original image → **320×320** is sufficient
+- If you need to detect **15–50px** objects → **416×416** minimum
+- If you need **≤15px** object detection → consider **640×640** with a larger compute budget, or use tiled inference
+
+---
+
+### Q5. Framework & Implementation Approach
+
+**Question:** Build from scratch in PyTorch, or extend the Ultralytics ecosystem?
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| **PyTorch from scratch** | Full control over every layer, easier to innovate on architecture, better for research/papers | Must implement training pipeline, augmentation, export, evaluation from zero. 2–4 weeks extra work. |
+| **Extend Ultralytics** | Battle-tested training loop, built-in augmentation (Mosaic, MixUp), one-line export to 10+ formats, knowledge distillation support, COCO evaluation built-in | Constrained by their module system, custom ops need careful integration, harder to deviate radically from their patterns |
+| **Hybrid** | Use Ultralytics for training/eval/export, but define custom backbone/neck/head modules | Best of both worlds, but requires understanding Ultralytics internals deeply |
+
+> [!TIP]
+> **My recommendation:** The **hybrid approach**. Ultralytics has invested thousands of engineering hours into their training pipeline, augmentation, and export system. We'd define our custom `TinyBackbone`, `TinyNeck`, and `TinyHead` as drop-in modules, then leverage their infrastructure for everything else. This saves weeks of work while maintaining full architectural freedom.
+
+**Impact:**
+- **From scratch** = we also need to implement: data loading, mosaic augmentation, loss functions (CIoU, BCE, DFL-free regression), EMA, learning rate scheduling, mAP evaluation, ONNX/TFLite export pipelines
+- **Ultralytics** = we get all of the above for free, plus compatibility with their CLI (`yolo train`, `yolo val`, `yolo export`)
+
+---
+
+### Q6. Quantization & Precision
+
+**Question:** Does the model need to run in reduced precision?
+
+| Precision | Model Size | Speed Boost | Accuracy Drop | Hardware Support |
+|-----------|-----------|-------------|---------------|-----------------|
+| **FP32** (default) | 1× | Baseline | None | Universal |
+| **FP16** (half) | 0.5× | 1.5–2× on GPU | ≤0.3% mAP | NVIDIA GPU, Apple Neural Engine, modern ARM |
+| **INT8** (quantized) | 0.25× | 2–4× on CPU/NPU | 0.5–2.0% mAP | Edge TPU, most NPUs, ONNX Runtime, TFLite |
+| **INT4** (aggressive) | 0.125× | 3–6× | 2–5% mAP | Limited (some NPUs, research) |
+| **Mixed (FP16+INT8)** | 0.3–0.4× | 2–3× | 0.3–1.0% mAP | TensorRT, CoreML |
+
+> [!WARNING]
+> **Critical design constraint:** If you need INT8, we must design the architecture to be **quantization-friendly** from the start:
+> - Avoid operations that quantize poorly: LayerNorm, Softmax, GELU, certain attention patterns
+> - Prefer: BatchNorm, ReLU/ReLU6/SiLU, standard Conv2d, depthwise Conv2d
+> - Channel counts should be multiples of **8** (for INT8 SIMD alignment)
+> - We'd need **Quantization-Aware Training (QAT)** — not just post-training quantization
+> 
+> This directly rules out or modifies several modules from our blueprint (e.g., Area Attention from v12 quantizes poorly).
+
+**Impact on architecture:**
+- **FP32 only** → We can use any operation freely, including lightweight attention
+- **INT8 required** → Architecture must be "quantization-safe": stick to Conv+BN+ReLU patterns, no attention, Ghost modules are fine, depthwise separable is fine
+- **FP16** → Minimal design constraints, mostly a deployment concern
+
+---
+
+### Summary: How Your Answers Shape the Model
+
+```mermaid
+flowchart LR
+    Q1["Q1: Deploy Target"] --> ARCH["Architecture Complexity"]
+    Q2["Q2: Task Scope"] --> HEAD["Head Design"]
+    Q3["Q3: Dataset"] --> NECK["Neck Scales"]
+    Q4["Q4: Resolution"] --> FLOPS["FLOPs Budget"]
+    Q5["Q5: Framework"] --> DEV["Dev Timeline"]
+    Q6["Q6: Quantization"] --> OPS["Allowed Operations"]
+    
+    ARCH --> FINAL["Final TinyYOLO Design"]
+    HEAD --> FINAL
+    NECK --> FINAL
+    FLOPS --> FINAL
+    DEV --> FINAL
+    OPS --> FINAL
+    
+    style FINAL fill:#66bb6a,color:#fff,stroke:#333
+```
 
 ---
 
