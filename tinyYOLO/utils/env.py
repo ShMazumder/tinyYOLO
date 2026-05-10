@@ -43,9 +43,20 @@ def detect_environment():
             env['gpu_available'] = True
             env['gpu_count'] = torch.cuda.device_count()
             env['gpu_name'] = torch.cuda.get_device_name(0)
-            props = torch.cuda.get_device_properties(0)
-            mem = getattr(props, 'total_memory', None) or getattr(props, 'total_mem', 0)
-            env['gpu_memory_gb'] = round(mem / (1024 ** 3), 1)
+            # Get GPU memory — multiple fallback methods
+            mem = 0
+            try:
+                mem = torch.cuda.mem_get_info(0)[1]  # (free, total)
+            except Exception:
+                try:
+                    props = torch.cuda.get_device_properties(0)
+                    for attr in ('total_memory', 'total_mem', 'totalGlobalMem'):
+                        if hasattr(props, attr):
+                            mem = getattr(props, attr)
+                            break
+                except Exception:
+                    pass
+            env['gpu_memory_gb'] = round(mem / (1024 ** 3), 1) if mem else 0
             env['recommended_device'] = 'cuda:0'
             env['fp16_available'] = True
         elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
