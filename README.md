@@ -121,6 +121,7 @@ python scripts/export.py --weights experiments/results/tinyYOLO-det-std-320/best
 ```
 tinyYOLO/
 ├── README.md                              # This file
+├── report.md                              # Full architectural report with citations
 ├── requirements.txt                       # Python dependencies
 ├── setup.py                               # Package setup (pip install -e .)
 │
@@ -172,7 +173,9 @@ tinyYOLO/
 │   ├── 05_cls_experiments.py
 │   ├── 06_obb_experiments.py
 │   ├── 07_quantization_comparison.py
-│   └── 08_resolution_ablation.py
+│   ├── 08_resolution_ablation.py
+│   ├── 09_metrics_report.py              # Post-training metrics & 12 visualizations
+│   └── 10_full_evaluation.py             # Complete evaluation pipeline (all steps)
 │
 └── experiments/                           # Auto-generated results
     └── results/                           # Per-experiment outputs (JSON, PNG, PT)
@@ -433,6 +436,7 @@ python 01_architecture_visualization.py
 | 07 | `07_quantization_comparison.py` | Compare std vs quantized: params, latency, quantization readiness, disk size | ❌ CPU OK |
 | 08 | `08_resolution_ablation.py` | Resolution sweep: latency/FLOPs/grid analysis across 160–640, cross-task comparison | ❌ CPU OK |
 | 09 | `09_metrics_report.py` | **Full metrics report**: hyperparams, augmentation, P/R/F1, mAP, confusion matrix, accuracy curves, params vs accuracy, cross-experiment comparison | ❌ CPU OK |
+| 10 | `10_full_evaluation.py` | **Complete pipeline**: train std+quantized, resolution ablation, metrics, ONNX export, cross-experiment plots | ✅ GPU recommended |
 
 ---
 
