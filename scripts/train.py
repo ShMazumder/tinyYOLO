@@ -87,36 +87,50 @@ def _download_and_extract(url, dest, name="dataset"):
 
 
 def _download_voc(dest):
-    """Download Pascal VOC dataset in YOLO format."""
+    """Download Pascal VOC dataset in YOLO format using Ultralytics."""
     voc_dir = dest / 'VOC'
     if (voc_dir / 'images' / 'train').exists():
         return  # Already downloaded
 
-    print("  [INFO] Downloading Pascal VOC (YOLO format)...")
+    print("  [INFO] Downloading Pascal VOC (YOLO format) via Ultralytics...")
     try:
-        from ultralytics.utils.downloads import download
-        url = 'https://github.com/ultralytics/assets/releases/download/v0.0.0/VOC.zip'
-        download([url], dir=dest)
-    except Exception:
-        # Manual fallback
-        _download_and_extract(
-            'https://github.com/ultralytics/assets/releases/download/v0.0.0/VOC.zip',
-            dest, 'VOC'
-        )
+        from ultralytics.data.utils import check_det_dataset
+        # Use Ultralytics' built-in VOC.yaml which has correct download logic
+        data_dict = check_det_dataset('VOC.yaml')
+        # Ultralytics may put data in a different location — create symlink if needed
+        ul_train = data_dict.get('train', '')
+        if isinstance(ul_train, list):
+            ul_train = ul_train[0]
+        ul_train = Path(str(ul_train))
 
-    # Verify structure
-    if not (voc_dir / 'images' / 'train').exists():
-        # Some versions extract to datasets/VOC/images/train2012 etc
-        for sub in ['train2012', 'train2007']:
-            alt = voc_dir / 'images' / sub
-            if alt.exists():
-                alt.rename(voc_dir / 'images' / 'train')
-                break
-        for sub in ['val2012', 'val2007']:
-            alt = voc_dir / 'images' / sub
-            if alt.exists():
-                alt.rename(voc_dir / 'images' / 'val')
-                break
+        if ul_train.exists() and not (voc_dir / 'images' / 'train').exists():
+            # Create expected directory structure via symlinks
+            voc_dir.mkdir(parents=True, exist_ok=True)
+            (voc_dir / 'images').mkdir(exist_ok=True)
+            (voc_dir / 'labels').mkdir(exist_ok=True)
+
+            train_img = ul_train
+            val_img = Path(str(data_dict.get('val', '')))
+            train_lbl = Path(str(train_img).replace('images', 'labels'))
+            val_lbl = Path(str(val_img).replace('images', 'labels'))
+
+            for src, dst_name in [(train_img, 'train'), (val_img, 'val')]:
+                dst = voc_dir / 'images' / dst_name
+                if src.exists() and not dst.exists():
+                    dst.symlink_to(src)
+            for src, dst_name in [(train_lbl, 'train'), (val_lbl, 'val')]:
+                dst = voc_dir / 'labels' / dst_name
+                if src.exists() and not dst.exists():
+                    dst.symlink_to(src)
+
+        print(f"  [OK] VOC dataset ready at {voc_dir}")
+        return
+    except Exception as e:
+        print(f"  [WARN] Ultralytics VOC download failed: {e}")
+        print(f"  [INFO] Please download manually:")
+        print(f"         pip install ultralytics")
+        print(f"         python -c \"from ultralytics.data.utils import check_det_dataset; check_det_dataset('VOC.yaml')\"")
+        raise
 
 
 def load_dataset_config(data_name):
@@ -143,8 +157,23 @@ def load_dataset_config(data_name):
 
         # Resolve paths relative to project root
         base = PROJECT_ROOT / cfg.get('path', 'datasets')
-        train_dir = str(base / cfg.get('train', 'images/train'))
-        val_dir = str(base / cfg.get('val', 'images/val'))
+        raw_train = cfg.get('train', 'images/train')
+        raw_val = cfg.get('val', 'images/val')
+
+        # Handle list-type paths (e.g., VOC has multiple train dirs)
+        if isinstance(raw_train, list):
+            train_dirs = [str(base / d) for d in raw_train]
+            train_dir = train_dirs[0]  # Use first for existence check
+        else:
+            train_dirs = [str(base / raw_train)]
+            train_dir = train_dirs[0]
+
+        if isinstance(raw_val, list):
+            val_dirs = [str(base / d) for d in raw_val]
+            val_dir = val_dirs[0]
+        else:
+            val_dirs = [str(base / raw_val)]
+            val_dir = val_dirs[0]
 
         # Check if data exists — try auto-download if not
         if not Path(train_dir).exists():
@@ -152,7 +181,27 @@ def load_dataset_config(data_name):
 
             # Try dataset-specific downloads
             if 'voc' in data_name.lower():
-                _download_voc(PROJECT_ROOT / 'datasets')
+                try:
+                    _download_voc(PROJECT_ROOT / 'datasets')
+                except Exception:
+                    pass
+                # If our expected paths still don't exist, use Ultralytics paths directly
+                if not Path(train_dir).exists():
+                    try:
+                        from ultralytics.data.utils import check_det_dataset
+                        data_dict = check_det_dataset('VOC.yaml')
+                        # Return Ultralytics paths with our nc/names
+                        ul_train = data_dict.get('train', '')
+                        if isinstance(ul_train, list):
+                            ul_train = ul_train[0]
+                        return {
+                            'train': str(ul_train),
+                            'val': str(data_dict.get('val', '')),
+                            'nc': cfg.get('nc', 20),
+                            'names': cfg.get('names', data_dict.get('names', {})),
+                        }
+                    except Exception:
+                        pass
             elif 'coco128' in data_name.lower():
                 _download_and_extract(
                     'https://github.com/ultralytics/assets/releases/download/v0.0.0/coco128.zip',
@@ -179,8 +228,8 @@ def load_dataset_config(data_name):
                 raise FileNotFoundError(f"Dataset not found: {train_dir}")
 
         return {
-            'train': train_dir,
-            'val': val_dir,
+            'train': train_dirs if len(train_dirs) > 1 else train_dir,
+            'val': val_dirs if len(val_dirs) > 1 else val_dir,
             'nc': cfg.get('nc', 80),
             'names': cfg.get('names', {i: f'cls_{i}' for i in range(cfg.get('nc', 80))}),
         }
@@ -223,24 +272,32 @@ def load_dataset_config(data_name):
 
 class SimpleDetectionDataset(Dataset):
     """
-    Loads images + YOLO-format labels from a directory.
-    Works with COCO128 standard layout.
+    Loads images + YOLO-format labels from one or more directories.
+    Works with COCO128, VOC, COCO, and custom YOLO-format datasets.
     """
 
     def __init__(self, img_dir, imgsz=320, augment=True):
-        self.img_dir = Path(img_dir)
-        self.label_dir = Path(str(img_dir).replace('images', 'labels'))
+        # Support single path or list of paths (e.g., VOC train2007 + train2012)
+        if isinstance(img_dir, (list, tuple)):
+            img_dirs = [Path(d) for d in img_dir]
+        else:
+            img_dirs = [Path(img_dir)]
+
+        self.img_dirs = img_dirs
         self.imgsz = imgsz
         self.augment = augment
 
-        # Find all images
-        self.img_files = sorted([
-            f for f in self.img_dir.iterdir()
-            if f.suffix.lower() in ('.jpg', '.jpeg', '.png', '.bmp')
-        ])
+        # Find all images across all directories
+        self.img_files = []
+        for d in img_dirs:
+            if d.exists():
+                self.img_files.extend(sorted([
+                    f for f in d.iterdir()
+                    if f.suffix.lower() in ('.jpg', '.jpeg', '.png', '.bmp')
+                ]))
 
         if not self.img_files:
-            raise FileNotFoundError(f"No images found in {self.img_dir}")
+            raise FileNotFoundError(f"No images found in {img_dirs}")
 
         # Transforms — YOLO-standard augmentation pipeline
         if augment:
@@ -278,7 +335,8 @@ class SimpleDetectionDataset(Dataset):
         img_tensor = self.transform(img)  # [3, imgsz, imgsz]
 
         # Load labels (YOLO format: class cx cy w h)
-        label_path = self.label_dir / (img_path.stem + '.txt')
+        # Derive label dir from image path (images/ → labels/)
+        label_path = Path(str(img_path).replace('/images/', '/labels/')).with_suffix('.txt')
         labels = []
         if label_path.exists():
             with open(label_path) as f:
@@ -488,8 +546,19 @@ def train_single(args, imgsz, env):
     print(f"  Task: {args.task} | Variant: {args.variant} | ImgSz: {imgsz}")
     print(f"{'='*60}")
 
-    # Build model
-    nc = 80 if args.task not in ('pose',) else 1
+    # Settings
+    epochs = 5 if args.quick else args.epochs
+    batch = args.batch or train_cfg['batch']
+    device = args.device or train_cfg['device']
+    data_name = args.data or TASK_DATA_MAP.get(args.task, 'coco128.yaml')
+
+    # --- Load dataset config first (to get nc) ---
+    print(f"\n  Loading dataset...")
+    data_dict = load_dataset_config(data_name)
+    train_dir = data_dict.get('train', '')
+    nc = data_dict.get('nc', 80 if args.task not in ('pose',) else 1)
+
+    # Build model with correct nc for this dataset
     model, model_info = build_model(task=args.task, variant=args.variant, nc=nc)
 
     params = count_parameters(model)
@@ -501,32 +570,24 @@ def train_single(args, imgsz, env):
     except Exception:
         pass
 
-    # Settings
-    epochs = 5 if args.quick else args.epochs
-    batch = args.batch or train_cfg['batch']
-    device = args.device or train_cfg['device']
-    data_name = args.data or TASK_DATA_MAP.get(args.task, 'coco128.yaml')
-
     print(f"  Device:     {device}")
     print(f"  Batch:      {batch}")
     print(f"  Epochs:     {epochs}")
-    print(f"  Data:       {data_name}")
+    print(f"  Data:       {data_name} (nc={nc})")
 
     # Results directory
     results_dir = PROJECT_ROOT / 'experiments' / 'results' / model_name
     results_dir.mkdir(parents=True, exist_ok=True)
 
-    # --- Download and load dataset ---
-    print(f"\n  Loading dataset...")
-    data_dict = load_dataset_config(data_name)
-    train_dir = data_dict.get('train', '')
-
-    # Handle Ultralytics path format (may return Path or str)
+    # Display train path(s)
     if isinstance(train_dir, (list, tuple)):
-        train_dir = train_dir[0]
-    train_dir = str(train_dir)
-    print(f"  Train images: {train_dir}")
+        print(f"  Train images: {len(train_dir)} directories")
+        for d in train_dir:
+            print(f"    - {d}")
+    else:
+        print(f"  Train images: {train_dir}")
 
+    # SimpleDetectionDataset handles both single path and list of paths
     dataset = SimpleDetectionDataset(train_dir, imgsz=imgsz, augment=True)
     dataloader = DataLoader(
         dataset, batch_size=batch, shuffle=True,

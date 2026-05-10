@@ -1,11 +1,35 @@
-# TinyYOLO Dataset Configuration — Pascal VOC 2012
-# ================================================
-# 20 classes, ~16.5K images — ideal for 0.23M parameter models
-# Download: automatic via Ultralytics or manual
+# TinyYOLO Dataset Configuration — Pascal VOC 2007+2012
+# ======================================================
+# 20 classes, ~16.5K train + ~5K val images
+# Download: automatic via Ultralytics built-in VOC.yaml
+#
+# Ultralytics VOC structure after download:
+#   datasets/VOC/
+#   ├── images/
+#   │   ├── train2012/    (5717 images)
+#   │   ├── train2007/    (2501 images)
+#   │   ├── val2012/      (5823 images)
+#   │   ├── val2007/      (2510 images)
+#   │   └── test2007/     (4952 images)
+#   └── labels/
+#       ├── train2012/
+#       ├── train2007/
+#       ├── val2012/
+#       ├── val2007/
+#       └── test2007/
 
 path: datasets/VOC
-train: images/train
-val: images/val
+
+# Train: all 2007+2012 train+val images (~16.5K)
+train:
+  - images/train2012
+  - images/train2007
+  - images/val2012
+  - images/val2007
+
+# Val: 2007 test set (~5K)
+val:
+  - images/test2007
 
 # Number of classes
 nc: 20
@@ -32,15 +56,3 @@ names:
   17: sofa
   18: train
   19: tvmonitor
-
-# Auto-download
-download: |
-  from ultralytics.utils.downloads import download
-  from pathlib import Path
-  import os
-
-  # Download VOC2012
-  dir = Path('datasets/VOC')
-  url = 'https://github.com/ultralytics/assets/releases/download/v0.0.0/VOC.zip'
-  if not dir.exists():
-      download(url, dir=dir.parent)
