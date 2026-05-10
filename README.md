@@ -374,9 +374,41 @@ python scripts/train.py --task seg --variant standard --imgsz 224,320,416 --swee
     per_class_report.txt           — Per-class P/R/F1/AP breakdown
 ```
 
-> **Note:** Metrics are deliberately low because tinyYOLO uses only **0.23M parameters**
-> (vs YOLOv8n's 3.2M) on only 128 training images. Best mAP@50 reached **0.1701** during
-> training. This framework is designed for edge deployment where model size < 1M is the priority.
+> **Note:** Metrics are deliberately modest because tinyYOLO uses only **0.23M parameters**
+> (vs YOLOv8n's 3.2M) on only 128 training images. Best mAP@50 reached **0.353** (quantized)
+> and **0.328** (standard@416) across 8 validated runs on Colab & Kaggle.
+> This framework is designed for edge deployment where model size < 1MB is the priority.
+
+#### Cross-Platform Results Summary (8 runs, COCO128, Tesla T4)
+
+| Variant | Resolution | Best mAP@50 | ONNX Size | FPS (T4) |
+|---------|-----------|-------------|-----------|----------|
+| Standard | 320×320 | 0.212 | 0.6 MB | 30.5 |
+| **Standard** | **416×416** | **0.328** | — | 18.3 |
+| Standard | 640×640 | 0.251 | — | 13.2 |
+| **Quantized** | **320×320** | **0.353** | < 0.6 MB | 34.5 |
+
+#### Resolution Ablation (Standard variant, 50 epochs)
+
+| Resolution | GFLOPs | Best mAP@50 | Predictions | Finding |
+|-----------|--------|-------------|-------------|--------|
+| 160×160 | 0.04 | 0.000 | 0 | Too small |
+| 224×224 | 0.07 | 0.000 | 0 | Too small |
+| 320×320 | 0.15 | 0.212 | 1322 | Baseline |
+| **416×416** | **0.25** | **0.328** | **311** | **🏆 Optimal** |
+| 640×640 | 0.59 | 0.251 | 16 | Diminishing returns |
+
+#### Latency Benchmarks (Tesla T4, batch=1)
+
+| ImgSz | Standard (ms / FPS) | Quantized (ms / FPS) |
+|-------|--------------------|-----------------------|
+| 160 | 19.4 / 51.6 | 18.9 / 52.9 |
+| 224 | 25.7 / 38.9 | 22.2 / 45.0 |
+| 320 | 32.8 / 30.5 | 29.0 / 34.5 |
+| 416 | 54.5 / 18.3 | 39.6 / 25.2 |
+| 640 | 75.9 / 13.2 | 72.6 / 13.8 |
+
+> Quantized variant is **~12% faster** on average due to ReLU6 vs SiLU.
 
 ### `scripts/benchmark_models.py` — Benchmarking
 
@@ -610,13 +642,20 @@ done
 ### Phase 6: Export (after training)
 
 ```bash
-# Export best detection model
-python scripts/export.py --weights experiments/results/tinyYOLO-det-std-320/model_init.pt \
+# Export best detection model to ONNX (produces ~0.6 MB file)
+python scripts/export.py --weights experiments/results/tinyYOLO-det-std-320/best.pt \
   --task det --variant standard --imgsz 320 --formats onnx,torchscript
 
 # Export quantized model
-python scripts/export.py --weights experiments/results/tinyYOLO-det-q-320/model_init.pt \
+python scripts/export.py --weights experiments/results/tinyYOLO-det-q-320/best.pt \
   --task det --variant quantized --imgsz 320 --formats onnx --int8
+```
+
+### Phase 7: Full Automated Pipeline
+
+```bash
+# Run everything end-to-end (train → ablation → metrics → export → benchmark)
+python notebooks/10_full_evaluation.py
 ```
 
 ---
