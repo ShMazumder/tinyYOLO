@@ -5,13 +5,15 @@
 # per-class breakdown, accuracy curves, loss curves, and comparisons.
 
 # %% Setup
-import sys, json
-sys.path.insert(0, '..')
+import sys, json, os
+from pathlib import Path
+_SCRIPT_DIR = Path(__file__).resolve().parent if '__file__' in dir() else Path('.')
+_PROJECT_ROOT = _SCRIPT_DIR.parent if _SCRIPT_DIR.name == 'notebooks' else _SCRIPT_DIR
+sys.path.insert(0, str(_PROJECT_ROOT))
 import numpy as np
 import matplotlib.pyplot as plt
-from pathlib import Path
 
-RESULTS_BASE = Path('../experiments/results')
+RESULTS_BASE = _PROJECT_ROOT / 'experiments' / 'results'
 
 # %% [markdown]
 # ## 1. Load Experiment Results
