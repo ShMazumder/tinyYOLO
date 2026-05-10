@@ -1,0 +1,32 @@
+# TinyYOLO Dataset Configuration — Custom Dataset Template
+# =========================================================
+# Copy this file and modify for your own dataset.
+# See README.md > "Custom Dataset Guide" for full instructions.
+#
+# Required directory structure:
+#   datasets/my_dataset/
+#   ├── images/
+#   │   ├── train/          # Training images (.jpg, .png)
+#   │   └── val/            # Validation images (.jpg, .png)
+#   └── labels/
+#       ├── train/          # YOLO-format labels (.txt)
+#       └── val/            # YOLO-format labels (.txt)
+#
+# Label format (one .txt per image, same filename):
+#   <class_id> <x_center> <y_center> <width> <height>
+#   All values normalized to [0, 1] relative to image dimensions.
+#   Example: 0 0.5 0.5 0.3 0.4
+#   (class 0, centered, 30% width, 40% height)
+
+path: datasets/my_dataset
+train: images/train
+val: images/val
+
+# Number of classes — MUST match your label class IDs
+nc: 3
+
+# Class names — one per class, indexed from 0
+names:
+  0: class_a
+  1: class_b
+  2: class_c

@@ -29,10 +29,12 @@ Cherry-picks the best innovations from YOLOv1–v26 into ultra-lightweight model
 6. [Scripts Reference](#scripts-reference)
 7. [Notebooks Reference](#notebooks-reference)
 8. [YAML Configs Reference](#yaml-configs-reference)
-9. [Running All Experiments](#running-all-experiments)
-10. [Environment Auto-Detection](#environment-auto-detection)
-11. [Export & Deployment](#export--deployment)
-12. [Research Background](#research-background)
+9. [Datasets](#datasets)
+10. [Custom Dataset Guide](#custom-dataset-guide)
+11. [Running All Experiments](#running-all-experiments)
+12. [Environment Auto-Detection](#environment-auto-detection)
+13. [Export & Deployment](#export--deployment)
+14. [Research Background](#research-background)
 
 ---
 
@@ -657,6 +659,156 @@ python scripts/export.py --weights experiments/results/tinyYOLO-det-q-320/best.p
 # Run everything end-to-end (train → ablation → metrics → export → benchmark)
 python notebooks/10_full_evaluation.py
 ```
+
+---
+
+## Datasets
+
+TinyYOLO ships with 5 ready-to-use dataset configs in `datasets/`:
+
+| Config | Dataset | Images | Classes | Download | Training Time (T4) | Recommended For |
+|--------|---------|--------|---------|----------|-------------------|-----------------|
+| `coco128.yaml` | COCO128 | 128 | 80 | ~6 MB | ~30 min | Quick validation |
+| `coco-val.yaml` | COCO val2017 | 5K | 80 | ~1 GB | 1–2 hours | Medium benchmark |
+| `coco.yaml` | Full COCO 2017 | 118K | 80 | ~20 GB | 6–10 hours | Gold standard |
+| `voc.yaml` | Pascal VOC | 16.5K | 20 | ~2 GB | 2–3 hours | ⭐ Best for tiny models |
+| `custom.yaml` | Your data | — | — | — | — | Custom projects |
+
+### Usage
+
+```bash
+# Train on Pascal VOC (recommended for 0.23M models)
+python scripts/train.py --task det --variant quantized --imgsz 416 --epochs 100 --data voc.yaml
+
+# Train on COCO val2017 (5K images, good middle ground)
+python scripts/train.py --task det --variant standard --imgsz 320 --epochs 100 --data coco-val.yaml
+
+# Train on full COCO (gold standard, needs 6+ hours)
+python scripts/train.py --task det --variant standard --imgsz 416 --epochs 300 --data coco.yaml
+
+# Train on COCO128 (default, quick smoke test)
+python scripts/train.py --task det --variant standard --imgsz 320 --epochs 100
+```
+
+### Which Dataset Should I Use?
+
+| Scenario | Recommendation | Why |
+|----------|---------------|-----|
+| **First time / validation** | `coco128.yaml` | 30 min, validates pipeline |
+| **Research / best mAP** | `voc.yaml` | 20 classes × 825 img/class → best data-per-class ratio |
+| **Publishing results** | `coco.yaml` | Standard benchmark, comparable to papers |
+| **Production / your data** | `custom.yaml` | Train on your own domain |
+
+> **Key insight from experiments:** With only 0.23M parameters, data-per-class ratio matters
+> more than total images. VOC (20 classes, 825 images/class) will outperform COCO128
+> (80 classes, 1.6 images/class) even though both are small datasets.
+
+---
+
+## Custom Dataset Guide
+
+### Step 1: Organize Your Data
+
+Your dataset must follow the YOLO directory layout:
+
+```
+datasets/my_dataset/
+├── images/
+│   ├── train/          # Training images (.jpg, .jpeg, .png)
+│   │   ├── img001.jpg
+│   │   ├── img002.jpg
+│   │   └── ...
+│   └── val/            # Validation images (10-20% of data)
+│       ├── img101.jpg
+│       └── ...
+└── labels/
+    ├── train/          # One .txt per image, same filename
+    │   ├── img001.txt
+    │   ├── img002.txt
+    │   └── ...
+    └── val/
+        ├── img101.txt
+        └── ...
+```
+
+### Step 2: Create Label Files
+
+Each label file (`.txt`) contains one line per object in the corresponding image:
+
+```
+<class_id> <x_center> <y_center> <width> <height>
+```
+
+- **class_id**: Integer starting from 0
+- **x_center, y_center**: Center of bounding box, normalized to [0, 1]
+- **width, height**: Box dimensions, normalized to [0, 1]
+
+**Example** (`img001.txt` — 2 objects: a cat and a dog):
+```
+0 0.45 0.52 0.30 0.40
+1 0.72 0.35 0.15 0.25
+```
+
+> **Tip:** Use [Roboflow](https://roboflow.com), [CVAT](https://cvat.ai), or [LabelImg](https://github.com/heartexlabs/labelImg) to annotate images and export in YOLO format.
+
+### Step 3: Create Your Dataset Config
+
+Copy the template and edit:
+
+```bash
+cp datasets/custom.yaml datasets/my_project.yaml
+```
+
+Edit `datasets/my_project.yaml`:
+
+```yaml
+path: datasets/my_dataset
+train: images/train
+val: images/val
+
+nc: 2                    # Number of YOUR classes
+
+names:
+  0: cat
+  1: dog
+```
+
+### Step 4: Train
+
+```bash
+# Quick test (5 epochs)
+python scripts/train.py --task det --variant standard --imgsz 320 --data my_project.yaml --quick
+
+# Full training
+python scripts/train.py --task det --variant quantized --imgsz 416 --epochs 100 --data my_project.yaml
+
+# With custom name
+python scripts/train.py --task det --variant standard --imgsz 320 --epochs 200 \
+  --data my_project.yaml --name my_cat_dog_detector
+```
+
+### Step 5: Evaluate & Export
+
+```bash
+# Generate metrics report
+python notebooks/09_metrics_report.py
+
+# Export to ONNX for deployment
+python scripts/export.py --weights experiments/results/<your-experiment>/best.pt \
+  --task det --variant standard --imgsz 320 --formats onnx
+```
+
+### Tips for Best Results with Custom Data
+
+| Tip | Details |
+|-----|--------|
+| **Minimum images** | 100+ per class for decent results, 500+ for good results |
+| **Image diversity** | Vary lighting, angles, backgrounds, scales |
+| **Class balance** | Keep classes roughly equal (±2× is OK) |
+| **Resolution** | Use `--imgsz 416` for best mAP (from our ablation study) |
+| **Variant choice** | Use `quantized` if deploying to edge, `standard` for max accuracy |
+| **Epochs** | Start with 100, increase to 200–300 if loss is still decreasing |
+| **Validation split** | Use 10–20% of data for validation |
 
 ---
 

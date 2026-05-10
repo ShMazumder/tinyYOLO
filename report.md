@@ -622,7 +622,55 @@ All runs: COCO128 (128 images, 80 classes), Tesla T4, 100 epochs, CIoU loss.
 
 ---
 
-## 7. References
+## 7. Datasets & Scaling Strategy
+
+### 7.1 Supported Datasets
+
+| Dataset | Config | Images | Classes | Img/Class | Training (T4) |
+|---------|--------|--------|---------|-----------|---------------|
+| COCO128 | `coco128.yaml` | 128 | 80 | 1.6 | ~30 min |
+| COCO val2017 | `coco-val.yaml` | 5K | 80 | 62 | 1–2 hours |
+| Full COCO | `coco.yaml` | 118K | 80 | 1475 | 6–10 hours |
+| **Pascal VOC** | `voc.yaml` | **16.5K** | **20** | **825** | **2–3 hours** |
+| Custom | `custom.yaml` | — | — | — | — |
+
+### 7.2 Why VOC is Optimal for Tiny Models
+
+With 0.23M parameters, the bottleneck is **data-per-class ratio**, not total dataset size:
+
+| Dataset | Img/Class | Best mAP@50 (predicted) | Status |
+|---------|-----------|------------------------|--------|
+| COCO128 | 1.6 | 0.353 (measured) | ✅ Validated |
+| VOC | 825 | 15–25% (expected) | ⬜ Pending |
+| Full COCO | 1475 | 5–15% (expected) | ⬜ Pending |
+
+> **Note:** Full COCO mAP will be lower than VOC despite more data, because 80 classes is too many for a 0.23M model to distinguish. The 20-class VOC benchmark gives the model enough capacity per class to learn meaningful features.
+
+### 7.3 Custom Dataset Support
+
+TinyYOLO supports any YOLO-format dataset. Create a YAML config pointing to your data:
+
+```yaml
+# datasets/my_project.yaml
+path: datasets/my_dataset
+train: images/train
+val: images/val
+nc: 3
+names:
+  0: cat
+  1: dog
+  2: bird
+```
+
+```bash
+python scripts/train.py --task det --variant quantized --imgsz 416 --epochs 100 --data my_project.yaml
+```
+
+See `datasets/custom.yaml` for the full template with annotation format documentation.
+
+---
+
+## 8. References
 
 [1] K. Han et al., "**GhostNet: More Features from Cheap Operations**," *CVPR*, 2020. — Ghost Convolution backbone.
 
@@ -652,6 +700,9 @@ All runs: COCO128 (128 images, 80 classes), Tesla T4, 100 epochs, CIoU loss.
 
 [14] M. Sandler et al., "**MobileNetV2: Inverted Residuals and Linear Bottlenecks**," *CVPR*, 2018. — ReLU6 for INT8.
 
+[15] M. Everingham et al., "**The Pascal Visual Object Classes (VOC) Challenge**," *IJCV*, 2010. — VOC benchmark.
+
 ---
 
 *Report generated for tinyYOLO v2 — CIoU Loss Edition | Last updated: 2026-05-10*
+

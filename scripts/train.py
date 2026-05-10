@@ -69,22 +69,86 @@ def parse_args():
 
 
 # ---------------------------------------------------------------------------
-# COCO128 Dataset Loader (works with Ultralytics data download)
+# Dataset Loader — supports COCO128, VOC, COCO, and custom datasets
 # ---------------------------------------------------------------------------
 
-def download_coco128():
-    """Download COCO128 dataset using Ultralytics."""
+def load_dataset_config(data_name):
+    """
+    Load dataset from a YAML config or Ultralytics built-in name.
+
+    Supports:
+      - Local YAML:       datasets/voc.yaml, datasets/custom.yaml
+      - Built-in names:   coco128.yaml, coco.yaml, VOC.yaml
+      - Absolute paths:   /path/to/my_data.yaml
+
+    Returns dict with keys: train, val, nc, names
+    """
+    import yaml
+
+    # 1. Check local datasets/ folder first
+    local_yaml = PROJECT_ROOT / 'datasets' / data_name
+    if not str(data_name).endswith('.yaml'):
+        local_yaml = PROJECT_ROOT / 'datasets' / f'{data_name}.yaml'
+
+    if local_yaml.exists():
+        with open(local_yaml) as f:
+            cfg = yaml.safe_load(f)
+
+        # Resolve paths relative to project root
+        base = PROJECT_ROOT / cfg.get('path', 'datasets')
+        train_dir = str(base / cfg.get('train', 'images/train'))
+        val_dir = str(base / cfg.get('val', 'images/val'))
+
+        # Check if data exists, try Ultralytics download if not
+        if not Path(train_dir).exists():
+            print(f"  [INFO] Dataset not found at {train_dir}")
+            try:
+                from ultralytics.data.utils import check_det_dataset
+                builtin_name = data_name if data_name.endswith('.yaml') else f'{data_name}.yaml'
+                data_dict = check_det_dataset(builtin_name)
+                return data_dict
+            except Exception:
+                print(f"  [WARN] Auto-download failed. Please download manually.")
+                print(f"  [INFO] Expected layout:")
+                print(f"         {base}/")
+                print(f"         ├── images/train/  (or images/train2017/)")
+                print(f"         ├── images/val/")
+                print(f"         ├── labels/train/")
+                print(f"         └── labels/val/")
+                raise FileNotFoundError(f"Dataset not found: {train_dir}")
+
+        return {
+            'train': train_dir,
+            'val': val_dir,
+            'nc': cfg.get('nc', 80),
+            'names': cfg.get('names', {i: f'cls_{i}' for i in range(cfg.get('nc', 80))}),
+        }
+
+    # 2. Try absolute path
+    if Path(data_name).exists():
+        with open(data_name) as f:
+            cfg = yaml.safe_load(f)
+        base = Path(cfg.get('path', '.')).resolve()
+        return {
+            'train': str(base / cfg.get('train', 'images/train')),
+            'val': str(base / cfg.get('val', 'images/val')),
+            'nc': cfg.get('nc', 80),
+            'names': cfg.get('names', {}),
+        }
+
+    # 3. Fallback: Ultralytics built-in download
     try:
         from ultralytics.data.utils import check_det_dataset
-        data_dict = check_det_dataset('coco128.yaml')
+        data_dict = check_det_dataset(data_name)
         return data_dict
     except Exception as e:
         print(f"  [WARN] Ultralytics download failed: {e}")
-        print(f"  [INFO] Attempting manual download...")
-        # Manual fallback
+
+    # 4. Manual COCO128 fallback
+    if 'coco128' in data_name:
         import urllib.request, zipfile
         url = "https://github.com/ultralytics/assets/releases/download/v0.0.0/coco128.zip"
-        dest = Path("datasets")
+        dest = PROJECT_ROOT / "datasets"
         dest.mkdir(exist_ok=True)
         zip_path = dest / "coco128.zip"
         if not (dest / "coco128").exists():
@@ -95,7 +159,10 @@ def download_coco128():
             zip_path.unlink()
         return {'train': str(dest / 'coco128' / 'images' / 'train2017'),
                 'val': str(dest / 'coco128' / 'images' / 'train2017'),
-                'nc': 80, 'names': {i: f'class_{i}' for i in range(80)}}
+                'nc': 80, 'names': {i: f'cls_{i}' for i in range(80)}}
+
+    raise FileNotFoundError(f"Dataset config not found: {data_name}\n"
+                           f"  Tried: {local_yaml}, Ultralytics built-in, manual fallback")
 
 
 class SimpleDetectionDataset(Dataset):
@@ -395,7 +462,7 @@ def train_single(args, imgsz, env):
 
     # --- Download and load dataset ---
     print(f"\n  Loading dataset...")
-    data_dict = download_coco128()
+    data_dict = load_dataset_config(data_name)
     train_dir = data_dict.get('train', '')
 
     # Handle Ultralytics path format (may return Path or str)
