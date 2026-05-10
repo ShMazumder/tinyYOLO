@@ -43,7 +43,8 @@ def detect_environment():
             env['gpu_available'] = True
             env['gpu_count'] = torch.cuda.device_count()
             env['gpu_name'] = torch.cuda.get_device_name(0)
-            mem = torch.cuda.get_device_properties(0).total_mem
+            props = torch.cuda.get_device_properties(0)
+            mem = getattr(props, 'total_memory', None) or getattr(props, 'total_mem', 0)
             env['gpu_memory_gb'] = round(mem / (1024 ** 3), 1)
             env['recommended_device'] = 'cuda:0'
             env['fp16_available'] = True
