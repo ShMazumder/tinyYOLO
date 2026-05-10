@@ -433,6 +433,65 @@ Where:
 | RandomHorizontalFlip | p=0.5 | Mirror invariance |
 | RandomPerspective | distortion=0.2, p=0.3 | Viewpoint robustness |
 
+### 5.4 YAML Configuration Structure
+
+All 10 model configs follow a unified structure with v2 training settings:
+
+```yaml
+# Example: configs/standard/tinyYOLO-det.yaml
+task: det
+variant: standard
+nc: 80
+
+backbone:
+  channels: [16, 24, 40, 80, 160]
+  depths: [1, 1, 2, 3, 2]
+  attention: spatial          # 'spatial' (std) or 'eca' (quantized)
+
+neck:
+  type: LitePAN
+  out_channel: 64
+
+head:
+  type: TinyDetect
+  reg_max: 0                  # No DFL — direct regression
+
+loss:
+  type: CIoU+BCE              # NEW in v2
+  box_weight: 2.0
+  cls_weight: 1.0
+  obj_weight: 1.0
+
+batchnorm:                    # NEW in v2
+  eps: 0.001                  # YOLO-standard
+  momentum: 0.03
+
+training:
+  optimizer: AdamW
+  lr0: 0.001
+  weight_decay: 0.0001        # Changed from 0.01
+  weight_decay_no_bias: true  # NEW in v2
+  scheduler: cosine
+
+augmentation:
+  fliplr: 0.5
+  grayscale: 0.1              # NEW in v2
+  perspective: 0.2            # NEW in v2
+```
+
+| Config | Task | Loss | Attention | Epochs |
+|--------|------|------|-----------|--------|
+| `tinyYOLO-det.yaml` | Detection | CIoU+BCE | spatial+SE | 100 |
+| `tinyYOLO-seg.yaml` | Segmentation | CIoU+BCE | spatial+SE | 100 |
+| `tinyYOLO-pose.yaml` | Pose | CIoU+BCE | spatial+SE | 150 |
+| `tinyYOLO-cls.yaml` | Classification | CrossEntropy | spatial+SE | 100 |
+| `tinyYOLO-obb.yaml` | OBB | CIoU+BCE | spatial+SE | 150 |
+| `tinyYOLO-det-q.yaml` | Detection (Q) | CIoU+BCE | ECA | 120 |
+| `tinyYOLO-seg-q.yaml` | Segmentation (Q) | CIoU+BCE | ECA | 100 |
+| `tinyYOLO-pose-q.yaml` | Pose (Q) | CIoU+BCE | ECA | 150 |
+| `tinyYOLO-cls-q.yaml` | Classification (Q) | CrossEntropy | ECA | 100 |
+| `tinyYOLO-obb-q.yaml` | OBB (Q) | CIoU+BCE | ECA | 150 |
+
 ---
 
 ## 6. Experimental Results

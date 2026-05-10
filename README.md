@@ -514,21 +514,30 @@ This notebook generates **12 visualizations**:
 
 ## YAML Configs Reference
 
-Each config defines: task, variant, backbone channels/depths, neck settings, head type, training hyperparameters, and augmentation.
+Each config defines: task, variant, backbone, neck, head, **loss** (CIoU+BCE), **batchnorm** (YOLO-standard), training hyperparameters, and augmentation.
 
 ### Standard Configs (`configs/standard/`)
 
 | Config | Task | NC | Key Settings |
 |--------|------|-----|-------------|
-| `tinyYOLO-det.yaml` | Detection | 80 (COCO) | SiLU, spatial attention, 100 epochs |
-| `tinyYOLO-seg.yaml` | Segmentation | 80 | 32 proto-masks, copy_paste=0.3 |
-| `tinyYOLO-pose.yaml` | Pose | 1 (person) | 17 keypoints × 3 dims, 150 epochs |
-| `tinyYOLO-cls.yaml` | Classification | 1000 (ImageNet) | dropout=0.2, label_smoothing=0.1 |
-| `tinyYOLO-obb.yaml` | Oriented BBox | 15 (DOTA) | flipud=0.5, 150 epochs |
+| `tinyYOLO-det.yaml` | Detection | 80 (COCO) | CIoU loss, SiLU, spatial+SE attention, 100 epochs |
+| `tinyYOLO-seg.yaml` | Segmentation | 80 | CIoU loss, 32 proto-masks, copy_paste=0.3 |
+| `tinyYOLO-pose.yaml` | Pose | 1 (person) | CIoU loss, 17 keypoints × 3 dims, 150 epochs |
+| `tinyYOLO-cls.yaml` | Classification | 1000 (ImageNet) | CrossEntropy, dropout=0.2, label_smoothing=0.1 |
+| `tinyYOLO-obb.yaml` | Oriented BBox | 15 (DOTA) | CIoU loss, flipud=0.5, 150 epochs |
 
 ### Quantized Configs (`configs/quantized/`)
 
 Same tasks but with: `variant: quantized`, `attention: eca`, QAT settings, `backend: qnnpack`.
+
+### Common Settings (All Configs v2)
+
+| Setting | Value | Notes |
+|---------|-------|-------|
+| Loss | CIoU+BCE (2.0/1.0/1.0) | Except cls (CrossEntropy) |
+| BatchNorm | eps=0.001, momentum=0.03 | YOLO-standard |
+| Weight Decay | 0.0001 (weights only) | Biases/BN excluded |
+| Augmentation | +grayscale(0.1), +perspective(0.2) | Enhanced pipeline |
 
 ---
 
