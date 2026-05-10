@@ -119,14 +119,23 @@ class SimpleDetectionDataset(Dataset):
         if not self.img_files:
             raise FileNotFoundError(f"No images found in {self.img_dir}")
 
-        # Transforms
-        self.transform = transforms.Compose([
-            transforms.ToPILImage(),
-            transforms.Resize((imgsz, imgsz)),
-            transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.01) if augment else transforms.Lambda(lambda x: x),
-            transforms.RandomHorizontalFlip(p=0.5) if augment else transforms.Lambda(lambda x: x),
-            transforms.ToTensor(),
-        ])
+        # Transforms — YOLO-standard augmentation pipeline
+        if augment:
+            self.transform = transforms.Compose([
+                transforms.ToPILImage(),
+                transforms.Resize((imgsz, imgsz)),
+                transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.015),
+                transforms.RandomGrayscale(p=0.1),
+                transforms.RandomHorizontalFlip(p=0.5),
+                transforms.RandomPerspective(distortion_scale=0.2, p=0.3),
+                transforms.ToTensor(),
+            ])
+        else:
+            self.transform = transforms.Compose([
+                transforms.ToPILImage(),
+                transforms.Resize((imgsz, imgsz)),
+                transforms.ToTensor(),
+            ])
 
     def __len__(self):
         return len(self.img_files)
@@ -177,15 +186,82 @@ class SimpleDetectionDataset(Dataset):
 
 class DetectionLoss(nn.Module):
     """
-    Simplified detection loss for tinyYOLO training.
-    Components: objectness + classification + box regression.
+    Detection loss for tinyYOLO with CIoU box regression.
+    Components: CIoU box loss + BCE classification + BCE objectness.
+    Loss weights follow pfeatherstone/tinyyolo conventions:
+        total = 7.5 × IoU + 1.0 × cls + 1.0 × obj
     """
 
     def __init__(self, nc=80):
         super().__init__()
         self.nc = nc
         self.bce = nn.BCEWithLogitsLoss(reduction='mean')
-        self.mse = nn.MSELoss(reduction='mean')
+        # YOLO-standard loss weights
+        self.box_weight = 7.5
+        self.cls_weight = 1.0
+        self.obj_weight = 1.0
+
+    @staticmethod
+    def _ciou(pred_box, target_box, eps=1e-7):
+        """
+        Compute CIoU loss between predicted and target boxes.
+        Both in (cx, cy, w, h) format, values in [0, 1].
+
+        Returns:
+            ciou_loss: scalar (1 - CIoU), lower is better.
+        """
+        # Convert to xyxy
+        px1 = pred_box[0] - pred_box[2] / 2
+        py1 = pred_box[1] - pred_box[3] / 2
+        px2 = pred_box[0] + pred_box[2] / 2
+        py2 = pred_box[1] + pred_box[3] / 2
+
+        tx1 = target_box[0] - target_box[2] / 2
+        ty1 = target_box[1] - target_box[3] / 2
+        tx2 = target_box[0] + target_box[2] / 2
+        ty2 = target_box[1] + target_box[3] / 2
+
+        # Intersection
+        inter_x1 = torch.max(px1, tx1)
+        inter_y1 = torch.max(py1, ty1)
+        inter_x2 = torch.min(px2, tx2)
+        inter_y2 = torch.min(py2, ty2)
+        inter = (inter_x2 - inter_x1).clamp(min=0) * (inter_y2 - inter_y1).clamp(min=0)
+
+        # Union
+        pred_area = (px2 - px1).clamp(min=0) * (py2 - py1).clamp(min=0)
+        target_area = (tx2 - tx1).clamp(min=0) * (ty2 - ty1).clamp(min=0)
+        union = pred_area + target_area - inter + eps
+
+        iou = inter / union
+
+        # Enclosing box
+        enc_x1 = torch.min(px1, tx1)
+        enc_y1 = torch.min(py1, ty1)
+        enc_x2 = torch.max(px2, tx2)
+        enc_y2 = torch.max(py2, ty2)
+
+        # Distance between centers
+        cx_diff = pred_box[0] - target_box[0]
+        cy_diff = pred_box[1] - target_box[1]
+        rho2 = cx_diff ** 2 + cy_diff ** 2
+
+        # Diagonal of enclosing box
+        c2 = (enc_x2 - enc_x1) ** 2 + (enc_y2 - enc_y1) ** 2 + eps
+
+        # Aspect ratio consistency (v term)
+        w_pred = (px2 - px1).clamp(min=eps)
+        h_pred = (py2 - py1).clamp(min=eps)
+        w_target = (tx2 - tx1).clamp(min=eps)
+        h_target = (ty2 - ty1).clamp(min=eps)
+
+        v = (4 / (math.pi ** 2)) * (
+            torch.atan(w_target / h_target) - torch.atan(w_pred / h_pred)
+        ) ** 2
+        alpha = v / (1 - iou + v + eps)
+
+        ciou = iou - rho2 / c2 - alpha * v
+        return 1.0 - ciou  # Loss: 0 when perfect match
 
     def forward(self, predictions, targets):
         """
@@ -193,72 +269,83 @@ class DetectionLoss(nn.Module):
             predictions: list of [B, 4+nc, H, W] from model
             targets: [B, max_objects, 5] (cls, cx, cy, w, h)
         """
-        total_loss = torch.tensor(0.0, device=predictions[0].device)
-        box_loss = torch.tensor(0.0, device=predictions[0].device)
-        cls_loss = torch.tensor(0.0, device=predictions[0].device)
-        obj_loss = torch.tensor(0.0, device=predictions[0].device)
+        device = predictions[0].device
+        total_box = torch.tensor(0.0, device=device)
+        total_cls = torch.tensor(0.0, device=device)
+        total_obj = torch.tensor(0.0, device=device)
+        n_targets_total = 0
 
         for pred in predictions:
             B, C, H, W = pred.shape
-            # pred: [B, 4+nc, H, W]
             pred_box = pred[:, :4, :, :]   # [B, 4, H, W]
             pred_cls = pred[:, 4:, :, :]   # [B, nc, H, W]
 
-            # Create target maps
-            # For simplicity, compute loss against the raw prediction statistics
-            # This ensures gradients flow and the model learns meaningful features
+            # --- Objectness target map ---
+            obj_target = torch.zeros(B, 1, H, W, device=device)
 
-            # Valid targets mask
-            valid = targets[:, :, 2] > 0  # [B, max_objects] — has width > 0
-
-            # --- Objectness Loss ---
-            # Target: cells containing object centers should have high response
-            obj_target = torch.zeros(B, 1, H, W, device=pred.device)
             for b in range(B):
                 for t in range(targets.shape[1]):
-                    if targets[b, t, 2] > 0:  # valid target
+                    if targets[b, t, 2] > 0:  # valid target (has width > 0)
                         cx, cy = targets[b, t, 1], targets[b, t, 2]
-                        gi, gj = int(cx * W), int(cy * H)
-                        gi = min(gi, W - 1)
-                        gj = min(gj, H - 1)
+                        gi = min(int(cx * W), W - 1)
+                        gj = min(int(cy * H), H - 1)
                         obj_target[b, 0, gj, gi] = 1.0
 
-            # Use max of class predictions as objectness proxy
+            # Objectness: max class logit as proxy
             obj_pred = pred_cls.max(dim=1, keepdim=True)[0]
-            obj_loss += self.bce(obj_pred, obj_target)
+            total_obj += self.bce(obj_pred, obj_target)
 
-            # --- Classification Loss ---
-            # For cells that have targets, supervise class predictions
+            # --- Per-target CIoU + Classification ---
             for b in range(B):
                 for t in range(targets.shape[1]):
                     if targets[b, t, 2] > 0:
                         cls_id = int(targets[b, t, 0])
-                        cx, cy = targets[b, t, 1], targets[b, t, 2]
-                        gi, gj = int(cx * W), int(cy * H)
-                        gi = min(gi, W - 1)
-                        gj = min(gj, H - 1)
+                        cx, cy, w, h = targets[b, t, 1:5]
+                        gi = min(int(cx * W), W - 1)
+                        gj = min(int(cy * H), H - 1)
 
-                        # Classification target (one-hot)
-                        cls_target = torch.zeros(self.nc, device=pred.device)
+                        # Classification (BCE)
+                        cls_target = torch.zeros(self.nc, device=device)
                         if 0 <= cls_id < self.nc:
                             cls_target[cls_id] = 1.0
-                        cls_loss += self.bce(pred_cls[b, :, gj, gi], cls_target)
+                        total_cls += self.bce(pred_cls[b, :, gj, gi], cls_target)
 
-                        # Box regression target
-                        box_target = targets[b, t, 1:5].to(pred.device)
-                        box_loss += self.mse(torch.sigmoid(pred_box[b, :, gj, gi]), box_target)
+                        # CIoU box loss
+                        pred_cxcywh = torch.sigmoid(pred_box[b, :, gj, gi])
+                        target_cxcywh = targets[b, t, 1:5].to(device)
+                        total_box += self._ciou(pred_cxcywh, target_cxcywh)
 
-            n_targets = valid.sum().clamp(min=1)
-            cls_loss = cls_loss / n_targets
-            box_loss = box_loss / n_targets
+                        n_targets_total += 1
 
-        total_loss = obj_loss * 1.0 + cls_loss * 0.5 + box_loss * 5.0
+            n_targets_total = max(n_targets_total, 1)
+
+        # Normalize by target count
+        total_box = total_box / n_targets_total
+        total_cls = total_cls / n_targets_total
+
+        # Weighted sum (pfeatherstone/tinyyolo convention)
+        total_loss = (self.box_weight * total_box +
+                      self.cls_weight * total_cls +
+                      self.obj_weight * total_obj)
+
         return total_loss, {
-            'box': box_loss.item(),
-            'cls': cls_loss.item(),
-            'obj': obj_loss.item(),
+            'box': total_box.item(),
+            'cls': total_cls.item(),
+            'obj': total_obj.item(),
             'total': total_loss.item(),
         }
+
+
+def apply_yolo_batchnorm_defaults(model):
+    """
+    Apply YOLO-standard BatchNorm parameters.
+    All official YOLO models use eps=1e-3, momentum=0.03
+    instead of PyTorch defaults (eps=1e-5, momentum=0.1).
+    """
+    for m in model.modules():
+        if isinstance(m, (nn.BatchNorm2d, nn.BatchNorm1d)):
+            m.eps = 1e-3
+            m.momentum = 0.03
 
 
 # ---------------------------------------------------------------------------
@@ -326,9 +413,21 @@ def train_single(args, imgsz, env):
 
     # --- Setup training ---
     model = model.to(device)
+
+    # Apply YOLO-standard BatchNorm (eps=1e-3, momentum=0.03)
+    apply_yolo_batchnorm_defaults(model)
+
     model.train()
 
-    optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
+    # Separate weight decay groups (following pfeatherstone/tinyyolo)
+    # Weights (dim >= 2) get weight decay, biases/BN params don't
+    wd_params = [p for p in model.parameters() if p.dim() >= 2]
+    no_wd_params = [p for p in model.parameters() if p.dim() < 2]
+    optimizer = optim.AdamW([
+        {'params': wd_params, 'weight_decay': 1e-4},
+        {'params': no_wd_params, 'weight_decay': 0.0},
+    ], lr=args.lr, betas=(0.9, 0.999))
+
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs, eta_min=args.lr * 0.01)
 
     # Use AMP if available
@@ -523,13 +622,26 @@ def train_single(args, imgsz, env):
         'timestamp': datetime.now().isoformat(),
         'augmentation': {
             'resize': imgsz,
-            'color_jitter': True,
+            'color_jitter': {'brightness': 0.4, 'contrast': 0.4, 'saturation': 0.4, 'hue': 0.015},
+            'random_grayscale': 0.1,
             'horizontal_flip': 0.5,
+            'random_perspective': {'distortion_scale': 0.2, 'p': 0.3},
+        },
+        'loss': {
+            'type': 'CIoU + BCE',
+            'box_weight': 7.5,
+            'cls_weight': 1.0,
+            'obj_weight': 1.0,
         },
         'optimizer': {
             'type': 'AdamW',
             'lr': args.lr,
-            'weight_decay': 0.01,
+            'betas': [0.9, 0.999],
+            'weight_decay': '1e-4 (weights only, biases/BN excluded)',
+        },
+        'batchnorm': {
+            'eps': 1e-3,
+            'momentum': 0.03,
         },
         'scheduler': {
             'type': 'CosineAnnealingLR',
