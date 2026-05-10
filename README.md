@@ -111,7 +111,7 @@ python scripts/train.py --task det --variant standard --imgsz 320 --epochs 100
 python scripts/train.py --task det --variant standard --imgsz 160,224,320,416,640 --sweep
 
 # 5. Export to ONNX
-python scripts/export.py --weights experiments/results/tinyYOLO-det-std-320/model_init.pt --formats onnx
+python scripts/export.py --weights experiments/results/tinyYOLO-det-std-320/best.pt --formats onnx
 ```
 
 ---
