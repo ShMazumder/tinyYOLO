@@ -16,12 +16,23 @@ head:
   type: TinyOBB
   reg_max: 0
 
+loss:
+  type: CIoU+BCE
+  box_weight: 2.0
+  cls_weight: 1.0
+  obj_weight: 1.0
+
+batchnorm:
+  eps: 0.001
+  momentum: 0.03
+
 training:
   epochs: 150
   optimizer: AdamW
   lr0: 0.001
   lrf: 0.01
-  weight_decay: 0.01
+  weight_decay: 0.0001
+  weight_decay_no_bias: true
   warmup_epochs: 5
   scheduler: cosine
 
@@ -35,3 +46,5 @@ augmentation:
   scale: 0.5
   fliplr: 0.5
   flipud: 0.5  # Useful for aerial imagery
+  grayscale: 0.1
+  perspective: 0.2

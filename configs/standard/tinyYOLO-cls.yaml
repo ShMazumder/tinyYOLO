@@ -12,12 +12,17 @@ head:
   type: TinyClassify
   dropout: 0.2
 
+batchnorm:
+  eps: 0.001
+  momentum: 0.03
+
 training:
   epochs: 100
   optimizer: AdamW
   lr0: 0.005
   lrf: 0.01
-  weight_decay: 0.05
+  weight_decay: 0.0001
+  weight_decay_no_bias: true
   warmup_epochs: 5
   scheduler: cosine
   label_smoothing: 0.1
