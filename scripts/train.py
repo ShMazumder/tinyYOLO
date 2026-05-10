@@ -72,6 +72,53 @@ def parse_args():
 # Dataset Loader — supports COCO128, VOC, COCO, and custom datasets
 # ---------------------------------------------------------------------------
 
+def _download_and_extract(url, dest, name="dataset"):
+    """Download and extract a zip file."""
+    import urllib.request, zipfile
+    dest.mkdir(parents=True, exist_ok=True)
+    zip_path = dest / f"{name}.zip"
+    if not zip_path.exists():
+        print(f"  Downloading {name}...")
+        urllib.request.urlretrieve(url, zip_path)
+    print(f"  Extracting {name}...")
+    with zipfile.ZipFile(zip_path, 'r') as z:
+        z.extractall(dest)
+    zip_path.unlink()
+
+
+def _download_voc(dest):
+    """Download Pascal VOC dataset in YOLO format."""
+    voc_dir = dest / 'VOC'
+    if (voc_dir / 'images' / 'train').exists():
+        return  # Already downloaded
+
+    print("  [INFO] Downloading Pascal VOC (YOLO format)...")
+    try:
+        from ultralytics.utils.downloads import download
+        url = 'https://github.com/ultralytics/assets/releases/download/v0.0.0/VOC.zip'
+        download([url], dir=dest)
+    except Exception:
+        # Manual fallback
+        _download_and_extract(
+            'https://github.com/ultralytics/assets/releases/download/v0.0.0/VOC.zip',
+            dest, 'VOC'
+        )
+
+    # Verify structure
+    if not (voc_dir / 'images' / 'train').exists():
+        # Some versions extract to datasets/VOC/images/train2012 etc
+        for sub in ['train2012', 'train2007']:
+            alt = voc_dir / 'images' / sub
+            if alt.exists():
+                alt.rename(voc_dir / 'images' / 'train')
+                break
+        for sub in ['val2012', 'val2007']:
+            alt = voc_dir / 'images' / sub
+            if alt.exists():
+                alt.rename(voc_dir / 'images' / 'val')
+                break
+
+
 def load_dataset_config(data_name):
     """
     Load dataset from a YAML config or Ultralytics built-in name.
@@ -99,15 +146,29 @@ def load_dataset_config(data_name):
         train_dir = str(base / cfg.get('train', 'images/train'))
         val_dir = str(base / cfg.get('val', 'images/val'))
 
-        # Check if data exists, try Ultralytics download if not
+        # Check if data exists — try auto-download if not
         if not Path(train_dir).exists():
             print(f"  [INFO] Dataset not found at {train_dir}")
-            try:
-                from ultralytics.data.utils import check_det_dataset
-                builtin_name = data_name if data_name.endswith('.yaml') else f'{data_name}.yaml'
-                data_dict = check_det_dataset(builtin_name)
-                return data_dict
-            except Exception:
+
+            # Try dataset-specific downloads
+            if 'voc' in data_name.lower():
+                _download_voc(PROJECT_ROOT / 'datasets')
+            elif 'coco128' in data_name.lower():
+                _download_and_extract(
+                    'https://github.com/ultralytics/assets/releases/download/v0.0.0/coco128.zip',
+                    PROJECT_ROOT / 'datasets', 'coco128'
+                )
+            else:
+                # Try Ultralytics with full path to our YAML
+                try:
+                    from ultralytics.data.utils import check_det_dataset
+                    data_dict = check_det_dataset(str(local_yaml))
+                    return data_dict
+                except Exception:
+                    pass
+
+            # Re-check after download attempt
+            if not Path(train_dir).exists():
                 print(f"  [WARN] Auto-download failed. Please download manually.")
                 print(f"  [INFO] Expected layout:")
                 print(f"         {base}/")
@@ -145,18 +206,13 @@ def load_dataset_config(data_name):
         print(f"  [WARN] Ultralytics download failed: {e}")
 
     # 4. Manual COCO128 fallback
-    if 'coco128' in data_name:
-        import urllib.request, zipfile
-        url = "https://github.com/ultralytics/assets/releases/download/v0.0.0/coco128.zip"
+    if 'coco128' in str(data_name):
         dest = PROJECT_ROOT / "datasets"
-        dest.mkdir(exist_ok=True)
-        zip_path = dest / "coco128.zip"
         if not (dest / "coco128").exists():
-            print(f"  Downloading COCO128...")
-            urllib.request.urlretrieve(url, zip_path)
-            with zipfile.ZipFile(zip_path, 'r') as z:
-                z.extractall(dest)
-            zip_path.unlink()
+            _download_and_extract(
+                'https://github.com/ultralytics/assets/releases/download/v0.0.0/coco128.zip',
+                dest, 'coco128'
+            )
         return {'train': str(dest / 'coco128' / 'images' / 'train2017'),
                 'val': str(dest / 'coco128' / 'images' / 'train2017'),
                 'nc': 80, 'names': {i: f'cls_{i}' for i in range(80)}}
