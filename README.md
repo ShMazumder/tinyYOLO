@@ -101,13 +101,13 @@ print('Installation verified ✓')
 # 1. Benchmark all 10 model variants across all resolutions
 python scripts/benchmark_models.py
 
-# 2. Train detection model (quick test on COCO128)
+# 2. Quick training test (5 epochs on COCO128 — auto-downloads dataset)
 python scripts/train.py --task det --variant standard --imgsz 320 --quick
 
-# 3. Train with full settings
+# 3. Full training on COCO128 (100 epochs, auto-detects GPU/batch/AMP)
 python scripts/train.py --task det --variant standard --imgsz 320 --epochs 100
 
-# 4. Resolution sweep (train at all 5 resolutions)
+# 4. Resolution sweep (trains at each resolution sequentially)
 python scripts/train.py --task det --variant standard --imgsz 160,224,320,416,640 --sweep
 
 # 5. Export to ONNX
@@ -232,23 +232,49 @@ Input (160/224/320/416/640)
 
 ### `scripts/train.py` — Training
 
+Full training pipeline with COCO128 auto-download, real detection loss, AMP, EMA, and checkpoint saving.
+
+**What happens when you run training:**
+1. Auto-detects environment (Colab/Kaggle/RunPod/local) and configures batch size, workers, device
+2. Downloads COCO128 dataset automatically (if not cached)
+3. Builds model, loads images + YOLO-format labels
+4. Trains with AdamW + cosine LR schedule + AMP (on GPU) + gradient clipping
+5. Logs per-epoch losses: box, classification, objectness, total
+6. Saves checkpoints: `best.pt`, `last.pt`, `ema.pt`
+7. Plots training curves as PNG
+8. Saves full config + history as JSON
+
+**Output structure per experiment:**
+```
+experiments/results/tinyYOLO-det-std-320/
+├── config.json          # Full experiment configuration
+├── history.json         # Per-epoch loss + LR + timing
+├── best.pt              # Best checkpoint (lowest total loss)
+├── last.pt              # Final epoch checkpoint
+├── ema.pt               # Exponential Moving Average checkpoint
+└── training_curves.png  # Loss plots (box, cls, total)
+```
+
 ```bash
-# Basic training
+# Basic training (auto-detects everything)
 python scripts/train.py --task det --variant standard --imgsz 320
 
-# All options:
+# Quick smoke test (5 epochs)
+python scripts/train.py --task det --variant standard --imgsz 320 --quick
+
+# All CLI options:
 python scripts/train.py \
   --task det           # det | seg | pose | cls | obb
   --variant standard   # standard | quantized
-  --imgsz 320          # Single resolution or comma-separated
-  --epochs 100         # Training epochs
-  --batch 16           # Batch size (auto-detected if omitted)
+  --imgsz 320          # Single value or comma-separated for sweep
+  --epochs 100         # Training epochs (default: 100)
+  --batch 32           # Batch size (auto-detected if omitted)
   --device cuda:0      # Device (auto-detected if omitted)
+  --lr 0.001           # Learning rate (default: 1e-3)
   --data coco128.yaml  # Dataset (auto-selected per task if omitted)
-  --name my_exp        # Experiment name
-  --quick              # Quick test: 5 epochs
-  --sweep              # Run across all specified resolutions
-  --teacher yolo11s.pt # Knowledge distillation teacher
+  --name my_exp        # Custom experiment name
+  --quick              # Quick test: 5 epochs only
+  --sweep              # Run at each resolution in --imgsz
 ```
 
 **Train every task:**
@@ -275,6 +301,21 @@ python scripts/train.py --task obb --variant standard --imgsz 416
 python scripts/train.py --task obb --variant quantized --imgsz 416
 ```
 
+**Train all 10 variants in one go:**
+
+```bash
+for task in det seg pose obb; do
+  for variant in standard quantized; do
+    python scripts/train.py --task $task --variant $variant --imgsz 320 --epochs 100
+  done
+done
+
+# Classification uses 224
+for variant in standard quantized; do
+  python scripts/train.py --task cls --variant $variant --imgsz 224 --epochs 100
+done
+```
+
 **Resolution sweeps:**
 
 ```bash
@@ -283,6 +324,16 @@ python scripts/train.py --task det --variant standard --imgsz 160,224,320,416,64
 
 # Sweep for segmentation
 python scripts/train.py --task seg --variant standard --imgsz 224,320,416 --sweep
+```
+
+**Expected training output:**
+```
+  Epoch        Box        Cls        Obj      Total         LR     Time
+  ----------------------------------------------------------------
+    1/100     0.0842     0.0156     0.6932     0.7924   0.001000    2.3s
+    2/100     0.0791     0.0134     0.6891     0.7612   0.000998    2.1s
+    3/100     0.0723     0.0118     0.6834     0.7298   0.000995    2.1s
+    ...
 ```
 
 ### `scripts/benchmark_models.py` — Benchmarking
