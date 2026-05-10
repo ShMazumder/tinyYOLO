@@ -196,8 +196,9 @@ class DetectionLoss(nn.Module):
         super().__init__()
         self.nc = nc
         self.bce = nn.BCEWithLogitsLoss(reduction='mean')
-        # YOLO-standard loss weights
-        self.box_weight = 7.5
+        # Loss weights tuned for tiny models (CIoU starts ~1.0 for small models)
+        # Full YOLO uses 7.5× but that overwhelms obj/cls for sub-1M param models
+        self.box_weight = 2.0
         self.cls_weight = 1.0
         self.obj_weight = 1.0
 
@@ -629,7 +630,7 @@ def train_single(args, imgsz, env):
         },
         'loss': {
             'type': 'CIoU + BCE',
-            'box_weight': 7.5,
+            'box_weight': 2.0,
             'cls_weight': 1.0,
             'obj_weight': 1.0,
         },
