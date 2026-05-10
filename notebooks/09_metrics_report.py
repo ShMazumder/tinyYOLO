@@ -73,12 +73,27 @@ if exp and 'config' in exp:
     print(f"    AMP (FP16):    {cfg.get('amp', 'N/A')}")
     print(f"    Platform:      {cfg.get('platform', 'N/A')}")
 
+    if 'loss' in cfg:
+        loss = cfg['loss']
+        print(f"\n  Loss Function:")
+        print(f"    Type:          {loss.get('type', 'N/A')}")
+        print(f"    Box Weight:    {loss.get('box_weight', 'N/A')}")
+        print(f"    Cls Weight:    {loss.get('cls_weight', 'N/A')}")
+        print(f"    Obj Weight:    {loss.get('obj_weight', 'N/A')}")
+
     if 'optimizer' in cfg:
         opt = cfg['optimizer']
         print(f"\n  Optimizer:")
         print(f"    Type:          {opt.get('type', 'N/A')}")
         print(f"    Learning Rate: {opt.get('lr', 'N/A')}")
+        print(f"    Betas:         {opt.get('betas', 'N/A')}")
         print(f"    Weight Decay:  {opt.get('weight_decay', 'N/A')}")
+
+    if 'batchnorm' in cfg:
+        bn = cfg['batchnorm']
+        print(f"\n  BatchNorm (YOLO-Standard):")
+        print(f"    eps:           {bn.get('eps', 'N/A')}")
+        print(f"    momentum:      {bn.get('momentum', 'N/A')}")
 
     if 'scheduler' in cfg:
         sch = cfg['scheduler']
@@ -101,8 +116,28 @@ if exp and 'config' in exp:
 
     aug = cfg.get('augmentation', {})
     print(f"    Resize:            {aug.get('resize', 'N/A')}×{aug.get('resize', 'N/A')}")
-    print(f"    Color Jitter:      {aug.get('color_jitter', False)}")
+
+    cj = aug.get('color_jitter', {})
+    if isinstance(cj, dict):
+        print(f"    Color Jitter:")
+        print(f"      Brightness:    {cj.get('brightness', 'N/A')}")
+        print(f"      Contrast:      {cj.get('contrast', 'N/A')}")
+        print(f"      Saturation:    {cj.get('saturation', 'N/A')}")
+        print(f"      Hue:           {cj.get('hue', 'N/A')}")
+    else:
+        print(f"    Color Jitter:      {cj}")
+
+    print(f"    Random Grayscale:  p={aug.get('random_grayscale', 'N/A')}")
     print(f"    Horizontal Flip:   p={aug.get('horizontal_flip', 0)}")
+
+    rp = aug.get('random_perspective', {})
+    if isinstance(rp, dict):
+        print(f"    Random Perspective:")
+        print(f"      Distortion:    {rp.get('distortion_scale', 'N/A')}")
+        print(f"      Probability:   {rp.get('p', 'N/A')}")
+    else:
+        print(f"    Random Perspective: {rp}")
+
     print(f"    Normalization:     ImageNet (via ToTensor)")
     print(f"{'='*60}")
 

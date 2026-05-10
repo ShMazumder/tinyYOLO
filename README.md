@@ -2,7 +2,7 @@
 
 **A modular, research-grade tiny object detection framework built on PyTorch + Ultralytics.**
 
-Cherry-picks the best innovations from YOLOv1–v26 into ultra-lightweight models (0.07M–0.29M parameters) designed for edge deployment.
+Cherry-picks the best innovations from YOLOv1–v26 into ultra-lightweight models (0.07M–0.29M parameters) designed for edge deployment. Training pipeline uses CIoU loss, YOLO-standard BatchNorm, and comprehensive evaluation metrics (P/R/F1/mAP@50/mAP@50-95) with full report generation.
 
 ---
 
@@ -141,7 +141,9 @@ tinyYOLO/
 │       ├── __init__.py
 │       ├── env.py                         # Auto-detect training environment
 │       ├── benchmark.py                   # Params/FLOPs/latency measurement
-│       └── registry.py                    # Register modules with Ultralytics
+│       ├── registry.py                    # Register modules with Ultralytics
+│       ├── postprocess.py                 # Decode predictions + NMS
+│       └── metrics.py                     # P/R/F1/mAP/IoU/confusion matrix
 │
 ├── configs/                               # Model configuration files
 │   ├── standard/                          # SiLU activation + spatial attention
@@ -232,27 +234,31 @@ Input (160/224/320/416/640)
 
 ### `scripts/train.py` — Training
 
-Full training pipeline with COCO128 auto-download, real detection loss, AMP, EMA, and checkpoint saving.
+Full training pipeline with COCO128 auto-download, CIoU loss, AMP, EMA, per-epoch metrics, and full report generation.
 
 **What happens when you run training:**
 1. Auto-detects environment (Colab/Kaggle/RunPod/local) and configures batch size, workers, device
 2. Downloads COCO128 dataset automatically (if not cached)
-3. Builds model, loads images + YOLO-format labels
-4. Trains with AdamW + cosine LR schedule + AMP (on GPU) + gradient clipping
-5. Logs per-epoch losses: box, classification, objectness, total
-6. Saves checkpoints: `best.pt`, `last.pt`, `ema.pt`
-7. Plots training curves as PNG
-8. Saves full config + history as JSON
+3. Builds model, applies YOLO-standard BatchNorm (`eps=1e-3, momentum=0.03`)
+4. Trains with AdamW (separate weight decay groups) + cosine LR + AMP + gradient clipping
+5. Uses **CIoU box loss** + BCE classification + BCE objectness (weighted 2.0 / 1.0 / 1.0)
+6. Computes **P/R/F1/mAP@50/mAP@50-95** at regular intervals via NMS + IoU matching
+7. Saves best checkpoint by **mAP@50** (not just loss)
+8. Generates full report: training curves, confusion matrix, per-class breakdown
+9. Saves config, history, metrics as JSON
 
 **Output structure per experiment:**
 ```
 experiments/results/tinyYOLO-det-std-320/
-├── config.json          # Full experiment configuration
-├── history.json         # Per-epoch loss + LR + timing
-├── best.pt              # Best checkpoint (lowest total loss)
-├── last.pt              # Final epoch checkpoint
-├── ema.pt               # Exponential Moving Average checkpoint
-└── training_curves.png  # Loss plots (box, cls, total)
+├── config.json            # Full config: model, optimizer, scheduler, loss, augmentation, final metrics
+├── history.json           # Per-epoch: losses, P, R, F1, mAP50, mAP50-95, LR, timing
+├── metrics.json           # Final evaluation: all metrics + per-class + confusion matrix
+├── per_class_report.txt   # Human-readable per-class P/R/F1/AP table
+├── training_curves.png    # Loss + accuracy curves (2×3 grid)
+├── confusion_matrix.png   # Confusion matrix heatmap
+├── best.pt                # Best checkpoint (by mAP@50)
+├── last.pt                # Final epoch checkpoint
+└── ema.pt                 # Exponential Moving Average checkpoint
 ```
 
 ```bash
@@ -326,24 +332,28 @@ python scripts/train.py --task det --variant standard --imgsz 160,224,320,416,64
 python scripts/train.py --task seg --variant standard --imgsz 224,320,416 --sweep
 ```
 
-**Expected training output:**
+**Expected training output (actual results from COCO128, Tesla T4):**
 ```
-  Epoch      Box      Cls      Obj    Total      P      R     F1   mAP50         LR  Time
+  Epoch      Box      Cls      Obj    Total      P      R     F1   mAP50         LR   Time
   ----------------------------------------------------------------------------------------
-    1/100   0.0842   0.0156   0.6932   0.7924  0.012  0.008  0.010  0.0023   0.001000   2.3s
-    2/100   0.0791   0.0134   0.6891   0.7612  0.018  0.015  0.016  0.0041   0.000998   2.1s
-    ...
-  100/100   0.0312   0.0089   0.2134   0.3021  0.245  0.198  0.219  0.1230   0.000010   2.0s
+    1/100   0.1130   0.0677   0.3800   0.9788  0.000  0.000  0.000  0.0000   0.001000  13.8s
+   20/100   0.0278   0.0641   0.3041   0.4752  0.016  0.023  0.019  0.0314   0.000905   7.3s
+   60/100   0.0090   0.0598   0.2195   0.2942  0.028  0.045  0.035  0.0149   0.000352   7.5s
+  100/100   0.0070   0.0608   0.1913   0.2569  0.027  0.040  0.032  0.0129   0.000010   7.9s
 
   Running final evaluation...
   ============================================================
     Detection Metrics Report
   ============================================================
-    Precision:     0.2450
-    Recall:        0.1980
-    F1 Score:      0.2190
-    mAP@50:        0.1230
-    mAP@50-95:     0.0560
+    Predictions:   1378
+    Ground Truths: 929
+    TP: 37  |  FP: 1341  |  FN: 892
+    ────────────────────────────────────────────────────────────
+    Precision:     0.0269
+    Recall:        0.0398
+    F1 Score:      0.0321
+    mAP@50:        0.0129
+    mAP@50-95:     0.0035
   ============================================================
 
   Results saved to: experiments/results/tinyYOLO-det-std-320
@@ -356,6 +366,11 @@ python scripts/train.py --task seg --variant standard --imgsz 224,320,416 --swee
     confusion_matrix.png           — Confusion matrix heatmap
     per_class_report.txt           — Per-class P/R/F1/AP breakdown
 ```
+
+> **Note:** Metrics are deliberately low because tinyYOLO uses only **0.23M parameters**
+> (vs YOLOv8n's 3.2M) on only 128 training images. This framework is designed for
+> edge deployment where model size < 1M is the priority. For higher accuracy, use
+> a larger dataset or increase model capacity.
 
 ### `scripts/benchmark_models.py` — Benchmarking
 
@@ -429,10 +444,10 @@ The training script (`scripts/train.py`) computes all of the following during an
 
 | Metric | Description | Computed When |
 |--------|-------------|--------------|
-| **Box Loss** | Bbox regression loss (MSE) | Every epoch |
+| **Box Loss** | CIoU (Complete IoU — includes center distance + aspect ratio) | Every epoch |
 | **Cls Loss** | Classification loss (BCE) | Every epoch |
 | **Obj Loss** | Objectness loss (BCE) | Every epoch |
-| **Total Loss** | Weighted sum of all losses | Every epoch |
+| **Total Loss** | `2.0×CIoU + 1.0×Cls + 1.0×Obj` | Every epoch |
 | **Precision** | TP / (TP + FP) at IoU=0.5 | Every eval epoch |
 | **Recall** | TP / (TP + FN) at IoU=0.5 | Every eval epoch |
 | **F1 Score** | 2·P·R / (P + R) | Every eval epoch |
@@ -440,6 +455,16 @@ The training script (`scripts/train.py`) computes all of the following during an
 | **mAP@50-95** | Mean AP averaged over IoU 0.5:0.95:0.05 | Every eval epoch |
 | **Per-class AP** | AP for each class individually | Final evaluation |
 | **Confusion Matrix** | TP/FP counts per class | Final evaluation |
+
+### Training Configuration (YOLO-Standard)
+
+| Component | Setting | Reference |
+|-----------|---------|----------|
+| **Loss** | CIoU + BCE (weighted 2.0 / 1.0 / 1.0) | Adapted from [pfeatherstone/tinyyolo](https://github.com/pfeatherstone/tinyyolo) |
+| **BatchNorm** | `eps=1e-3, momentum=0.03` | All official YOLO models |
+| **Optimizer** | AdamW, separate weight decay groups | Weights: 1e-4, biases/BN: 0.0 |
+| **Scheduler** | Cosine annealing (η_min = lr × 0.01) | Standard YOLO recipe |
+| **Augmentation** | ColorJitter(0.4), Grayscale(0.1), HFlip(0.5), Perspective(0.2) | Enhanced pipeline |
 
 ### Auto-Generated Report Files
 
@@ -632,6 +657,7 @@ This project is built on a comprehensive analysis of all YOLO versions (v1→v26
 | YOLOv4 | Mosaic augmentation | Free accuracy boost during training |
 | YOLOX | Decoupled head | Better cls/reg separation |
 | YOLOv8 | Anchor-free detection | Simpler, fewer hyperparameters |
+| YOLOv8/pfeatherstone | CIoU loss + YOLO BatchNorm | Better box regression + stable training |
 | YOLOv10 | NMS-free design | Lower latency, cleaner deployment |
 | YOLO11 | Spatial attention (C2PSA) | Focus on important regions |
 | YOLO26 | No DFL, STAL | Simpler export + small object handling |
