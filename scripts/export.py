@@ -40,7 +40,7 @@ def export_onnx(model, imgsz, output_path, fp16=False):
 
     torch.onnx.export(
         model, dummy, str(output_path),
-        opset_version=17,
+        opset_version=18,
         input_names=['images'],
         output_names=['output'],
         dynamic_axes={'images': {0: 'batch'}, 'output': {0: 'batch'}},
