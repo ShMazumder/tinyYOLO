@@ -335,29 +335,33 @@ python scripts/train.py --task det --variant standard --imgsz 160,224,320,416,64
 python scripts/train.py --task seg --variant standard --imgsz 224,320,416 --sweep
 ```
 
-**Expected training output (actual results from COCO128, Tesla T4):**
+**Expected training output (actual results from COCO128, Tesla T4, CIoU v2):**
 ```
   Epoch      Box      Cls      Obj    Total      P      R     F1   mAP50         LR   Time
   ----------------------------------------------------------------------------------------
-    1/100   0.1130   0.0677   0.3800   0.9788  0.000  0.000  0.000  0.0000   0.001000  13.8s
-   20/100   0.0278   0.0641   0.3041   0.4752  0.016  0.023  0.019  0.0314   0.000905   7.3s
-   60/100   0.0090   0.0598   0.2195   0.2942  0.028  0.045  0.035  0.0149   0.000352   7.5s
-  100/100   0.0070   0.0608   0.1913   0.2569  0.027  0.040  0.032  0.0129   0.000010   7.9s
+     1/100   1.0923   0.0680   0.3775   2.6301  0.000  0.000  0.000  0.0000   0.001000  24.8s
+    40/100   0.9138   0.0641   0.3108   2.2024  0.271  0.017  0.032  0.1467   0.000658  18.9s
+    60/100   0.8718   0.0636   0.2924   2.0996  0.034  0.044  0.038  0.0602   0.000352  18.8s
+    80/100   0.8591   0.0626   0.2843   2.0651  0.030  0.042  0.035  0.1701   0.000105  19.0s
+   100/100   0.8606   0.0633   0.2909   2.0753  0.036  0.051  0.042  0.1464   0.000010  18.0s
 
   Running final evaluation...
   ============================================================
     Detection Metrics Report
   ============================================================
-    Predictions:   1378
+    Predictions:   1288
     Ground Truths: 929
-    TP: 37  |  FP: 1341  |  FN: 892
+    TP: 47  |  FP: 1241  |  FN: 882
     ────────────────────────────────────────────────────────────
-    Precision:     0.0269
-    Recall:        0.0398
-    F1 Score:      0.0321
-    mAP@50:        0.0129
-    mAP@50-95:     0.0035
+    Precision:     0.0365
+    Recall:        0.0506
+    F1 Score:      0.0424
+    mAP@50:        0.1464
+    mAP@50-95:     0.0699
   ============================================================
+
+  Best mAP@50:      0.1701
+  Best total loss:   2.0407
 
   Results saved to: experiments/results/tinyYOLO-det-std-320
   Outputs:
@@ -371,9 +375,8 @@ python scripts/train.py --task seg --variant standard --imgsz 224,320,416 --swee
 ```
 
 > **Note:** Metrics are deliberately low because tinyYOLO uses only **0.23M parameters**
-> (vs YOLOv8n's 3.2M) on only 128 training images. This framework is designed for
-> edge deployment where model size < 1M is the priority. For higher accuracy, use
-> a larger dataset or increase model capacity.
+> (vs YOLOv8n's 3.2M) on only 128 training images. Best mAP@50 reached **0.1701** during
+> training. This framework is designed for edge deployment where model size < 1M is the priority.
 
 ### `scripts/benchmark_models.py` — Benchmarking
 
