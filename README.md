@@ -328,12 +328,33 @@ python scripts/train.py --task seg --variant standard --imgsz 224,320,416 --swee
 
 **Expected training output:**
 ```
-  Epoch        Box        Cls        Obj      Total         LR     Time
-  ----------------------------------------------------------------
-    1/100     0.0842     0.0156     0.6932     0.7924   0.001000    2.3s
-    2/100     0.0791     0.0134     0.6891     0.7612   0.000998    2.1s
-    3/100     0.0723     0.0118     0.6834     0.7298   0.000995    2.1s
+  Epoch      Box      Cls      Obj    Total      P      R     F1   mAP50         LR  Time
+  ----------------------------------------------------------------------------------------
+    1/100   0.0842   0.0156   0.6932   0.7924  0.012  0.008  0.010  0.0023   0.001000   2.3s
+    2/100   0.0791   0.0134   0.6891   0.7612  0.018  0.015  0.016  0.0041   0.000998   2.1s
     ...
+  100/100   0.0312   0.0089   0.2134   0.3021  0.245  0.198  0.219  0.1230   0.000010   2.0s
+
+  Running final evaluation...
+  ============================================================
+    Detection Metrics Report
+  ============================================================
+    Precision:     0.2450
+    Recall:        0.1980
+    F1 Score:      0.2190
+    mAP@50:        0.1230
+    mAP@50-95:     0.0560
+  ============================================================
+
+  Results saved to: experiments/results/tinyYOLO-det-std-320
+  Outputs:
+    best.pt, last.pt, ema.pt      — Model checkpoints
+    config.json                    — Hyperparameters & augmentation report
+    history.json                   — Per-epoch losses + metrics
+    metrics.json                   — Final P/R/F1/mAP/confusion matrix
+    training_curves.png            — Loss + accuracy curves
+    confusion_matrix.png           — Confusion matrix heatmap
+    per_class_report.txt           — Per-class P/R/F1/AP breakdown
 ```
 
 ### `scripts/benchmark_models.py` — Benchmarking
@@ -396,8 +417,71 @@ python 01_architecture_visualization.py
 | 06 | `06_obb_experiments.py` | OBB: verify angle output, DOTA class reference | ❌ CPU OK |
 | 07 | `07_quantization_comparison.py` | Compare std vs quantized: params, latency, quantization readiness, disk size | ❌ CPU OK |
 | 08 | `08_resolution_ablation.py` | Resolution sweep: latency/FLOPs/grid analysis across 160–640, cross-task comparison | ❌ CPU OK |
+| 09 | `09_metrics_report.py` | **Full metrics report**: hyperparams, augmentation, P/R/F1, mAP, confusion matrix, accuracy curves, params vs accuracy, cross-experiment comparison | ❌ CPU OK |
 
 ---
+
+## Metrics & Reports
+
+### Metrics Computed Automatically During Training
+
+The training script (`scripts/train.py`) computes all of the following during and after training:
+
+| Metric | Description | Computed When |
+|--------|-------------|--------------|
+| **Box Loss** | Bbox regression loss (MSE) | Every epoch |
+| **Cls Loss** | Classification loss (BCE) | Every epoch |
+| **Obj Loss** | Objectness loss (BCE) | Every epoch |
+| **Total Loss** | Weighted sum of all losses | Every epoch |
+| **Precision** | TP / (TP + FP) at IoU=0.5 | Every eval epoch |
+| **Recall** | TP / (TP + FN) at IoU=0.5 | Every eval epoch |
+| **F1 Score** | 2·P·R / (P + R) | Every eval epoch |
+| **mAP@50** | Mean Average Precision at IoU=0.5 | Every eval epoch |
+| **mAP@50-95** | Mean AP averaged over IoU 0.5:0.95:0.05 | Every eval epoch |
+| **Per-class AP** | AP for each class individually | Final evaluation |
+| **Confusion Matrix** | TP/FP counts per class | Final evaluation |
+
+### Auto-Generated Report Files
+
+After training completes, the following files are saved to `experiments/results/<experiment>/`:
+
+| File | Contents |
+|------|----------|
+| `config.json` | Hyperparameter config (model, optimizer, scheduler, augmentation, final metrics) |
+| `history.json` | Per-epoch: losses, P, R, F1, mAP50, mAP50-95, LR, timing |
+| `metrics.json` | Final evaluation: all metrics + per-class breakdown + confusion matrix |
+| `per_class_report.txt` | Human-readable per-class P/R/F1/AP table |
+| `training_curves.png` | Loss curves (box, cls, total) + accuracy curves (P, R, F1, mAP) |
+| `confusion_matrix.png` | Confusion matrix heatmap |
+| `best.pt` | Best model checkpoint (by mAP@50) |
+| `last.pt` | Final epoch checkpoint |
+| `ema.pt` | Exponential Moving Average checkpoint |
+
+### Comprehensive Metrics Notebook
+
+For interactive post-training analysis, run:
+
+```bash
+cd notebooks
+python 09_metrics_report.py
+```
+
+This notebook generates **12 visualizations**:
+
+1. **Hyperparameter Configuration Report** — full model/optimizer/scheduler config
+2. **Augmentation Report** — all data augmentation settings
+3. **Classification Report** — P, R, F1, TP, FP, FN
+4. **Per-Class Breakdown** — per-class P/R/F1/AP table
+5. **Loss Curves** — box, cls, obj, total vs epoch
+6. **Accuracy Curves** — P, R, F1, mAP@50, mAP@50-95 vs epoch
+7. **Epoch vs Accuracy** — combined loss + metrics dual-axis plot
+8. **Parameter Size vs Accuracy** — Pareto front with YOLO baseline references
+9. **Confusion Matrix** — heatmap visualization
+10. **IoU Distribution** — AP at different IoU thresholds
+11. **Learning Rate Schedule** — cosine annealing curve
+12. **Cross-Experiment Comparison** — table comparing all trained variants
+
+
 
 ## YAML Configs Reference
 

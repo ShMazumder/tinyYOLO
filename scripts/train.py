@@ -341,14 +341,33 @@ def train_single(args, imgsz, env):
     ema_decay = 0.9999
     ema_model = {k: v.clone() for k, v in model.state_dict().items()}
 
+    # Evaluation imports
+    from tinyYOLO.utils.postprocess import decode_predictions, non_max_suppression, decode_targets
+    from tinyYOLO.utils.metrics import (
+        DetectionMetrics, print_metrics_report,
+        plot_training_curves, generate_full_report,
+    )
+
+    # Eval frequency: every N epochs (and always on last epoch)
+    eval_every = max(1, epochs // 10) if epochs > 5 else 1
+
+    # Validation dataloader (no augmentation, no shuffle)
+    val_dataset = SimpleDetectionDataset(train_dir, imgsz=imgsz, augment=False)
+    val_loader = DataLoader(val_dataset, batch_size=batch, shuffle=False,
+                            num_workers=min(train_cfg['workers'], 4),
+                            pin_memory=(device != 'cpu'))
+
     # --- Training loop ---
     history = []
     best_loss = float('inf')
+    best_map = 0.0
 
-    print(f"\n  {'Epoch':>6} {'Box':>10} {'Cls':>10} {'Obj':>10} {'Total':>10} {'LR':>10} {'Time':>8}")
-    print(f"  {'-'*66}")
+    print(f"\n  {'Epoch':>6} {'Box':>8} {'Cls':>8} {'Obj':>8} {'Total':>8} "
+          f"{'P':>6} {'R':>6} {'F1':>6} {'mAP50':>7} {'LR':>10} {'Time':>6}")
+    print(f"  {'-'*88}")
 
     for epoch in range(epochs):
+        model.train()
         epoch_losses = {'box': 0, 'cls': 0, 'obj': 0, 'total': 0}
         n_batches = 0
         t0 = time.time()
@@ -363,7 +382,7 @@ def train_single(args, imgsz, env):
                 with torch.amp.autocast('cuda'):
                     outputs = model(images)
                     if isinstance(outputs, tuple):
-                        outputs = outputs[0]  # For seg/pose, use detection outputs
+                        outputs = outputs[0]
                     loss, loss_dict = loss_fn(outputs, targets)
                 scaler.scale(loss).backward()
                 scaler.unscale_(optimizer)
@@ -379,14 +398,12 @@ def train_single(args, imgsz, env):
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=10.0)
                 optimizer.step()
 
-            # Accumulate losses
             for k in epoch_losses:
                 epoch_losses[k] += loss_dict.get(k, 0)
             n_batches += 1
 
         scheduler.step()
 
-        # Average losses
         for k in epoch_losses:
             epoch_losses[k] /= max(n_batches, 1)
 
@@ -398,30 +415,95 @@ def train_single(args, imgsz, env):
         elapsed = time.time() - t0
         lr = scheduler.get_last_lr()[0]
 
+        # --- Evaluation ---
+        epoch_metrics = {'precision': 0, 'recall': 0, 'f1': 0, 'mAP50': 0, 'mAP50_95': 0}
+        is_eval_epoch = ((epoch + 1) % eval_every == 0) or (epoch + 1 == epochs)
+
+        if is_eval_epoch:
+            model.eval()
+            det_metrics = DetectionMetrics(nc=nc, conf_thresh=0.15)
+
+            with torch.no_grad():
+                for val_images, val_targets in val_loader:
+                    val_images = val_images.to(device, non_blocking=True)
+                    val_targets = val_targets.to(device, non_blocking=True)
+
+                    val_outputs = model(val_images)
+                    if isinstance(val_outputs, tuple):
+                        val_outputs = val_outputs[0]
+
+                    # Decode predictions → [N, 6] (x1,y1,x2,y2,conf,cls)
+                    pred_list = decode_predictions(val_outputs, imgsz, conf_thresh=0.15, nc=nc)
+                    pred_list = non_max_suppression(pred_list, iou_thresh=0.45)
+
+                    # Decode ground truth → [M, 5] (x1,y1,x2,y2,cls)
+                    gt_list = decode_targets(val_targets, imgsz)
+
+                    det_metrics.update(pred_list, gt_list)
+
+            epoch_metrics = det_metrics.compute()
+            model.train()
+
+        # Print row
+        p = epoch_metrics.get('precision', 0)
+        r = epoch_metrics.get('recall', 0)
+        f1 = epoch_metrics.get('f1', 0)
+        m50 = epoch_metrics.get('mAP50', 0)
+
         print(f"  {epoch+1:>4}/{epochs} "
-              f"{epoch_losses['box']:>10.4f} "
-              f"{epoch_losses['cls']:>10.4f} "
-              f"{epoch_losses['obj']:>10.4f} "
-              f"{epoch_losses['total']:>10.4f} "
-              f"{lr:>10.6f} "
-              f"{elapsed:>7.1f}s")
+              f"{epoch_losses['box']:>8.4f} {epoch_losses['cls']:>8.4f} "
+              f"{epoch_losses['obj']:>8.4f} {epoch_losses['total']:>8.4f} "
+              f"{p:>6.3f} {r:>6.3f} {f1:>6.3f} {m50:>7.4f} "
+              f"{lr:>10.6f} {elapsed:>5.1f}s")
 
         history.append({
             'epoch': epoch + 1,
             'lr': lr,
             'time': round(elapsed, 1),
             **epoch_losses,
+            'precision': round(p, 4),
+            'recall': round(r, 4),
+            'f1': round(f1, 4),
+            'mAP50': round(m50, 4),
+            'mAP50_95': round(epoch_metrics.get('mAP50_95', 0), 4),
         })
 
-        # Save best
-        if epoch_losses['total'] < best_loss:
-            best_loss = epoch_losses['total']
+        # Save best (by mAP if available, else by loss)
+        if is_eval_epoch and m50 > best_map:
+            best_map = m50
             torch.save(model.state_dict(), results_dir / 'best.pt')
+        elif epoch_losses['total'] < best_loss:
+            best_loss = epoch_losses['total']
+            if not is_eval_epoch:
+                torch.save(model.state_dict(), results_dir / 'best.pt')
 
     # --- Save final results ---
     torch.save(model.state_dict(), results_dir / 'last.pt')
     torch.save(ema_model, results_dir / 'ema.pt')
 
+    # Final evaluation with full report
+    print(f"\n  Running final evaluation...")
+    model.eval()
+    final_metrics_calc = DetectionMetrics(nc=nc, conf_thresh=0.15)
+
+    with torch.no_grad():
+        for val_images, val_targets in val_loader:
+            val_images = val_images.to(device, non_blocking=True)
+            val_targets = val_targets.to(device, non_blocking=True)
+
+            val_outputs = model(val_images)
+            if isinstance(val_outputs, tuple):
+                val_outputs = val_outputs[0]
+
+            pred_list = decode_predictions(val_outputs, imgsz, conf_thresh=0.15, nc=nc)
+            pred_list = non_max_suppression(pred_list, iou_thresh=0.45)
+            gt_list = decode_targets(val_targets, imgsz)
+            final_metrics_calc.update(pred_list, gt_list)
+
+    final_metrics = final_metrics_calc.compute()
+    print_metrics_report(final_metrics)
+
+    # Save config with final metrics
     config = {
         'name': model_name,
         'task': args.task,
@@ -430,12 +512,37 @@ def train_single(args, imgsz, env):
         'imgsz': imgsz,
         'epochs': epochs,
         'batch': batch,
+        'lr': args.lr,
         'device': str(device),
+        'amp': use_amp,
         'params_M': params['total_M'],
         'best_loss': round(best_loss, 4),
+        'best_mAP50': round(best_map, 4),
         'final_lr': lr,
         'platform': env['platform'],
         'timestamp': datetime.now().isoformat(),
+        'augmentation': {
+            'resize': imgsz,
+            'color_jitter': True,
+            'horizontal_flip': 0.5,
+        },
+        'optimizer': {
+            'type': 'AdamW',
+            'lr': args.lr,
+            'weight_decay': 0.01,
+        },
+        'scheduler': {
+            'type': 'CosineAnnealingLR',
+            'T_max': epochs,
+            'eta_min': args.lr * 0.01,
+        },
+        'final_metrics': {
+            'precision': final_metrics['precision'],
+            'recall': final_metrics['recall'],
+            'f1': final_metrics['f1'],
+            'mAP50': final_metrics['mAP50'],
+            'mAP50_95': final_metrics['mAP50_95'],
+        },
     }
 
     with open(results_dir / 'config.json', 'w') as f:
@@ -443,38 +550,28 @@ def train_single(args, imgsz, env):
     with open(results_dir / 'history.json', 'w') as f:
         json.dump(history, f, indent=2)
 
-    # --- Plot training curves ---
+    # Generate full report (curves, confusion matrix, per-class)
     try:
-        import matplotlib
-        matplotlib.use('Agg')
-        import matplotlib.pyplot as plt
-
-        fig, axes = plt.subplots(1, 3, figsize=(15, 4))
-        epochs_range = [h['epoch'] for h in history]
-
-        for ax, key, color, title in [
-            (axes[0], 'box', '#2196F3', 'Box Loss'),
-            (axes[1], 'cls', '#FF9800', 'Classification Loss'),
-            (axes[2], 'total', '#4CAF50', 'Total Loss'),
-        ]:
-            vals = [h[key] for h in history]
-            ax.plot(epochs_range, vals, color=color, linewidth=2)
-            ax.set_xlabel('Epoch')
-            ax.set_ylabel('Loss')
-            ax.set_title(title)
-            ax.grid(True, alpha=0.3)
-
-        plt.suptitle(f'{model_name} Training Curves', fontweight='bold')
-        plt.tight_layout()
-        plt.savefig(results_dir / 'training_curves.png', dpi=150, bbox_inches='tight')
-        plt.close()
-        print(f"\n  Training curves saved: {results_dir / 'training_curves.png'}")
+        generate_full_report(final_metrics, history, results_dir)
     except Exception as e:
-        print(f"\n  [WARN] Could not plot training curves: {e}")
+        print(f"  [WARN] Report generation error: {e}")
+        # Fallback: basic loss curves
+        try:
+            plot_training_curves(history, results_dir / 'training_curves.png')
+        except Exception:
+            pass
 
     print(f"\n  Results saved to: {results_dir}")
-    print(f"  Best total loss:  {best_loss:.4f}")
-    print(f"  Checkpoints:      best.pt, last.pt, ema.pt")
+    print(f"  Best mAP@50:      {best_map:.4f}")
+    print(f"  Best total loss:   {best_loss:.4f}")
+    print(f"  Outputs:")
+    print(f"    best.pt, last.pt, ema.pt      — Model checkpoints")
+    print(f"    config.json                    — Hyperparameters & augmentation report")
+    print(f"    history.json                   — Per-epoch losses + metrics")
+    print(f"    metrics.json                   — Final P/R/F1/mAP/confusion matrix")
+    print(f"    training_curves.png            — Loss + accuracy curves")
+    print(f"    confusion_matrix.png           — Confusion matrix heatmap")
+    print(f"    per_class_report.txt           — Per-class P/R/F1/AP breakdown")
 
     return model_name
 
