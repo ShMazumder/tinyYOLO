@@ -569,16 +569,21 @@ def train_single(args, imgsz, env):
         })
 
         # Save best (by mAP if available, else by loss)
+        def _clean_state_dict(sd):
+            """Strip thop profiler keys from state dict."""
+            return {k: v for k, v in sd.items()
+                    if not k.endswith(('total_ops', 'total_params'))}
+
         if is_eval_epoch and m50 > best_map:
             best_map = m50
-            torch.save(model.state_dict(), results_dir / 'best.pt')
+            torch.save(_clean_state_dict(model.state_dict()), results_dir / 'best.pt')
         elif epoch_losses['total'] < best_loss:
             best_loss = epoch_losses['total']
             if not is_eval_epoch:
-                torch.save(model.state_dict(), results_dir / 'best.pt')
+                torch.save(_clean_state_dict(model.state_dict()), results_dir / 'best.pt')
 
     # --- Save final results ---
-    torch.save(model.state_dict(), results_dir / 'last.pt')
+    torch.save(_clean_state_dict(model.state_dict()), results_dir / 'last.pt')
     torch.save(ema_model, results_dir / 'ema.pt')
 
     # Final evaluation with full report

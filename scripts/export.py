@@ -71,7 +71,11 @@ def main():
     weights_path = Path(args.weights)
 
     if weights_path.exists():
-        model.load_state_dict(torch.load(weights_path, map_location='cpu'))
+        state_dict = torch.load(weights_path, map_location='cpu')
+        # Filter out thop profiler keys (total_ops/total_params) injected by GFLOPs calculation
+        state_dict = {k: v for k, v in state_dict.items()
+                      if not k.endswith(('total_ops', 'total_params'))}
+        model.load_state_dict(state_dict)
         print(f"  Loaded weights: {weights_path}")
     else:
         print(f"  [WARN] Weights not found, exporting untrained model")
