@@ -1,0 +1,44 @@
+# TinyYOLO Detection — Standard Architecture
+# GhostNet backbone + LitePAN neck + Decoupled anchor-free head
+# Activation: SiLU | Attention: LightSpatialAttn + SEBlock
+
+task: det
+variant: standard
+nc: 80  # COCO classes
+
+backbone:
+  channels: [16, 24, 40, 80, 160]
+  depths: [1, 1, 2, 3, 2]
+  attention: spatial  # LightSpatialAttn on P4, SEBlock on P5
+
+neck:
+  type: LitePAN
+  out_channel: 64
+
+head:
+  type: TinyDetect
+  reg_max: 0  # No DFL — direct regression
+
+training:
+  epochs: 100
+  optimizer: AdamW
+  lr0: 0.001
+  lrf: 0.01  # Final LR = lr0 * lrf
+  weight_decay: 0.01
+  warmup_epochs: 3
+  scheduler: cosine
+  label_smoothing: 0.0
+
+augmentation:
+  mosaic: 1.0
+  mixup: 0.1
+  copy_paste: 0.1
+  hsv_h: 0.015
+  hsv_s: 0.7
+  hsv_v: 0.4
+  degrees: 0.0
+  translate: 0.1
+  scale: 0.5
+  shear: 0.0
+  flipud: 0.0
+  fliplr: 0.5

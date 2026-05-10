@@ -1,0 +1,45 @@
+# TinyYOLO Detection — Quantized (INT8-safe) Architecture
+# Activation: ReLU6 | Attention: ECABlock only | No spatial attention
+# Channels aligned to multiples of 8 for SIMD
+
+task: det
+variant: quantized
+nc: 80
+
+backbone:
+  channels: [16, 24, 40, 80, 160]  # All multiples of 8
+  depths: [1, 1, 2, 3, 2]
+  attention: eca  # INT8-safe channel attention only
+
+neck:
+  type: LitePAN
+  out_channel: 64
+
+head:
+  type: TinyDetect
+  reg_max: 0
+
+quantization:
+  enabled: true
+  method: qat  # Quantization-Aware Training
+  backend: qnnpack  # Mobile-optimized
+  calibration_batches: 100
+
+training:
+  epochs: 120
+  optimizer: AdamW
+  lr0: 0.001
+  lrf: 0.01
+  weight_decay: 0.01
+  warmup_epochs: 5
+  scheduler: cosine
+
+augmentation:
+  mosaic: 1.0
+  mixup: 0.1
+  hsv_h: 0.015
+  hsv_s: 0.7
+  hsv_v: 0.4
+  translate: 0.1
+  scale: 0.5
+  fliplr: 0.5

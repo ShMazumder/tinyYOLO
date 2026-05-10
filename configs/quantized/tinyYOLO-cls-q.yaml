@@ -1,0 +1,37 @@
+# TinyYOLO Classification — Quantized (INT8-safe)
+task: cls
+variant: quantized
+nc: 1000
+
+backbone:
+  channels: [16, 24, 40, 80, 160]
+  depths: [1, 1, 2, 3, 2]
+  attention: eca
+
+head:
+  type: TinyClassify
+  dropout: 0.2
+
+quantization:
+  enabled: true
+  method: qat
+  backend: qnnpack
+  calibration_batches: 100
+
+training:
+  epochs: 100
+  optimizer: AdamW
+  lr0: 0.005
+  lrf: 0.01
+  weight_decay: 0.05
+  warmup_epochs: 5
+  scheduler: cosine
+  label_smoothing: 0.1
+
+augmentation:
+  hsv_h: 0.015
+  hsv_s: 0.7
+  hsv_v: 0.4
+  translate: 0.1
+  scale: 0.5
+  fliplr: 0.5
