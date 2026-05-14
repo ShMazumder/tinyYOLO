@@ -3,7 +3,7 @@
 # 80 classes, 128 images — quick validation & smoke testing
 # Download: automatic via Ultralytics or manual fallback
 
-path: datasets/coco128
+path: coco128
 train: images/train2017
 val: images/train2017
 
