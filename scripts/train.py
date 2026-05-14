@@ -331,22 +331,43 @@ class SimpleDetectionDataset(Dataset):
                         if Path(f).suffix.lower() in ('.jpg', '.jpeg', '.png', '.bmp')
                     ])
                 self.img_files.extend(found)
-
+        
         if not self.img_files:
             import os
             print(f"\n  [ERROR] No images found in {img_dirs}")
             # Diagnostic: check parent directory contents
             for d in img_dirs:
-                parent = d.parent if d.exists() else d.parent.parent if d.parent.exists() else None
-                if parent and parent.exists():
-                    print(f"  [DEBUG] Contents of {parent}:")
+                p = d
+                while not p.exists() and p != p.parent:
+                    p = p.parent
+                if p.exists():
+                    print(f"  [DEBUG] Contents of {p}:")
                     try:
-                        for item in sorted(parent.iterdir()):
+                        for item in sorted(p.iterdir()):
                             suffix = "/" if item.is_dir() else ""
                             print(f"    - {item.name}{suffix}")
-                    except:
-                        pass
+                    except: pass
             raise FileNotFoundError(f"No images found in {img_dirs}")
+
+        # Preliminary label check (check first 10 images)
+        label_count = 0
+        for i in range(min(10, len(self.img_files))):
+            img_p = self.img_files[i]
+            # Try same logic as __getitem__ to find label
+            try_p = Path(str(img_p).replace('images', 'labels')).with_suffix('.txt')
+            if not try_p.exists():
+                try:
+                    parent_name = img_p.parent.name
+                    grandparent = img_p.parent.parent
+                    try_p = (grandparent / 'labels' / parent_name / img_p.name).with_suffix('.txt')
+                except: pass
+            if try_p.exists():
+                label_count += 1
+        
+        if label_count == 0 and len(self.img_files) > 0:
+            print(f"\n  [WARN] No labels found for the first 10 images!")
+            print(f"         Training will likely fail (losses will be zero).")
+            print(f"         Expected labels in a 'labels/' directory near 'images/'.")
 
         # Transforms — YOLO-standard augmentation pipeline
         if augment:
@@ -418,6 +439,13 @@ class SimpleDetectionDataset(Dataset):
                         cls = int(parts[0])
                         bbox = [float(x) for x in parts[1:5]]
                         labels.append([cls] + bbox)
+        
+        # Periodic debug: show where we are looking for labels
+        if idx % 1000 == 0:
+            status = "FOUND" if label_path.exists() else "MISSING"
+            print(f"  [DEBUG] Label check: {img_path.name} -> {label_path.name} [{status}]")
+            if not label_path.exists():
+                print(f"          Path searched: {label_path}")
 
         # Pad labels to fixed size (max 100 objects per image)
         max_objects = 100

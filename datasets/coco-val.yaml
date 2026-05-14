@@ -99,6 +99,9 @@ download: |
   from pathlib import Path
 
   dir = Path('datasets/coco')
-  urls = ['http://images.cocodataset.org/zips/val2017.zip']
-  if not (dir / 'images' / 'val2017').exists():
+  urls = [
+      'https://github.com/ultralytics/assets/releases/download/v0.0.0/coco2017labels-segments.zip',
+      'http://images.cocodataset.org/zips/val2017.zip'
+  ]
+  if not (dir / 'labels' / 'val2017').exists() or not (dir / 'val2017').exists():
       download(urls, dir=dir)
