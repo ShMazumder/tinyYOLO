@@ -438,13 +438,6 @@ class SimpleDetectionDataset(Dataset):
                         cls = int(parts[0])
                         bbox = [float(x) for x in parts[1:5]]
                         labels.append([cls] + bbox)
-        
-        # Periodic debug: show where we are looking for labels
-        if idx % 1000 == 0:
-            status = "FOUND" if label_path.exists() else "MISSING"
-            print(f"  [DEBUG] Label check: {img_path.name} -> {label_path.name} [{status}]")
-            if not label_path.exists():
-                print(f"          Path searched: {label_path}")
 
         # Pad labels to fixed size (max 100 objects per image)
         max_objects = 100
