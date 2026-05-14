@@ -18,7 +18,7 @@
 #       ├── val2007/
 #       └── test2007/
 
-path: datasets/VOC
+path: VOC
 
 # Train: all 2007+2012 train+val images (~16.5K)
 train:
