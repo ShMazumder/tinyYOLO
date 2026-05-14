@@ -305,17 +305,29 @@ class SimpleDetectionDataset(Dataset):
         # Find all images across all directories
         self.img_files = []
         for d in img_dirs:
-            if d.exists():
+            target_dir = d
+            if not target_dir.exists():
+                # Smart search: if 'datasets/coco/images/val2017' doesn't exist,
+                # search for any 'val2017' folder under 'datasets/'
+                print(f"  [INFO] {target_dir} not found, searching for '{target_dir.name}' elsewhere...")
+                import glob
+                search_root = PROJECT_ROOT / 'datasets'
+                matches = glob.glob(str(search_root / "**" / target_dir.name), recursive=True)
+                if matches:
+                    target_dir = Path(matches[0])
+                    print(f"  [OK] Found data at {target_dir}")
+
+            if target_dir.exists():
                 # Primary search: direct children
                 found = sorted([
-                    f for f in d.iterdir()
+                    f for f in target_dir.iterdir()
                     if f.suffix.lower() in ('.jpg', '.jpeg', '.png', '.bmp')
                 ])
                 if not found:
-                    # Secondary search: recursive (max depth 3 to avoid infinite loops)
+                    # Secondary search: recursive
                     import glob
                     found = sorted([
-                        Path(f) for f in glob.glob(str(d / "**" / "*"), recursive=True)
+                        Path(f) for f in glob.glob(str(target_dir / "**" / "*"), recursive=True)
                         if Path(f).suffix.lower() in ('.jpg', '.jpeg', '.png', '.bmp')
                     ])
                 self.img_files.extend(found)
@@ -372,16 +384,31 @@ class SimpleDetectionDataset(Dataset):
         img_tensor = self.transform(img)  # [3, imgsz, imgsz]
 
         # Load labels (YOLO format: class cx cy w h)
-        # Derive label dir from image path (images/ → labels/)
-        img_path_str = str(img_path)
-        if '/images/' in img_path_str:
-            label_path_str = img_path_str.replace('/images/', '/labels/')
-        elif '\\images\\' in img_path_str:
-            label_path_str = img_path_str.replace('\\images\\', '\\labels\\')
-        else:
-            label_path_str = img_path_str.replace('images', 'labels')
+        # Derive label path from image path (robust search)
+        img_path = Path(img_path)
+        label_path = img_path.with_suffix('.txt') # Default fallback
         
-        label_path = Path(label_path_str).with_suffix('.txt')
+        # Strategy 1: Replace 'images' with 'labels' (Standard YOLO)
+        try_path = Path(str(img_path).replace('images', 'labels')).with_suffix('.txt')
+        if try_path.exists():
+            label_path = try_path
+        else:
+            # Strategy 2: Look for 'labels' at same level as 'images' parent
+            # e.g., .../coco/val2017/001.jpg -> .../coco/labels/val2017/001.txt
+            try:
+                parent_name = img_path.parent.name
+                grandparent = img_path.parent.parent
+                try_path = (grandparent / 'labels' / parent_name / img_path.name).with_suffix('.txt')
+                if try_path.exists():
+                    label_path = try_path
+                else:
+                    # Strategy 3: Just look in a 'labels' folder next to the image folder
+                    try_path = (img_path.parent.parent / 'labels' / img_path.name).with_suffix('.txt')
+                    if try_path.exists():
+                        label_path = try_path
+            except:
+                pass
+
         labels = []
         if label_path.exists():
             with open(label_path) as f:
