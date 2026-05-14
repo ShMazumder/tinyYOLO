@@ -4,9 +4,9 @@
 # WARNING: ~20GB download, ~6-10 hours training on T4
 # Download: automatic via Ultralytics
 
-path: coco
-train: images/train2017
-val: images/val2017
+path: .
+train: coco/images/train2017
+val: coco/images/val2017
 
 # Number of classes
 nc: 80
