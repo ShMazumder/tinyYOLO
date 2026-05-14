@@ -306,10 +306,19 @@ class SimpleDetectionDataset(Dataset):
         self.img_files = []
         for d in img_dirs:
             if d.exists():
-                self.img_files.extend(sorted([
+                # Primary search: direct children
+                found = sorted([
                     f for f in d.iterdir()
                     if f.suffix.lower() in ('.jpg', '.jpeg', '.png', '.bmp')
-                ]))
+                ])
+                if not found:
+                    # Secondary search: recursive (max depth 3 to avoid infinite loops)
+                    import glob
+                    found = sorted([
+                        Path(f) for f in glob.glob(str(d / "**" / "*"), recursive=True)
+                        if Path(f).suffix.lower() in ('.jpg', '.jpeg', '.png', '.bmp')
+                    ])
+                self.img_files.extend(found)
 
         if not self.img_files:
             raise FileNotFoundError(f"No images found in {img_dirs}")
@@ -351,7 +360,15 @@ class SimpleDetectionDataset(Dataset):
 
         # Load labels (YOLO format: class cx cy w h)
         # Derive label dir from image path (images/ → labels/)
-        label_path = Path(str(img_path).replace('/images/', '/labels/')).with_suffix('.txt')
+        img_path_str = str(img_path)
+        if '/images/' in img_path_str:
+            label_path_str = img_path_str.replace('/images/', '/labels/')
+        elif '\\images\\' in img_path_str:
+            label_path_str = img_path_str.replace('\\images\\', '\\labels\\')
+        else:
+            label_path_str = img_path_str.replace('images', 'labels')
+        
+        label_path = Path(label_path_str).with_suffix('.txt')
         labels = []
         if label_path.exists():
             with open(label_path) as f:
