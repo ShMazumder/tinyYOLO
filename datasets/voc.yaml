@@ -18,18 +18,16 @@
 #       ├── val2007/
 #       └── test2007/
 
-path: VOC
-
-# Train: all 2007+2012 train+val images (~16.5K)
+path: .
 train:
-  - images/train2012
-  - images/train2007
-  - images/val2012
-  - images/val2007
+  - VOC/images/train2012
+  - VOC/images/train2007
+  - VOC/images/val2012
+  - VOC/images/val2007
 
 # Val: 2007 test set (~5K)
 val:
-  - images/test2007
+  - VOC/images/test2007
 
 # Number of classes
 nc: 20
