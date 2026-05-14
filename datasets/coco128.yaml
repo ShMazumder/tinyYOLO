@@ -3,9 +3,9 @@
 # 80 classes, 128 images — quick validation & smoke testing
 # Download: automatic via Ultralytics or manual fallback
 
-path: coco128
-train: images/train2017
-val: images/train2017
+path: .
+train: coco128/images/train2017
+val: coco128/images/train2017
 
 # Number of classes
 nc: 80
