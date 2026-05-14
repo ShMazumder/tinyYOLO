@@ -4,7 +4,7 @@
 # WARNING: ~20GB download, ~6-10 hours training on T4
 # Download: automatic via Ultralytics
 
-path: .
+path: datasets
 train: coco/images/train2017
 val: coco/images/val2017
 
@@ -105,4 +105,4 @@ download: |
       'http://images.cocodataset.org/zips/train2017.zip',
       'http://images.cocodataset.org/zips/val2017.zip',
   ]
-  download(urls, dir=dir.parent)
+  download(urls, dir=dir)

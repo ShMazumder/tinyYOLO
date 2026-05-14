@@ -3,7 +3,7 @@
 # 80 classes, ~5K images — good middle ground between COCO128 and full COCO
 # Download: automatic via Ultralytics
 
-path: .
+path: datasets
 train: coco/images/val2017
 val: coco/images/val2017
 
@@ -99,6 +99,6 @@ download: |
   from pathlib import Path
 
   dir = Path('datasets/coco')
-  urls = ['https://github.com/ultralytics/assets/releases/download/v0.0.0/coco-val2017.zip']
+  urls = ['http://images.cocodataset.org/zips/val2017.zip']
   if not (dir / 'images' / 'val2017').exists():
-      download(urls, dir=dir.parent)
+      download(urls, dir=dir)

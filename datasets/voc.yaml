@@ -18,7 +18,7 @@
 #       ├── val2007/
 #       └── test2007/
 
-path: .
+path: datasets
 train:
   - VOC/images/train2012
   - VOC/images/train2007

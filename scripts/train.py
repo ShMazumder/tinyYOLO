@@ -146,11 +146,11 @@ def load_dataset_config(data_name):
     """
     import yaml
 
-    # Try to set Ultralytics datasets_dir to PROJECT_ROOT / 'datasets'
-    # This prevents double-nested paths like datasets/datasets/coco
+    # Try to set Ultralytics datasets_dir to PROJECT_ROOT
+    # This ensures that 'datasets/NAME' paths in YAMLs resolve correctly
     try:
         from ultralytics.utils import settings
-        settings.update({'datasets_dir': str(PROJECT_ROOT / 'datasets')})
+        settings.update({'datasets_dir': str(PROJECT_ROOT)})
     except Exception:
         pass
 
@@ -321,6 +321,19 @@ class SimpleDetectionDataset(Dataset):
                 self.img_files.extend(found)
 
         if not self.img_files:
+            import os
+            print(f"\n  [ERROR] No images found in {img_dirs}")
+            # Diagnostic: check parent directory contents
+            for d in img_dirs:
+                parent = d.parent if d.exists() else d.parent.parent if d.parent.exists() else None
+                if parent and parent.exists():
+                    print(f"  [DEBUG] Contents of {parent}:")
+                    try:
+                        for item in sorted(parent.iterdir()):
+                            suffix = "/" if item.is_dir() else ""
+                            print(f"    - {item.name}{suffix}")
+                    except:
+                        pass
             raise FileNotFoundError(f"No images found in {img_dirs}")
 
         # Transforms — YOLO-standard augmentation pipeline
