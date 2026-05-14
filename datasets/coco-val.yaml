@@ -3,7 +3,7 @@
 # 80 classes, ~5K images — good middle ground between COCO128 and full COCO
 # Download: automatic via Ultralytics
 
-path: datasets/coco
+path: coco
 train: images/val2017
 val: images/val2017
 
