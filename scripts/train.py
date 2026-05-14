@@ -349,25 +349,25 @@ class SimpleDetectionDataset(Dataset):
                     except: pass
             raise FileNotFoundError(f"No images found in {img_dirs}")
 
-        # Preliminary label check (check first 10 images)
-        label_count = 0
-        for i in range(min(10, len(self.img_files))):
-            img_p = self.img_files[i]
-            # Try same logic as __getitem__ to find label
-            try_p = Path(str(img_p).replace('images', 'labels')).with_suffix('.txt')
-            if not try_p.exists():
-                try:
-                    parent_name = img_p.parent.name
-                    grandparent = img_p.parent.parent
-                    try_p = (grandparent / 'labels' / parent_name / img_p.name).with_suffix('.txt')
-                except: pass
-            if try_p.exists():
-                label_count += 1
+        # Universal label root discovery
+        self.label_root = None
+        print(f"  [INFO] Searching for labels folder under 'datasets/'...")
+        import glob
+        search_root = PROJECT_ROOT / 'datasets'
+        # Look for any folder named 'labels'
+        matches = glob.glob(str(search_root / "**" / "labels"), recursive=True)
+        if matches:
+            # Pick the first one that looks like it has content
+            for m in matches:
+                p = Path(m)
+                if any(p.iterdir()):
+                    self.label_root = p
+                    print(f"  [OK] Found label root at {self.label_root}")
+                    break
         
-        if label_count == 0 and len(self.img_files) > 0:
-            print(f"\n  [WARN] No labels found for the first 10 images!")
-            print(f"         Training will likely fail (losses will be zero).")
-            print(f"         Expected labels in a 'labels/' directory near 'images/'.")
+        if not self.label_root:
+            print(f"  [WARN] No 'labels' folder found under 'datasets/'!")
+            print(f"         Losses will likely be zero.")
 
         # Transforms — YOLO-standard augmentation pipeline
         if augment:
@@ -409,26 +409,25 @@ class SimpleDetectionDataset(Dataset):
         img_path = Path(img_path)
         label_path = img_path.with_suffix('.txt') # Default fallback
         
-        # Strategy 1: Replace 'images' with 'labels' (Standard YOLO)
-        try_path = Path(str(img_path).replace('images', 'labels')).with_suffix('.txt')
-        if try_path.exists():
-            label_path = try_path
-        else:
-            # Strategy 2: Look for 'labels' at same level as 'images' parent
-            # e.g., .../coco/val2017/001.jpg -> .../coco/labels/val2017/001.txt
-            try:
-                parent_name = img_path.parent.name
-                grandparent = img_path.parent.parent
-                try_path = (grandparent / 'labels' / parent_name / img_path.name).with_suffix('.txt')
-                if try_path.exists():
-                    label_path = try_path
-                else:
-                    # Strategy 3: Just look in a 'labels' folder next to the image folder
-                    try_path = (img_path.parent.parent / 'labels' / img_path.name).with_suffix('.txt')
-                    if try_path.exists():
-                        label_path = try_path
-            except:
-                pass
+        # Strategy 1: Use pre-discovered label_root if available
+        if self.label_root:
+            # Try to match the image path's structure within the label_root
+            # e.g., images/val2017/001.jpg -> label_root/val2017/001.txt
+            # or just label_root/001.txt
+            try_paths = [
+                (self.label_root / img_path.parent.name / img_path.name).with_suffix('.txt'),
+                (self.label_root / img_path.name).with_suffix('.txt')
+            ]
+            for tp in try_paths:
+                if tp.exists():
+                    label_path = tp
+                    break
+        
+        # Strategy 2: Standard YOLO fallback (replace 'images' with 'labels')
+        if not label_path.exists():
+            try_path = Path(str(img_path).replace('images', 'labels')).with_suffix('.txt')
+            if try_path.exists():
+                label_path = try_path
 
         labels = []
         if label_path.exists():
