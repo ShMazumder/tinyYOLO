@@ -4,7 +4,7 @@
 # WARNING: ~20GB download, ~6-10 hours training on T4
 # Download: automatic via Ultralytics
 
-path: datasets/coco
+path: coco
 train: images/train2017
 val: images/val2017
 
