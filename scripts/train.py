@@ -146,6 +146,14 @@ def load_dataset_config(data_name):
     """
     import yaml
 
+    # Try to set Ultralytics datasets_dir to PROJECT_ROOT / 'datasets'
+    # This prevents double-nested paths like datasets/datasets/coco
+    try:
+        from ultralytics.utils import settings
+        settings.update({'datasets_dir': str(PROJECT_ROOT / 'datasets')})
+    except Exception:
+        pass
+
     # 1. Check local datasets/ folder first
     local_yaml = PROJECT_ROOT / 'datasets' / data_name
     if not str(data_name).endswith('.yaml'):
@@ -155,8 +163,15 @@ def load_dataset_config(data_name):
         with open(local_yaml) as f:
             cfg = yaml.safe_load(f)
 
-        # Resolve paths relative to project root
-        base = PROJECT_ROOT / cfg.get('path', 'datasets')
+        # Resolve paths relative to datasets folder by default
+        path_val = cfg.get('path', '.')
+        if Path(path_val).is_absolute():
+            base = Path(path_val)
+        elif str(path_val).startswith('datasets'):
+            # Backward compatibility: if path already has datasets/, resolve from root
+            base = PROJECT_ROOT / path_val
+        else:
+            base = PROJECT_ROOT / 'datasets' / path_val
         raw_train = cfg.get('train', 'images/train')
         raw_val = cfg.get('val', 'images/val')
 
