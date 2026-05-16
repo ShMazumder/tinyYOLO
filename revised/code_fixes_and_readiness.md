@@ -49,10 +49,10 @@ head_kwargs = HEAD_KWARGS[task](nc, neck_out, act)
 
 ---
 
-### Fix F2: Task-Aligned Label Assignment (TAL)
+### Fix F2: Task-Aligned Label Assignment (TAL) ✅ IMPLEMENTED
 
-**File:** `scripts/train.py` — `DetectionLoss.forward()`
-**Lines:** 540–610
+**File:** `scripts/train.py` — `TALAssigner` class (lines 85–233)
+**Status:** Fully implemented with center prior filtering, IoU-aware alignment metric, and conflict resolution.
 
 **Before:** Single-cell assignment (1 positive per GT per scale)
 **After:** TAL with k=10 top positives per GT, alignment metric $t = s^{0.5} \cdot u^{6.0}$
@@ -80,6 +80,10 @@ class TALAssigner:
         # Keep assignment with highest alignment metric
         ...
 ```
+
+> **Implementation note:** Full `TALAssigner` class with `_box_iou_batch()` and `assign()` methods
+> is now in `scripts/train.py` lines 85–233. Includes center prior, k=10 selection, and
+> conflict resolution via highest alignment metric.
 
 ---
 
@@ -193,9 +197,9 @@ set_seed(args.seed)  # Add --seed argument to argparse
 
 ---
 
-### Fix F7: Learning Rate Warmup
+### Fix F7: Learning Rate Warmup ✅ IMPLEMENTED
 
-**File:** `scripts/train.py` — training loop
+**File:** `scripts/train.py` — training loop (lines 803–811)
 
 ```python
 # After scheduler creation:
@@ -210,11 +214,15 @@ if epoch < warmup_epochs:
         pg['lr'] = args.lr * warmup_progress
 ```
 
+> **Implementation note:** Warmup is now implemented with per-iteration granularity
+> (not per-epoch) in `scripts/train.py` lines 803–811. The `--warmup` CLI arg
+> was already present; the loop logic now actively adjusts optimizer LR.
+
 ---
 
-### Fix F8: Mosaic Augmentation
+### Fix F8: Mosaic Augmentation ✅ IMPLEMENTED
 
-**File:** `scripts/train.py` — `SimpleDetectionDataset`
+**File:** `scripts/train.py` — `MosaicDataset` class (lines 570–666)
 
 Add mosaic augmentation that combines 4 images into a single training sample:
 
@@ -235,6 +243,11 @@ class MosaicDataset(Dataset):
         # Adjust labels to mosaic coordinates
         ...
 ```
+
+> **Implementation note:** Full `MosaicDataset` class with 4-image composition, random
+> center point (30–70%), coordinate remapping, and auto-disable at 90% of training
+> is now in `scripts/train.py` lines 570–666. Training loop calls `dataset.set_mosaic(False)`
+> when `epoch >= mosaic_disable_epoch`.
 
 ---
 
@@ -287,11 +300,11 @@ class MosaicDataset(Dataset):
 
 ---
 
-### Fix F12: ONNX Export State Dict Cleanup
+### Fix F12: ONNX Export State Dict Cleanup ✅ IMPLEMENTED
 
-**File:** `scripts/export.py` — `_clean_state_dict()`
+**File:** `scripts/export.py` — `_clean_state_dict()` (lines 57–75)
 
-Add documentation explaining why profiler metadata must be removed:
+Added dedicated function with comprehensive documentation explaining why profiler metadata must be removed:
 ```python
 def _clean_state_dict(state_dict):
     """Remove profiler metadata keys injected by PyTorch profiler.
@@ -302,9 +315,11 @@ def _clean_state_dict(state_dict):
 
 ---
 
-### Fix F13: QAT Pipeline
+### Fix F13: QAT Pipeline ✅ IMPLEMENTED
 
-**File:** New file `scripts/quantize.py`
+**File:** New file `scripts/quantize.py` (305 lines)
+
+Full quantization pipeline with two modes:
 
 ```python
 """
@@ -326,6 +341,11 @@ def apply_qat(model, calibration_loader, n_batches=500):
     model_int8 = quant.convert(model.eval(), inplace=False)
     return model_int8
 ```
+
+> **Implementation note:** The full `scripts/quantize.py` includes `apply_ptq()` (MinMax
+> observer calibration, per-channel symmetric weights), `apply_qat()` (fake quantization
+> nodes, observer freeze at 75%), `export_quantized()` (ONNX + TorchScript), and supports
+> both `qnnpack` (ARM) and `fbgemm` (x86) backends.
 
 ---
 

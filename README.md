@@ -59,7 +59,7 @@ pip install -r requirements.txt
 
 ```python
 # In a Colab cell:
-!git clone <your-repo-url> /content/tinyYOLO
+!git clone https://github.com/ShMazumder/tinyYOLO.git /content/tinyYOLO
 %cd /content/tinyYOLO
 !pip install -e . -q
 ```
@@ -68,7 +68,7 @@ pip install -r requirements.txt
 
 ```python
 # In a Kaggle notebook cell:
-!git clone <your-repo-url> /kaggle/working/tinyYOLO
+!git clone https://github.com/ShMazumder/tinyYOLO.git /kaggle/working/tinyYOLO
 import sys; sys.path.insert(0, '/kaggle/working/tinyYOLO')
 !pip install -e /kaggle/working/tinyYOLO -q
 ```
@@ -77,7 +77,7 @@ import sys; sys.path.insert(0, '/kaggle/working/tinyYOLO')
 
 ```bash
 cd /workspace
-git clone <your-repo-url> tinyYOLO
+git clone https://github.com/ShMazumder/tinyYOLO.git tinyYOLO
 cd tinyYOLO && pip install -e .
 ```
 
@@ -145,7 +145,8 @@ tinyYOLO/
 ├── analysis/                              # Research documentation
 │   ├── YOLO_complete_analysis.md          # Full YOLO v1→v26 comparison
 │   ├── implementation_plan.md             # Architecture design document
-│   └── revision_analysis.md              # ⭐ R1 revision gap analysis (NEW)
+│   ├── revision_analysis.md              # ⭐ R1 revision gap analysis (NEW)
+│   └── gpu_experiment_guide.md           # ⭐ Step-by-step GPU experiment commands (NEW)
 │
 ├── tinyYOLO/                              # Core Python package
 │   ├── __init__.py
@@ -181,6 +182,7 @@ tinyYOLO/
 ├── scripts/                               # Command-line tools
 │   ├── train.py                           # Unified training (R1: TAL, seed, warmup, mosaic)
 │   ├── export.py                          # Model export (ONNX/TorchScript)
+│   ├── quantize.py                        # ⭐ QAT/PTQ quantization pipeline (NEW)
 │   └── benchmark_models.py               # Full benchmarking suite
 │
 ├── notebooks/                             # Experiment scripts (# %% cell format)
@@ -462,6 +464,40 @@ python scripts/export.py \
   --int8          # Optional: INT8 quantization
 ```
 
+### `scripts/quantize.py` — INT8 Quantization (NEW in R1)
+
+Full quantization pipeline supporting both QAT and PTQ with configurable backends.
+
+```bash
+# Post-Training Quantization (PTQ) — fast, calibration-based
+python scripts/quantize.py --mode ptq \
+  --weights experiments/results/voc-q-416-seed42/best.pt \
+  --data voc.yaml --n-calib 500 --backend qnnpack
+
+# Quantization-Aware Training (QAT) — higher accuracy retention
+python scripts/quantize.py --mode qat \
+  --weights experiments/results/voc-q-416-seed42/best.pt \
+  --data voc.yaml --epochs 10 --lr 1e-4 --backend qnnpack
+
+# Export INT8 ONNX directly
+python scripts/quantize.py --mode ptq \
+  --weights best.pt --data voc.yaml --export onnx
+
+# All options:
+python scripts/quantize.py \
+  --mode ptq|qat          # Quantization method
+  --weights path/to.pt    # Pre-trained checkpoint
+  --data voc.yaml         # Calibration dataset
+  --variant quantized     # Architecture variant (quantized recommended)
+  --imgsz 416             # Image size
+  --batch 16              # Batch size
+  --epochs 10             # QAT fine-tuning epochs
+  --lr 1e-4               # QAT learning rate (lower than full training)
+  --n-calib 500           # PTQ calibration batches
+  --backend qnnpack       # qnnpack (ARM) or fbgemm (x86)
+  --export onnx           # Export INT8 model after quantization
+```
+
 ---
 
 ## Notebooks Reference
@@ -597,7 +633,7 @@ Same tasks but with: `variant: quantized`, `attention: eca`, QAT settings, `back
 | Loss | CIoU+BCE (2.0/1.0/1.0) | Except cls (CrossEntropy) |
 | BatchNorm | eps=0.001, momentum=0.03 | YOLO-standard |
 | Weight Decay | 0.0001 (weights only) | Biases/BN excluded |
-| Augmentation | +grayscale(0.1), +perspective(0.2) | Enhanced pipeline |
+| **Augmentation** | +grayscale(0.1), +perspective(0.15) | Enhanced pipeline |
 
 ---
 
@@ -902,6 +938,7 @@ Full analysis: [`analysis/YOLO_complete_analysis.md`](analysis/YOLO_complete_ana
 
 | Version | Date | Changes |
 |---------|------|---------|
+| **R1.1** | 2025-05-16 | Completed all pending code fixes: TAL assignment implemented (`TALAssigner` class), LR warmup logic in training loop, mosaic augmentation (`MosaicDataset` wrapper), QAT/PTQ pipeline (`scripts/quantize.py`), ONNX export documentation. All 12/12 code fixes now applied. |
 | **R1** | 2025-05-15 | Major revision addressing peer review: head activation fix, dedicated objectness head, TAL assignment, mosaic augmentation, seed control, warmup, proper train/val splits, VOC/COCO evaluation, edge deployment (Jetson/RPi4), SOTA comparisons, 10 ablation studies. See [`revised/`](revised/). |
 | R0 | 2025-05-09 | Initial submission. COCO128 evaluation only. |
 
