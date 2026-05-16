@@ -1,8 +1,9 @@
 # TinyYOLO — Post-Experiment Roadmap
 
-**Status:** Waiting for GPU experiments to complete  
+**Status:** GPU experiments IN PROGRESS (Kaggle: 64s/epoch, Colab: 265s/epoch)  
 **Last updated:** 2025-05-16  
-**Prerequisite:** Run experiment notebooks `01`–`05` in `experiments/`
+**Prerequisite:** Run experiment notebooks `01`–`05` in `experiments/`  
+**Training speed:** Kaggle T4 = ~5.3h/seed, Colab T4 = ~22h/seed (vectorized loss + RAM caching)
 
 ---
 
@@ -160,10 +161,10 @@ Antigravity will auto-update:
 
 | Phase | Duration | Can Parallelize? |
 |-------|----------|-----------------|
-| GPU Experiments (01–04) | 2–4 days | ✅ Run on multiple Colab sessions |
+| GPU Experiments (01–04) | 1–2 days (Kaggle) / 4–5 days (Colab) | ✅ Run on multiple sessions |
 | Results Integration | 1 day | After experiments |
 | Edge Hardware | 1–2 days | ✅ Parallel with results integration |
 | SOTA Comparison | 0.5 days | ✅ Parallel with edge |
 | Manuscript Finalization | 1–2 days | After all data collected |
 | Submission | 1 day | Final step |
-| **Total** | **~5–9 days** | |
+| **Total** | **~4–7 days** | |

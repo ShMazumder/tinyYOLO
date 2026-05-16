@@ -162,7 +162,7 @@ Replaces naive single-cell assignment. Alignment metric: $t = s^{0.5} \cdot u^{6
 
 $$\mathcal{L} = 2.0 \cdot \mathcal{L}_{\text{CIoU}} + 1.0 \cdot \mathcal{L}_{\text{BCE-cls}} + 1.0 \cdot \mathcal{L}_{\text{BCE-obj}}$$
 
-Loss normalization: single $N_{\text{pos}}$ across all scales (R1 fix — was inflated per-scale).
+Loss normalization: single $N_{\text{pos}}$ across all scales (R1 fix — was inflated per-scale). Loss computation is fully vectorized using `torch.where()` and batched CIoU — no Python for-loops over batch/targets.
 
 ### 4.3 Training Recipe
 
@@ -173,7 +173,8 @@ Loss normalization: single $N_{\text{pos}}$ across all scales (R1 fix — was in
 | **Warmup** | **3 epochs linear (NEW)** |
 | **Mosaic** | **p=1.0, disabled last 10% (NEW)** |
 | **Seed** | **42 (deterministic, NEW)** |
-| Augmentation | ColorJitter, HFlip, Perspective (0.15) |
+| Augmentation | OpenCV-native HSV jitter, HFlip, Grayscale |
+| Image Caching | RAM pre-load for datasets <5 GB |
 | EMA | decay=0.9999 |
 | AMP | FP16 on GPU |
 

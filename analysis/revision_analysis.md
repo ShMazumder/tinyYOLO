@@ -35,7 +35,7 @@ The original manuscript received **Major Revision** with 8 mandatory and 11 mino
 | F7 | LR warmup — linear warmup for first N epochs (default 3) | `scripts/train.py` | ✅ Applied |
 | F8 | Mosaic augmentation — `MosaicDataset` wrapper with auto-disable at 90% | `scripts/train.py` | ✅ Applied |
 | F10 | Loss weight documentation — corrected from "7.5×" to "2.0×" | `scripts/train.py` | ✅ Applied |
-| F11 | Augmentation tuning — perspective distortion 0.2→0.15 | `scripts/train.py` | ✅ Applied |
+| F11 | Augmentation tuning — OpenCV-native pipeline (replaced PIL) | `scripts/train.py` | ✅ Applied |
 
 ### Infrastructure Additions (All Implemented ✅)
 
@@ -43,6 +43,17 @@ The original manuscript received **Major Revision** with 8 mandatory and 11 mino
 |--------|-------------|------|--------|
 | F12 | ONNX export documentation — profiler metadata cleanup explained | `scripts/export.py` | ✅ Applied |
 | F13 | QAT/PTQ quantization pipeline | `scripts/quantize.py` | ✅ New file |
+
+### Performance Optimizations (All Implemented ✅)
+
+| Fix ID | Description | File | Status |
+|--------|-------------|------|--------|
+| P1 | Vectorized DetectionLoss — eliminated 38K Python loop iterations/batch | `scripts/train.py` | ✅ Applied |
+| P2 | OpenCV-native augmentation — replaced PIL pipeline | `scripts/train.py` | ✅ Applied |
+| P3 | RAM image + label caching — auto-cache datasets <5 GB | `scripts/train.py` | ✅ Applied |
+| P4 | Batch size / worker tuning — T4: 32→64, resolution scaling relaxed | `tinyYOLO/utils/env.py` | ✅ Applied |
+| P5 | Notebook execution — get_ipython().system() for tqdm compat | `experiments/01-04_*.ipynb` | ✅ Applied |
+| P6 | tqdm progress bars — single-line epoch monitoring | `scripts/train.py` | ✅ Applied |
 
 ---
 
@@ -65,9 +76,13 @@ Head output: [B, 5+nc, H, W]   (85 channels for COCO-80)
 Objectness: dedicated head      (obj_preds branch with proper init)
 Activation: act=configurable    ('silu' for standard, 'relu6' for quantized)
 Assignment: TAL                 (k=10 positives per GT, alignment metric)
+Loss:       vectorized          (torch.where + batched CIoU, zero Python loops)
+Augment:    OpenCV-native       (HSV jitter, HFlip, Grayscale — no PIL)
+Caching:    RAM pre-load        (images <5 GB + all labels at init)
 Warmup:     3 epochs linear     (per-iteration granularity)
-Mosaic:     4-image             (disabled last 10% of training)
+Mosaic:     4-image numpy       (cv2.resize on uint8, not tensor F.interpolate)
 Seed:       deterministic       (torch + numpy + random + CUDA)
+Progress:   tqdm                (single-line batch bars with leave=False)
 ```
 
 ---
@@ -102,7 +117,8 @@ Seed:       deterministic       (torch + numpy + random + CUDA)
 ### Modified Files
 - `tinyYOLO/modules/heads.py` — All 5 head classes with configurable activation and dedicated objectness
 - `tinyYOLO/models.py` — Model builder passes variant activation to heads
-- `scripts/train.py` — TAL, warmup, mosaic, seed control, loss normalization, augmentation tuning
+- `tinyYOLO/utils/env.py` — Batch size tuning, worker config, resolution scaling
+- `scripts/train.py` — TAL, vectorized loss, OpenCV augmentation, RAM caching, tqdm, warmup, mosaic, seed control
 
 ### New Files
 - `scripts/quantize.py` — QAT/PTQ quantization pipeline
