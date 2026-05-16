@@ -28,6 +28,10 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
+try:
+    from tqdm import tqdm
+except ImportError:
+    tqdm = None
 from torchvision import transforms
 import numpy as np
 import random
@@ -1052,7 +1056,19 @@ def train_single(args, imgsz, env):
 
         n_total_iters = len(dataloader)
 
-        for batch_idx, (images, targets) in enumerate(dataloader):
+        # Wrap with tqdm for real-time batch progress
+        batch_iter = enumerate(dataloader)
+        if tqdm is not None:
+            pbar = tqdm(
+                batch_iter, total=len(dataloader),
+                desc=f"  Epoch {epoch+1}/{epochs}",
+                bar_format='{l_bar}{bar:30}{r_bar}',
+                leave=False, file=sys.stdout
+            )
+        else:
+            pbar = batch_iter
+
+        for batch_idx, (images, targets) in pbar:
             images = images.to(device, non_blocking=True)
             targets = targets.to(device, non_blocking=True)
 
@@ -1091,6 +1107,11 @@ def train_single(args, imgsz, env):
             for k in epoch_losses:
                 epoch_losses[k] += loss_dict.get(k, 0)
             n_batches += 1
+
+            # Update tqdm description with running loss
+            if tqdm is not None and isinstance(pbar, tqdm):
+                avg_loss = epoch_losses['total'] / n_batches
+                pbar.set_postfix({'loss': f'{avg_loss:.4f}'}, refresh=True)
 
         scheduler.step()
 
@@ -1140,11 +1161,15 @@ def train_single(args, imgsz, env):
         f1 = epoch_metrics.get('f1', 0)
         m50 = epoch_metrics.get('mAP50', 0)
 
+        # Close tqdm bar before printing epoch summary
+        if tqdm is not None and isinstance(pbar, tqdm):
+            pbar.close()
+
         print(f"  {epoch+1:>4}/{epochs} "
               f"{epoch_losses['box']:>8.4f} {epoch_losses['cls']:>8.4f} "
               f"{epoch_losses['obj']:>8.4f} {epoch_losses['total']:>8.4f} "
               f"{p:>6.3f} {r:>6.3f} {f1:>6.3f} {m50:>7.4f} "
-              f"{lr:>10.6f} {elapsed:>5.1f}s")
+              f"{lr:>10.6f} {elapsed:>5.1f}s", flush=True)
 
         history.append({
             'epoch': epoch + 1,
