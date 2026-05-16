@@ -541,6 +541,30 @@ scp -r user@gpu-host:~/tinyYOLO/experiments/results/ \
 
 ---
 
+## 9. Training Acceleration (New in R1)
+
+To hit the 64s/epoch benchmark and reduce total training time, use these flags:
+
+### 9.1 Pretrained Backbone (`--pretrained`)
+TinyYOLO now supports loading ImageNet-pretrained GhostNet weights. This allows models to converge in **~100–150 epochs** instead of 300, halving the required GPU hours.
+```bash
+python scripts/train.py --task det --pretrained --epochs 150
+```
+
+### 9.2 Torch Compile (`--compile`)
+If using PyTorch 2.0+ (standard in Colab/Kaggle), this enables kernel fusion for **1.5–2.0x faster** training iterations.
+```bash
+python scripts/train.py --task det --compile
+```
+
+### 9.3 Combined Super-Fast Run
+```bash
+python scripts/train.py --task det --pretrained --compile --epochs 150 --batch 128
+```
+*Note: Batch 128 fits on T4 (15GB) for 416 resolution and maximizes utilization.*
+
+---
+
 ## Troubleshooting
 
 | Issue | Solution |

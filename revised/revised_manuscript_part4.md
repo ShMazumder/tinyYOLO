@@ -8,7 +8,7 @@
 
 TinyYOLO occupies a unique position in the lightweight detector landscape: it operates at a parameter scale (0.22–0.23M) where only YOLO-Fastest is directly comparable, while providing capabilities (multi-task support, INT8-native design) not available in any model at this scale. The accuracy–efficiency Pareto analysis (Section 7.4) reveals that TinyYOLO-q sits on the frontier — no model achieves higher mAP@50 at comparable parameter count.
 
-However, the gap to models 4× larger (NanoDet at 0.95M: 48.3% mAP@50 vs. TinyYOLO's 41.2% on VOC) suggests that TinyYOLO's practical value lies in deployment scenarios where the 0.95M models genuinely cannot fit, rather than as a general-purpose lightweight detector. Candidate deployment targets include: (i) microcontrollers with 256–512 KB SRAM (e.g., STM32H7 series), (ii) ultra-low-power vision sensors (e.g., Sony IMX500), and (iii) multi-model pipelines where TinyYOLO serves as a first-stage filter before a heavier second-stage classifier.
+However, the gap to models 4× larger (e.g., official NanoDet-m at 0.95M achieving 27.3% mAP@50 on COCO vs. TinyYOLO's TBD%) suggests that TinyYOLO's practical value lies in deployment scenarios where the larger models genuinely cannot fit, rather than as a general-purpose lightweight detector. Candidate deployment targets include: (i) microcontrollers with 256–512 KB SRAM (e.g., STM32H7 series), where MCUNetV2 [26] has demonstrated success on VOC, (ii) ultra-low-power vision sensors (e.g., Sony IMX500), and (iii) multi-model pipelines where TinyYOLO serves as a first-stage filter before a heavier second-stage classifier.
 
 ### 11.2 Quantized Variant Superiority
 
