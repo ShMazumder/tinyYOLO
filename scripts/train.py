@@ -571,9 +571,9 @@ class SimpleDetectionDataset(Dataset):
         except ImportError:
             avail_gb = 999  # assume enough if psutil not available
         est_gb = len(self.img_files) * imgsz * imgsz * 3 / (1024 ** 3)
-        # Only cache if dataset fits in 40% of free RAM AND is under 5 GB
-        # (prevents OOM on multi-seed runs where memory isn't fully freed)
-        self._use_cache = (est_gb < avail_gb * 0.4) and (est_gb < 5.0)
+        # Cache if dataset fits in 40% of free RAM
+        # On Kaggle (30GB): 8GB train fits (8 < 12). On Colab (12.7GB): 8GB skipped (8 > 5)
+        self._use_cache = (est_gb < avail_gb * 0.4)
         if self._use_cache:
             print(f"  [CACHE] Pre-loading {len(self.img_files)} images into RAM (~{est_gb:.1f} GB)...")
             for i, fp in enumerate(self.img_files):

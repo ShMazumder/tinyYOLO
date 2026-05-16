@@ -49,9 +49,15 @@ def decode_predictions(outputs, imgsz, conf_thresh=0.25, nc=80):
         x2 = cx + w / 2
         y2 = cy + h / 2
 
-        # Class predictions: [B, nc, H, W]
-        pred_cls = pred[:, 4:, :, :]
+        # Objectness: [B, 1, H, W] — dedicated objectness head at index 4
+        pred_obj = torch.sigmoid(pred[:, 4:5, :, :])  # [B, 1, H, W]
+
+        # Class predictions: [B, nc, H, W] — start at index 5 (after 4 bbox + 1 obj)
+        pred_cls = pred[:, 5:, :, :]
         cls_conf, cls_id = torch.sigmoid(pred_cls).max(dim=1)  # [B, H, W]
+
+        # Joint confidence = objectness × class_conf
+        cls_conf = cls_conf * pred_obj.squeeze(1)  # [B, H, W]
 
         for b in range(B):
             # Flatten
@@ -73,11 +79,16 @@ def decode_predictions(outputs, imgsz, conf_thresh=0.25, nc=80):
                 dets = torch.cat([boxes, scores.unsqueeze(1), classes.unsqueeze(1)], dim=1)
                 all_boxes[b].append(dets)
 
-    # Concatenate all scales and apply NMS per batch
+    # Concatenate all scales and cap pre-NMS detections
     results = []
+    max_pre_nms = 1000  # Safety cap to prevent memory blowup
     for b in range(batch_size):
         if all_boxes[b]:
             dets = torch.cat(all_boxes[b], dim=0)
+            # Keep top-k by confidence if too many
+            if len(dets) > max_pre_nms:
+                topk = dets[:, 4].topk(max_pre_nms).indices
+                dets = dets[topk]
             results.append(dets)
         else:
             results.append(torch.zeros(0, 6, device=outputs[0].device))
