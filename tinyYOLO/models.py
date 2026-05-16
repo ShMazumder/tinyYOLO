@@ -49,11 +49,11 @@ HEAD_MAP = {
 }
 
 HEAD_KWARGS = {
-    'det': lambda nc, ch: {'nc': nc, 'in_channels': ch},
-    'seg': lambda nc, ch: {'nc': nc, 'in_channels': ch, 'nm': 32},
-    'pose': lambda nc, ch: {'nc': 1, 'in_channels': ch, 'nk': 17, 'ndim': 3},
-    'cls': lambda nc, ch: {'in_channel': 160, 'nc': nc},
-    'obb': lambda nc, ch: {'nc': nc, 'in_channels': ch},
+    'det': lambda nc, ch, act: {'nc': nc, 'in_channels': ch, 'act': act},
+    'seg': lambda nc, ch, act: {'nc': nc, 'in_channels': ch, 'nm': 32, 'act': act},
+    'pose': lambda nc, ch, act: {'nc': 1, 'in_channels': ch, 'nk': 17, 'ndim': 3, 'act': act},
+    'cls': lambda nc, ch, act: {'in_channel': 160, 'nc': nc},
+    'obb': lambda nc, ch, act: {'nc': nc, 'in_channels': ch, 'act': act},
 }
 
 
@@ -75,19 +75,22 @@ def build_model(task='det', variant='standard', nc=80, width_mult=1.0):
     channels = [max(8, int(c * width_mult) // 8 * 8) for c in base_channels]
     backbone = TinyBackbone(channels=channels, variant=variant)
 
+    # Variant-appropriate activation — used consistently across all components
+    act = 'silu' if variant == 'standard' else 'relu6'
+
     # Build neck (skip for classification)
     neck = None
     neck_out = None
+    neck_ch = None
     if task != 'cls':
         in_ch = backbone.get_out_channels()
         neck_ch = max(8, int(64 * width_mult) // 8 * 8)
-        act = 'silu' if variant == 'standard' else 'relu6'
         neck = LitePAN(in_channels=in_ch, out_channel=neck_ch, act=act)
         neck_out = neck.get_out_channels()
 
-    # Build head
+    # Build head — pass variant-appropriate activation
     head_cls = HEAD_MAP[task]
-    head_kwargs = HEAD_KWARGS[task](nc, neck_out)
+    head_kwargs = HEAD_KWARGS[task](nc, neck_out, act)
 
     # For classification, adjust input channel based on backbone
     if task == 'cls':
@@ -106,7 +109,7 @@ def build_model(task='det', variant='standard', nc=80, width_mult=1.0):
         'nc': nc,
         'width_mult': width_mult,
         'backbone_channels': channels,
-        'neck_channel': neck_ch if neck else None,
+        'neck_channel': neck_ch,
         'total_params': total_params,
         'total_params_M': round(total_params / 1e6, 2),
     }

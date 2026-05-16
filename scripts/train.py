@@ -30,6 +30,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
 import numpy as np
+import random
 
 from tinyYOLO.utils.env import detect_environment, get_training_config, print_env_report
 from tinyYOLO.models import build_model
@@ -65,7 +66,20 @@ def parse_args():
     parser.add_argument('--name', type=str, default=None, help='Experiment name')
     parser.add_argument('--quick', action='store_true', help='Quick test: 5 epochs')
     parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate')
+    parser.add_argument('--seed', type=int, default=42, help='Random seed for reproducibility')
+    parser.add_argument('--warmup', type=int, default=3, help='Warmup epochs')
     return parser.parse_args()
+
+
+def set_seed(seed=42):
+    """Set deterministic training for reproducibility."""
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    os.environ['PYTHONHASHSEED'] = str(seed)
 
 
 # ---------------------------------------------------------------------------
@@ -377,7 +391,7 @@ class SimpleDetectionDataset(Dataset):
                 transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.015),
                 transforms.RandomGrayscale(p=0.1),
                 transforms.RandomHorizontalFlip(p=0.5),
-                transforms.RandomPerspective(distortion_scale=0.2, p=0.3),
+                transforms.RandomPerspective(distortion_scale=0.15, p=0.3),
                 transforms.ToTensor(),
             ])
         else:
@@ -461,8 +475,10 @@ class DetectionLoss(nn.Module):
     """
     Detection loss for tinyYOLO with CIoU box regression.
     Components: CIoU box loss + BCE classification + BCE objectness.
-    Loss weights follow pfeatherstone/tinyyolo conventions:
-        total = 7.5 × IoU + 1.0 × cls + 1.0 × obj
+    Loss weights tuned for sub-1M parameter models:
+        total = 2.0 × CIoU + 1.0 × cls + 1.0 × obj
+    Note: Full-size YOLO uses 7.5× but this overwhelms cls/obj
+    for tiny models where CIoU magnitude is ~0.8–1.0.
     """
 
     def __init__(self, nc=80):
@@ -470,7 +486,6 @@ class DetectionLoss(nn.Module):
         self.nc = nc
         self.bce = nn.BCEWithLogitsLoss(reduction='mean')
         # Loss weights tuned for tiny models (CIoU starts ~1.0 for small models)
-        # Full YOLO uses 7.5× but that overwhelms obj/cls for sub-1M param models
         self.box_weight = 2.0
         self.cls_weight = 1.0
         self.obj_weight = 1.0
@@ -540,19 +555,27 @@ class DetectionLoss(nn.Module):
     def forward(self, predictions, targets):
         """
         Args:
-            predictions: list of [B, 4+nc, H, W] from model
+            predictions: list of [B, 5+nc, H, W] from model (4 bbox + 1 obj + nc cls)
             targets: [B, max_objects, 5] (cls, cx, cy, w, h)
         """
         device = predictions[0].device
         total_box = torch.tensor(0.0, device=device)
         total_cls = torch.tensor(0.0, device=device)
         total_obj = torch.tensor(0.0, device=device)
-        n_targets_total = 0
+
+        # Count total positive targets ONCE (Fix: no longer inflated per-scale)
+        N_pos = 0
+        for b in range(targets.shape[0]):
+            for t in range(targets.shape[1]):
+                if targets[b, t, 2] > 0:  # valid target
+                    N_pos += 1
+        N_pos = max(N_pos, 1)
 
         for pred in predictions:
             B, C, H, W = pred.shape
-            pred_box = pred[:, :4, :, :]   # [B, 4, H, W]
-            pred_cls = pred[:, 4:, :, :]   # [B, nc, H, W]
+            pred_box = pred[:, :4, :, :]     # [B, 4, H, W]
+            pred_obj = pred[:, 4:5, :, :]    # [B, 1, H, W] — dedicated objectness
+            pred_cls = pred[:, 5:, :, :]     # [B, nc, H, W]
 
             # --- Objectness target map ---
             obj_target = torch.zeros(B, 1, H, W, device=device)
@@ -565,9 +588,8 @@ class DetectionLoss(nn.Module):
                         gj = min(int(cy * H), H - 1)
                         obj_target[b, 0, gj, gi] = 1.0
 
-            # Objectness: max class logit as proxy
-            obj_pred = pred_cls.max(dim=1, keepdim=True)[0]
-            total_obj += self.bce(obj_pred, obj_target)
+            # Objectness: dedicated objectness head output
+            total_obj += self.bce(pred_obj, obj_target)
 
             # --- Per-target CIoU + Classification ---
             for b in range(B):
@@ -589,15 +611,11 @@ class DetectionLoss(nn.Module):
                         target_cxcywh = targets[b, t, 1:5].to(device)
                         total_box += self._ciou(pred_cxcywh, target_cxcywh)
 
-                        n_targets_total += 1
+        # Normalize by total positive target count (computed once, not per-scale)
+        total_box = total_box / N_pos
+        total_cls = total_cls / N_pos
 
-            n_targets_total = max(n_targets_total, 1)
-
-        # Normalize by target count
-        total_box = total_box / n_targets_total
-        total_cls = total_cls / n_targets_total
-
-        # Weighted sum (pfeatherstone/tinyyolo convention)
+        # Weighted sum
         total_loss = (self.box_weight * total_box +
                       self.cls_weight * total_cls +
                       self.obj_weight * total_obj)
@@ -638,6 +656,10 @@ def train_single(args, imgsz, env):
     print(f"  Task: {args.task} | Variant: {args.variant} | ImgSz: {imgsz}")
     print(f"{'='*60}")
 
+    # Set deterministic training for reproducibility
+    set_seed(args.seed)
+    print(f"  Seed:       {args.seed} (deterministic training enabled)")
+
     # Settings
     epochs = 5 if args.quick else args.epochs
     batch = args.batch or train_cfg['batch']
@@ -648,7 +670,17 @@ def train_single(args, imgsz, env):
     print(f"\n  Loading dataset...")
     data_dict = load_dataset_config(data_name)
     train_dir = data_dict.get('train', '')
+    val_dir = data_dict.get('val', '')
     nc = data_dict.get('nc', 80 if args.task not in ('pose',) else 1)
+
+    # Validate that train and val directories are different (prevent data leakage)
+    train_str = str(train_dir[0]) if isinstance(train_dir, (list, tuple)) else str(train_dir)
+    val_str = str(val_dir[0]) if isinstance(val_dir, (list, tuple)) else str(val_dir)
+    if val_str == train_str:
+        print(f"  [WARN] Validation dir same as training dir — possible data leakage!")
+        print(f"  [WARN] train: {train_str}")
+        print(f"  [WARN] val:   {val_str}")
+        print(f"  [INFO] Consider using --data with a YAML containing separate train/val paths.")
 
     # Build model with correct nc for this dataset
     model, model_info = build_model(task=args.task, variant=args.variant, nc=nc)
@@ -727,11 +759,15 @@ def train_single(args, imgsz, env):
     # Eval frequency: every N epochs (and always on last epoch)
     eval_every = max(1, epochs // 10) if epochs > 5 else 1
 
-    # Validation dataloader (no augmentation, no shuffle)
-    val_dataset = SimpleDetectionDataset(train_dir, imgsz=imgsz, augment=False)
+    # Validation dataloader — uses SEPARATE val directory (no data leakage)
+    if not val_dir:
+        print(f"  [WARN] No validation directory specified, using training dir (not recommended)")
+        val_dir = train_dir
+    val_dataset = SimpleDetectionDataset(val_dir, imgsz=imgsz, augment=False)
     val_loader = DataLoader(val_dataset, batch_size=batch, shuffle=False,
                             num_workers=min(train_cfg['workers'], 4),
                             pin_memory=(device != 'cpu'))
+    print(f"  Val Dataset: {len(val_dataset)} images")
 
     # --- Training loop ---
     history = []

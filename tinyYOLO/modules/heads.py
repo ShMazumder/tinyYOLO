@@ -30,9 +30,10 @@ class TinyDetect(nn.Module):
         nc: Number of classes.
         in_channels: List of input channels from neck (one per scale).
         reg_max: Max regression range (0 = no DFL, direct regression).
+        act: Activation function name ('silu' for standard, 'relu6' for quantized).
     """
 
-    def __init__(self, nc=80, in_channels=None, reg_max=0):
+    def __init__(self, nc=80, in_channels=None, reg_max=0, act='silu'):
         super().__init__()
         if in_channels is None:
             in_channels = [64, 64, 64]
@@ -40,46 +41,54 @@ class TinyDetect(nn.Module):
         self.nc = nc
         self.nl = len(in_channels)  # Number of detection layers (scales)
         self.reg_max = reg_max
-        self.no = nc + 4  # Outputs per anchor: nc classes + 4 bbox coords
+        self.no = nc + 5  # Outputs per anchor: 4 bbox + 1 obj + nc classes
 
         # Per-scale decoupled heads
         self.cls_convs = nn.ModuleList()
         self.reg_convs = nn.ModuleList()
         self.cls_preds = nn.ModuleList()
         self.reg_preds = nn.ModuleList()
+        self.obj_preds = nn.ModuleList()  # Dedicated objectness head
 
         for ch in in_channels:
-            # Classification branch
+            # Classification branch — uses variant-appropriate activation
             self.cls_convs.append(nn.Sequential(
-                DWConv(ch, ch, 3, 1, act='silu'),
-                DWConv(ch, ch, 3, 1, act='silu'),
+                DWConv(ch, ch, 3, 1, act=act),
+                DWConv(ch, ch, 3, 1, act=act),
             ))
             self.cls_preds.append(
                 nn.Conv2d(ch, nc, 1, bias=True)
             )
-            # Regression branch
+            # Regression branch — uses variant-appropriate activation
             self.reg_convs.append(nn.Sequential(
-                DWConv(ch, ch, 3, 1, act='silu'),
-                DWConv(ch, ch, 3, 1, act='silu'),
+                DWConv(ch, ch, 3, 1, act=act),
+                DWConv(ch, ch, 3, 1, act=act),
             ))
             self.reg_preds.append(
                 nn.Conv2d(ch, 4, 1, bias=True)
+            )
+            # Objectness prediction (dedicated, replaces max-class proxy)
+            self.obj_preds.append(
+                nn.Conv2d(ch, 1, 1, bias=True)
             )
 
         self._init_bias()
 
     def _init_bias(self):
-        """Initialize classification bias for stable early training."""
+        """Initialize classification and objectness bias for stable early training."""
+        prior = 0.01
+        bias_val = -math.log((1 - prior) / prior)
         for cls_pred in self.cls_preds:
-            # Bias init: -log((1 - prior) / prior) where prior = 0.01
-            nn.init.constant_(cls_pred.bias, -math.log((1 - 0.01) / 0.01))
+            nn.init.constant_(cls_pred.bias, bias_val)
+        for obj_pred in self.obj_preds:
+            nn.init.constant_(obj_pred.bias, bias_val)
 
     def forward(self, features):
         """
         Args:
             features: List of feature maps from neck [F3, N4, N5].
         Returns:
-            List of (cls_pred, reg_pred) tuples per scale.
+            List of [B, 5+nc, H, W] tensors per scale (4 bbox + 1 obj + nc cls).
         """
         outputs = []
         for i, feat in enumerate(features):
@@ -87,7 +96,8 @@ class TinyDetect(nn.Module):
             reg_feat = self.reg_convs[i](feat)
             cls_out = self.cls_preds[i](cls_feat)  # [B, nc, H, W]
             reg_out = self.reg_preds[i](reg_feat)  # [B, 4, H, W]
-            outputs.append(torch.cat([reg_out, cls_out], dim=1))  # [B, 4+nc, H, W]
+            obj_out = self.obj_preds[i](feat)       # [B, 1, H, W]
+            outputs.append(torch.cat([reg_out, obj_out, cls_out], dim=1))  # [B, 5+nc, H, W]
         return outputs
 
 
@@ -101,27 +111,28 @@ class TinySegment(nn.Module):
         nc: Number of classes.
         in_channels: List of input channels from neck.
         nm: Number of proto-mask channels.
+        act: Activation function name ('silu' for standard, 'relu6' for quantized).
     """
 
-    def __init__(self, nc=80, in_channels=None, nm=32):
+    def __init__(self, nc=80, in_channels=None, nm=32, act='silu'):
         super().__init__()
         if in_channels is None:
             in_channels = [64, 64, 64]
         self.nm = nm
-        self.detect = TinyDetect(nc=nc, in_channels=in_channels)
+        self.detect = TinyDetect(nc=nc, in_channels=in_channels, act=act)
 
         # Mask coefficient prediction (appended to detection)
         self.mask_preds = nn.ModuleList()
         for ch in in_channels:
             self.mask_preds.append(nn.Conv2d(ch, nm, 1, bias=True))
 
-        # Proto-mask branch (from highest-res feature)
+        # Proto-mask branch (from highest-res feature) — uses variant activation
         self.proto = nn.Sequential(
-            ConvBNAct(in_channels[0], in_channels[0], 3, 1, act='silu'),
+            ConvBNAct(in_channels[0], in_channels[0], 3, 1, act=act),
             nn.Upsample(scale_factor=2, mode='nearest'),
-            ConvBNAct(in_channels[0], in_channels[0] // 2, 3, 1, act='silu'),
+            ConvBNAct(in_channels[0], in_channels[0] // 2, 3, 1, act=act),
             nn.Upsample(scale_factor=2, mode='nearest'),
-            ConvBNAct(in_channels[0] // 2, nm, 1, 1, act='silu'),
+            ConvBNAct(in_channels[0] // 2, nm, 1, 1, act=act),
         )
 
     def forward(self, features):
@@ -148,21 +159,22 @@ class TinyPose(nn.Module):
         in_channels: List of input channels from neck.
         nk: Number of keypoints (17 for COCO).
         ndim: Dimensions per keypoint (2 for x,y or 3 for x,y,visibility).
+        act: Activation function name ('silu' for standard, 'relu6' for quantized).
     """
 
-    def __init__(self, nc=1, in_channels=None, nk=17, ndim=3):
+    def __init__(self, nc=1, in_channels=None, nk=17, ndim=3, act='silu'):
         super().__init__()
         if in_channels is None:
             in_channels = [64, 64, 64]
         self.nk = nk
         self.ndim = ndim
-        self.detect = TinyDetect(nc=nc, in_channels=in_channels)
+        self.detect = TinyDetect(nc=nc, in_channels=in_channels, act=act)
 
-        # Keypoint prediction branch
+        # Keypoint prediction branch — uses variant-appropriate activation
         self.kpt_preds = nn.ModuleList()
         for ch in in_channels:
             self.kpt_preds.append(nn.Sequential(
-                DWConv(ch, ch, 3, 1, act='silu'),
+                DWConv(ch, ch, 3, 1, act=act),
                 nn.Conv2d(ch, nk * ndim, 1, bias=True),
             ))
 
@@ -211,19 +223,20 @@ class TinyOBB(nn.Module):
     Args:
         nc: Number of classes.
         in_channels: List of input channels from neck.
+        act: Activation function name ('silu' for standard, 'relu6' for quantized).
     """
 
-    def __init__(self, nc=80, in_channels=None):
+    def __init__(self, nc=80, in_channels=None, act='silu'):
         super().__init__()
         if in_channels is None:
             in_channels = [64, 64, 64]
-        self.detect = TinyDetect(nc=nc, in_channels=in_channels)
+        self.detect = TinyDetect(nc=nc, in_channels=in_channels, act=act)
 
-        # Angle prediction (1 value per anchor)
+        # Angle prediction (1 value per anchor) — uses variant-appropriate activation
         self.angle_preds = nn.ModuleList()
         for ch in in_channels:
             self.angle_preds.append(nn.Sequential(
-                DWConv(ch, ch, 3, 1, act='silu'),
+                DWConv(ch, ch, 3, 1, act=act),
                 nn.Conv2d(ch, 1, 1, bias=True),
             ))
 
