@@ -555,3 +555,5 @@ scp -r user@gpu-host:~/tinyYOLO/experiments/results/ \
 | `ModuleNotFoundError: tinyYOLO` | Run `pip install -e .` from the project root |
 | `No module named 'tqdm'` | Run `pip install tqdm` |
 | Slow epoch time (>120s on T4) | Ensure latest `train.py` with vectorized loss. Push/pull latest code |
+| mAP stays at 0 or declining | Ensure `postprocess.py` uses `pred[:, 5:]` for classes and `sigmoid*imgsz` decode. Pull latest code |
+| Validation hangs at eval epoch | Pull latest `postprocess.py` — old code had channel index bug generating millions of detections |

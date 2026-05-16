@@ -416,6 +416,33 @@ def apply_qat(model, calibration_loader, n_batches=500):
 
 **Impact:** Epoch time reduced from **265s → 64s** on T4 (4× speedup). This was the #1 bottleneck.
 
+### Perf P1b: Box Decode Fix (CRITICAL)
+
+**File:** `tinyYOLO/utils/postprocess.py` — `decode_predictions()`
+
+**Before:** `cx = (sigmoid(pred) + grid_x) * stride`, `w = sigmoid(pred) * imgsz * 0.5` — grid-offset decode.
+**After:** `cx = sigmoid(pred) * imgsz`, `w = sigmoid(pred) * imgsz` — matches training loss coordinate system.
+
+**Root cause:** Training supervises `sigmoid(pred)` against normalized `[0,1]` targets via CIoU. The old decode added grid offsets and stride multiplication that were never trained. This caused every predicted box to be spatially displaced and half-sized, resulting in near-zero IoU with ground truth.
+
+### Perf P1c: Channel Index Fix (CRITICAL)
+
+**File:** `tinyYOLO/utils/postprocess.py`
+
+**Before:** `pred_cls = pred[:, 4:, :, :]` — included objectness channel (index 4) as a class.
+**After:** `pred_cls = pred[:, 5:, :, :]` + `pred_obj = pred[:, 4:5, :, :]` + joint confidence `obj × cls_conf`.
+
+**Root cause:** With the dedicated objectness head (output = `[4 bbox, 1 obj, nc cls]`), classes start at index 5. The old code generated millions of false detections from the objectness channel, causing validation to hang.
+
+### Perf P1d: Objectness BCE pos_weight
+
+**File:** `scripts/train.py` — `DetectionLoss.__init__()`
+
+**Before:** `BCEWithLogitsLoss()` with no `pos_weight` on objectness targets that are ~0.1% positive.
+**After:** `BCEWithLogitsLoss(pos_weight=torch.tensor([4.0]))` for objectness.
+
+**Root cause:** With only ~3 positive cells out of ~3500 per scale, standard BCE learns to predict obj≈0 everywhere. The `pos_weight=4.0` upweights positive targets so the model learns to activate objectness for target cells.
+
 ### Perf P2: OpenCV-Native Augmentation Pipeline
 
 **File:** `scripts/train.py` — `SimpleDetectionDataset._augment_cv2()`

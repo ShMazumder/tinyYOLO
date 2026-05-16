@@ -267,12 +267,13 @@ Full training pipeline with COCO128 auto-download, vectorized CIoU loss, AMP, EM
 3. **Pre-caches images in RAM** (if dataset <5 GB and memory allows) — eliminates disk I/O
 4. Builds model, applies YOLO-standard BatchNorm (`eps=1e-3, momentum=0.03`)
 5. Trains with AdamW (separate weight decay groups) + cosine LR + AMP + gradient clipping
-6. Uses **vectorized CIoU box loss** + BCE classification + BCE objectness (weighted 2.0 / 1.0 / 1.0)
-7. Computes **P/R/F1/mAP@50/mAP@50-95** at regular intervals via NMS + IoU matching
-8. Displays **tqdm progress bars** (single-line updates per epoch)
-9. Saves best checkpoint by **mAP@50** (not just loss)
-10. Generates full report: training curves, confusion matrix, per-class breakdown
-11. Saves config, history, metrics as JSON
+6. Uses **vectorized CIoU box loss** + BCE classification + BCE objectness with `pos_weight=4.0` (weighted 2.0 / 1.0 / 1.0)
+7. Box decode uses `sigmoid × imgsz` matching training coordinate system (normalized [0,1])
+8. Computes **P/R/F1/mAP@50/mAP@50-95** at regular intervals via NMS + IoU matching
+9. Displays **tqdm progress bars** (single-line updates per epoch)
+10. Saves best checkpoint by **mAP@50** (not just loss)
+11. Generates full report: training curves, confusion matrix, per-class breakdown
+12. Saves config, history, metrics as JSON
 
 **Training speed (benchmarked):**
 | Platform | Epoch Time (VOC 16.5K, 416×416) | 300 Epochs |

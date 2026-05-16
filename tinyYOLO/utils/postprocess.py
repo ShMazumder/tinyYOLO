@@ -21,27 +21,20 @@ def decode_predictions(outputs, imgsz, conf_thresh=0.25, nc=80):
     Returns:
         List of [N, 6] tensors per batch: (x1, y1, x2, y2, conf, cls).
     """
-    strides = [imgsz // o.shape[2] for o in outputs]  # [8, 16, 32]
     batch_size = outputs[0].shape[0]
     all_boxes = [[] for _ in range(batch_size)]
 
-    for scale_idx, (pred, stride) in enumerate(zip(outputs, strides)):
+    for scale_idx, pred in enumerate(outputs):
         B, C, H, W = pred.shape
-        device = pred.device
-
-        # Create grid
-        gy, gx = torch.meshgrid(
-            torch.arange(H, device=device, dtype=torch.float32),
-            torch.arange(W, device=device, dtype=torch.float32),
-            indexing='ij'
-        )
 
         # Decode boxes: [B, 4, H, W]
+        # Training loss uses CIoU on sigmoid(pred) vs normalized [0,1] targets,
+        # so decode must use sigmoid * imgsz (NOT grid-offset decode)
         pred_box = pred[:, :4, :, :]
-        cx = (torch.sigmoid(pred_box[:, 0]) + gx) * stride  # center x
-        cy = (torch.sigmoid(pred_box[:, 1]) + gy) * stride  # center y
-        w = torch.sigmoid(pred_box[:, 2]) * imgsz * 0.5     # width
-        h = torch.sigmoid(pred_box[:, 3]) * imgsz * 0.5     # height
+        cx = torch.sigmoid(pred_box[:, 0]) * imgsz   # center x in pixels
+        cy = torch.sigmoid(pred_box[:, 1]) * imgsz   # center y in pixels
+        w = torch.sigmoid(pred_box[:, 2]) * imgsz     # width in pixels
+        h = torch.sigmoid(pred_box[:, 3]) * imgsz     # height in pixels
 
         # Convert to xyxy
         x1 = cx - w / 2

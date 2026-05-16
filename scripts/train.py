@@ -776,6 +776,9 @@ class DetectionLoss(nn.Module):
         super().__init__()
         self.nc = nc
         self.bce = nn.BCEWithLogitsLoss(reduction='mean')
+        # Objectness BCE needs pos_weight: ~0.1% of cells are positive
+        self.obj_bce = nn.BCEWithLogitsLoss(reduction='mean',
+                                             pos_weight=torch.tensor([4.0]))
         # Loss weights tuned for tiny models (CIoU starts ~1.0 for small models)
         self.box_weight = 2.0
         self.cls_weight = 1.0
@@ -882,7 +885,7 @@ class DetectionLoss(nn.Module):
             if len(b_idx) > 0:
                 obj_target[b_idx, 0, gj[b_idx, t_idx], gi[b_idx, t_idx]] = 1.0
 
-            total_obj += self.bce(pred_obj, obj_target)
+            total_obj += self.obj_bce(pred_obj, obj_target)
 
             # === CIoU + Classification (vectorized) ===
             if len(b_idx) > 0:

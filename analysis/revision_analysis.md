@@ -25,6 +25,7 @@ The original manuscript received **Major Revision** with 8 mandatory and 11 mino
 | F3 | Train/val data leakage — separate val directory enforced | `scripts/train.py` | ✅ Applied |
 | F4 | Dedicated objectness head — replaces max-class-logit proxy | `tinyYOLO/modules/heads.py` | ✅ Applied |
 | F5 | Loss normalization — single N_pos across all scales | `scripts/train.py` | ✅ Applied |
+| F5b | Objectness pos_weight=4.0 — counteracts 99.9% negative cell imbalance | `scripts/train.py` | ✅ Applied |
 | F6 | Seed control — deterministic training with `--seed` | `scripts/train.py` | ✅ Applied |
 
 ### Training Pipeline Enhancements (All Implemented ✅)
@@ -49,6 +50,9 @@ The original manuscript received **Major Revision** with 8 mandatory and 11 mino
 | Fix ID | Description | File | Status |
 |--------|-------------|------|--------|
 | P1 | Vectorized DetectionLoss — eliminated 38K Python loop iterations/batch | `scripts/train.py` | ✅ Applied |
+| P1b | Box decode fix — `sigmoid*imgsz` matching training coords (was grid-offset) | `tinyYOLO/utils/postprocess.py` | ✅ Applied |
+| P1c | Channel index fix — classes at `pred[:, 5:]` not `pred[:, 4:]` (objectness head) | `tinyYOLO/utils/postprocess.py` | ✅ Applied |
+| P1d | Pre-NMS top-1000 cap — prevents memory blowup from excess detections | `tinyYOLO/utils/postprocess.py` | ✅ Applied |
 | P2 | OpenCV-native augmentation — replaced PIL pipeline | `scripts/train.py` | ✅ Applied |
 | P3 | RAM image + label caching — auto-cache datasets <5 GB | `scripts/train.py` | ✅ Applied |
 | P4 | Batch size / worker tuning — T4: 32→64, resolution scaling relaxed | `tinyYOLO/utils/env.py` | ✅ Applied |
@@ -77,8 +81,10 @@ Objectness: dedicated head      (obj_preds branch with proper init)
 Activation: act=configurable    ('silu' for standard, 'relu6' for quantized)
 Assignment: TAL                 (k=10 positives per GT, alignment metric)
 Loss:       vectorized          (torch.where + batched CIoU, zero Python loops)
+Obj BCE:    pos_weight=4.0      (counteracts 99.9% negative cell imbalance)
+Box decode: sigmoid*imgsz       (matches training coord system, no grid offsets)
 Augment:    OpenCV-native       (HSV jitter, HFlip, Grayscale — no PIL)
-Caching:    RAM pre-load        (images <5 GB + all labels at init)
+Caching:    RAM pre-load        (40% of free RAM + all labels at init)
 Warmup:     3 epochs linear     (per-iteration granularity)
 Mosaic:     4-image numpy       (cv2.resize on uint8, not tensor F.interpolate)
 Seed:       deterministic       (torch + numpy + random + CUDA)

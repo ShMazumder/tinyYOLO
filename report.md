@@ -164,6 +164,10 @@ $$\mathcal{L} = 2.0 \cdot \mathcal{L}_{\text{CIoU}} + 1.0 \cdot \mathcal{L}_{\te
 
 Loss normalization: single $N_{\text{pos}}$ across all scales (R1 fix — was inflated per-scale). Loss computation is fully vectorized using `torch.where()` and batched CIoU — no Python for-loops over batch/targets.
 
+**Objectness BCE:** Uses `pos_weight=4.0` to counteract extreme class imbalance (~0.1% positive cells per feature map). Without this, the model learns to suppress all objectness predictions.
+
+**Box decode consistency:** Both training and inference operate in normalized [0,1] coordinate space. Decode: `cx = sigmoid(pred) × imgsz`, not grid-offset decode.
+
 ### 4.3 Training Recipe
 
 | Setting | Value |
