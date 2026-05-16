@@ -32,7 +32,26 @@ def parse_args():
 
 
 def export_onnx(model, imgsz, output_path, fp16=False):
-    """Export to ONNX format."""
+    """Export model to ONNX format for cross-platform deployment.
+
+    The ONNX model can be used with:
+      - ONNX Runtime (CPU/GPU inference)
+      - TensorRT (NVIDIA Jetson — convert ONNX → TensorRT engine)
+      - TFLite (via onnx-tf → TFLite conversion)
+      - OpenVINO (Intel hardware)
+
+    Args:
+        model: TinyYOLO model in eval mode.
+        imgsz: Input image size (square).
+        output_path: Output .onnx file path.
+        fp16: If True, export in FP16 (half precision).
+
+    Notes:
+        - Dynamic batch axis is enabled by default for variable batch inference.
+        - Opset 18 is used for broadest runtime compatibility.
+        - For INT8 deployment, use scripts/quantize.py to create a calibrated
+          INT8 model, then export with TensorRT's INT8 calibration workflow.
+    """
     import torch
 
     model.eval()
@@ -49,7 +68,16 @@ def export_onnx(model, imgsz, output_path, fp16=False):
 
 
 def export_torchscript(model, imgsz, output_path):
-    """Export to TorchScript format."""
+    """Export model to TorchScript format for C++ deployment.
+
+    TorchScript models can be loaded without Python via libtorch,
+    making them suitable for embedded C++ applications.
+
+    Args:
+        model: TinyYOLO model in eval mode.
+        imgsz: Input image size.
+        output_path: Output .torchscript file path.
+    """
     import torch
 
     model.eval()
@@ -57,6 +85,25 @@ def export_torchscript(model, imgsz, output_path):
     traced = torch.jit.trace(model, dummy)
     traced.save(str(output_path))
     print(f"  Exported TorchScript: {output_path}")
+
+
+def _clean_state_dict(state_dict):
+    """Remove profiler metadata keys injected by PyTorch profiler/thop.
+
+    When using thop or torch profiler to measure GFLOPs, PyTorch injects
+    buffer keys like 'backbone.stage1.total_ops' and 'backbone.stage1.total_params'
+    into the model's state_dict. These are NOT model parameters — they are
+    profiling metadata stored as zero-dimensional tensors.
+
+    If not removed before export, these keys cause:
+      - ONNX export failure: shape mismatch (scalar vs. expected tensor)
+      - State dict loading errors: unexpected keys in checkpoint
+      - TensorRT conversion failure: unrecognized layers
+
+    This function strips all keys ending in 'total_ops' or 'total_params'.
+    """
+    return {k: v for k, v in state_dict.items()
+            if not k.endswith(('total_ops', 'total_params'))}
 
 
 def main():
@@ -72,9 +119,8 @@ def main():
 
     if weights_path.exists():
         state_dict = torch.load(weights_path, map_location='cpu')
-        # Filter out thop profiler keys (total_ops/total_params) injected by GFLOPs calculation
-        state_dict = {k: v for k, v in state_dict.items()
-                      if not k.endswith(('total_ops', 'total_params'))}
+        # Filter out thop profiler keys — see _clean_state_dict docstring
+        state_dict = _clean_state_dict(state_dict)
         model.load_state_dict(state_dict)
         print(f"  Loaded weights: {weights_path}")
     else:
