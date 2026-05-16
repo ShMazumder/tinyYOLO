@@ -34,6 +34,7 @@ except ImportError:
     tqdm = None
 from torchvision import transforms
 import numpy as np
+import cv2
 import random
 
 from tinyYOLO.utils.env import detect_environment, get_training_config, print_env_report
@@ -539,30 +540,31 @@ class SimpleDetectionDataset(Dataset):
             print(f"  [WARN] No 'labels' folder found under 'datasets/'!")
             print(f"         Losses will likely be zero.")
 
-        # Transforms — YOLO-standard augmentation pipeline
-        if augment:
-            self.transform = transforms.Compose([
-                transforms.ToPILImage(),
-                transforms.Resize((imgsz, imgsz)),
-                transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.015),
-                transforms.RandomGrayscale(p=0.1),
-                transforms.RandomHorizontalFlip(p=0.5),
-                transforms.RandomPerspective(distortion_scale=0.15, p=0.3),
-                transforms.ToTensor(),
-            ])
-        else:
-            self.transform = transforms.Compose([
-                transforms.ToPILImage(),
-                transforms.Resize((imgsz, imgsz)),
-                transforms.ToTensor(),
-            ])
+        # Transforms — fast OpenCV-based augmentation (much faster than PIL pipeline)
+        self.augment_flag = augment
+
+    def _augment_cv2(self, img):
+        """Fast OpenCV-based augmentation — avoids slow PIL round-trip."""
+        # Random horizontal flip
+        if random.random() < 0.5:
+            img = cv2.flip(img, 1)
+        # Color jitter (HSV space — single conversion)
+        if random.random() < 0.8:
+            hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV).astype(np.float32)
+            hsv[:, :, 0] = np.clip(hsv[:, :, 0] + random.uniform(-5, 5), 0, 179)
+            hsv[:, :, 1] = np.clip(hsv[:, :, 1] * random.uniform(0.6, 1.4), 0, 255)
+            hsv[:, :, 2] = np.clip(hsv[:, :, 2] * random.uniform(0.6, 1.4), 0, 255)
+            img = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2RGB)
+        # Random grayscale
+        if random.random() < 0.1:
+            gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+            img = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
+        return img
 
     def __len__(self):
         return len(self.img_files)
 
     def __getitem__(self, idx):
-        import cv2
-
         # Load image
         img_path = self.img_files[idx]
         img = cv2.imread(str(img_path))
@@ -571,8 +573,15 @@ class SimpleDetectionDataset(Dataset):
             img = np.random.randint(0, 255, (self.imgsz, self.imgsz, 3), dtype=np.uint8)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-        # Apply transforms
-        img_tensor = self.transform(img)  # [3, imgsz, imgsz]
+        # Resize with fast interpolation
+        img = cv2.resize(img, (self.imgsz, self.imgsz), interpolation=cv2.INTER_LINEAR)
+
+        # Apply augmentation (OpenCV-native, no PIL)
+        if self.augment_flag:
+            img = self._augment_cv2(img)
+
+        # Convert to tensor: HWC uint8 -> CHW float32 [0, 1]
+        img_tensor = torch.from_numpy(img.transpose(2, 0, 1).copy()).float() / 255.0
 
         # Load labels (YOLO format: class cx cy w h)
         # Derive label path from image path (robust search)
@@ -971,7 +980,7 @@ def train_single(args, imgsz, env):
     use_mosaic = not args.quick and epochs > 10
     mosaic_disable_epoch = int(epochs * 0.9) if use_mosaic else 0
     dataset = MosaicDataset(base_dataset, imgsz=imgsz, enable=use_mosaic)
-    n_workers = max(train_cfg['workers'], 2)
+    n_workers = min(train_cfg['workers'], max(os.cpu_count() or 2, 2))
     dataloader = DataLoader(
         dataset, batch_size=batch, shuffle=True,
         num_workers=n_workers,
