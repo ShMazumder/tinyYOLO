@@ -843,68 +843,107 @@ class DetectionLoss(nn.Module):
 
     def forward(self, predictions, targets):
         """
+        Vectorized loss computation — no Python for-loops over batch/targets.
+
         Args:
-            predictions: list of [B, 5+nc, H, W] from model (4 bbox + 1 obj + nc cls)
+            predictions: list of [B, 5+nc, H, W] from model
             targets: [B, max_objects, 5] (cls, cx, cy, w, h)
         """
         device = predictions[0].device
+        targets = targets.to(device)
+
+        # Find all valid targets (w > 0) — vectorized
+        valid_mask = targets[:, :, 2] > 0  # [B, max_objects]
+        N_pos = max(valid_mask.sum().item(), 1)
+
         total_box = torch.tensor(0.0, device=device)
         total_cls = torch.tensor(0.0, device=device)
         total_obj = torch.tensor(0.0, device=device)
 
-        # Count total positive targets ONCE (Fix: no longer inflated per-scale)
-        N_pos = 0
-        for b in range(targets.shape[0]):
-            for t in range(targets.shape[1]):
-                if targets[b, t, 2] > 0:  # valid target
-                    N_pos += 1
-        N_pos = max(N_pos, 1)
-
         for pred in predictions:
             B, C, H, W = pred.shape
             pred_box = pred[:, :4, :, :]     # [B, 4, H, W]
-            pred_obj = pred[:, 4:5, :, :]    # [B, 1, H, W] — dedicated objectness
+            pred_obj = pred[:, 4:5, :, :]    # [B, 1, H, W]
             pred_cls = pred[:, 5:, :, :]     # [B, nc, H, W]
 
-            # --- Objectness target map ---
+            # === Objectness target (vectorized scatter) ===
             obj_target = torch.zeros(B, 1, H, W, device=device)
 
-            for b in range(B):
-                for t in range(targets.shape[1]):
-                    if targets[b, t, 2] > 0:  # valid target (has width > 0)
-                        cx, cy = targets[b, t, 1], targets[b, t, 2]
-                        gi = min(int(cx * W), W - 1)
-                        gj = min(int(cy * H), H - 1)
-                        obj_target[b, 0, gj, gi] = 1.0
+            # Get grid indices for all valid targets at once
+            all_cx = targets[:, :, 1]  # [B, max_obj]
+            all_cy = targets[:, :, 2]  # [B, max_obj]
+            gi = (all_cx * W).long().clamp(0, W - 1)  # [B, max_obj]
+            gj = (all_cy * H).long().clamp(0, H - 1)  # [B, max_obj]
 
-            # Objectness: dedicated objectness head output
+            # Set objectness targets using advanced indexing
+            b_idx, t_idx = torch.where(valid_mask)  # indices of valid targets
+            if len(b_idx) > 0:
+                obj_target[b_idx, 0, gj[b_idx, t_idx], gi[b_idx, t_idx]] = 1.0
+
             total_obj += self.bce(pred_obj, obj_target)
 
-            # --- Per-target CIoU + Classification ---
-            for b in range(B):
-                for t in range(targets.shape[1]):
-                    if targets[b, t, 2] > 0:
-                        cls_id = int(targets[b, t, 0])
-                        cx, cy, w, h = targets[b, t, 1:5]
-                        gi = min(int(cx * W), W - 1)
-                        gj = min(int(cy * H), H - 1)
+            # === CIoU + Classification (vectorized) ===
+            if len(b_idx) > 0:
+                # Gather all valid target info
+                v_cls = targets[b_idx, t_idx, 0].long()  # [N_valid]
+                v_cx = targets[b_idx, t_idx, 1]
+                v_cy = targets[b_idx, t_idx, 2]
+                v_w = targets[b_idx, t_idx, 3]
+                v_h = targets[b_idx, t_idx, 4]
+                v_gi = gi[b_idx, t_idx]
+                v_gj = gj[b_idx, t_idx]
 
-                        # Classification (BCE)
-                        cls_target = torch.zeros(self.nc, device=device)
-                        if 0 <= cls_id < self.nc:
-                            cls_target[cls_id] = 1.0
-                        total_cls += self.bce(pred_cls[b, :, gj, gi], cls_target)
+                # Classification — batched BCE
+                cls_preds = pred_cls[b_idx, :, v_gj, v_gi]  # [N_valid, nc]
+                cls_targets = torch.zeros_like(cls_preds)
+                valid_cls = (v_cls >= 0) & (v_cls < self.nc)
+                if valid_cls.any():
+                    cls_targets[valid_cls, v_cls[valid_cls]] = 1.0
+                total_cls += self.bce(cls_preds, cls_targets) * cls_preds.shape[0]
 
-                        # CIoU box loss
-                        pred_cxcywh = torch.sigmoid(pred_box[b, :, gj, gi])
-                        target_cxcywh = targets[b, t, 1:5].to(device)
-                        total_box += self._ciou(pred_cxcywh, target_cxcywh)
+                # CIoU box loss — batched
+                box_preds = torch.sigmoid(pred_box[b_idx, :, v_gj, v_gi])  # [N_valid, 4]
+                box_targets = torch.stack([v_cx, v_cy, v_w, v_h], dim=1)   # [N_valid, 4]
 
-        # Normalize by total positive target count (computed once, not per-scale)
+                # Batched CIoU
+                eps = 1e-7
+                p_cx, p_cy, p_w, p_h = box_preds[:, 0], box_preds[:, 1], box_preds[:, 2], box_preds[:, 3]
+                t_cx, t_cy, t_w, t_h = box_targets[:, 0], box_targets[:, 1], box_targets[:, 2], box_targets[:, 3]
+
+                px1, py1 = p_cx - p_w / 2, p_cy - p_h / 2
+                px2, py2 = p_cx + p_w / 2, p_cy + p_h / 2
+                tx1, ty1 = t_cx - t_w / 2, t_cy - t_h / 2
+                tx2, ty2 = t_cx + t_w / 2, t_cy + t_h / 2
+
+                inter_x1 = torch.max(px1, tx1)
+                inter_y1 = torch.max(py1, ty1)
+                inter_x2 = torch.min(px2, tx2)
+                inter_y2 = torch.min(py2, ty2)
+                inter = (inter_x2 - inter_x1).clamp(min=0) * (inter_y2 - inter_y1).clamp(min=0)
+
+                area_p = (px2 - px1).clamp(min=0) * (py2 - py1).clamp(min=0)
+                area_t = (tx2 - tx1).clamp(min=0) * (ty2 - ty1).clamp(min=0)
+                union = area_p + area_t - inter + eps
+                iou = inter / union
+
+                enc_x1, enc_y1 = torch.min(px1, tx1), torch.min(py1, ty1)
+                enc_x2, enc_y2 = torch.max(px2, tx2), torch.max(py2, ty2)
+                rho2 = (p_cx - t_cx) ** 2 + (p_cy - t_cy) ** 2
+                c2 = (enc_x2 - enc_x1) ** 2 + (enc_y2 - enc_y1) ** 2 + eps
+
+                w_p = (px2 - px1).clamp(min=eps)
+                h_p = (py2 - py1).clamp(min=eps)
+                w_t = (tx2 - tx1).clamp(min=eps)
+                h_t = (ty2 - ty1).clamp(min=eps)
+                v = (4 / (math.pi ** 2)) * (torch.atan(w_t / h_t) - torch.atan(w_p / h_p)) ** 2
+                alpha = v / (1 - iou + v + eps)
+                ciou_loss = 1.0 - (iou - rho2 / c2 - alpha * v)
+                total_box += ciou_loss.sum()
+
+        # Normalize
         total_box = total_box / N_pos
         total_cls = total_cls / N_pos
 
-        # Weighted sum
         total_loss = (self.box_weight * total_box +
                       self.cls_weight * total_cls +
                       self.obj_weight * total_obj)
