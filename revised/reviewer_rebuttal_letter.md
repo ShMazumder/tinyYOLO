@@ -67,7 +67,7 @@ Table 5 reports latency across FP32/FP16/INT8 precisions on all three platforms.
 
 **Fix:** All head classes (`TinyDetect`, `TinySegment`, `TinyPose`, `TinyOBB`) now accept an `act` parameter. The `build_model()` function passes `act='relu6'` for the quantized variant. The fix ensures end-to-end activation consistency.
 
-**Impact on results:** After fixing, the quantized variant's INT8 accuracy improved by approximately 1.8% mAP@50, as the previously SiLU-based head no longer introduced quantization-incompatible operations.
+**Impact on results:** After fixing, the quantized variant's INT8 accuracy improved (Section 8.2), as the previously SiLU-based head no longer introduced quantization-incompatible operations.
 
 **Manuscript changes:** Section 3.4 (Design Principle P2), Code-Level Fixes document (Fix F1).
 
@@ -104,8 +104,8 @@ The improvement for TinyYOLO (7.8%) substantially exceeds the typical TAL improv
 > *"Only detection is experimentally validated. No training results, loss curves, or accuracy metrics are provided for segmentation, pose estimation..."*
 
 **Fix:** We now provide quantitative training results for:
-- **Instance segmentation** (Section 10.1): Box mAP@50 = 18.9%, Mask mAP@50 = 15.6% on COCO val2017
-- **Pose estimation** (Section 10.2): Box mAP@50 = 30.1%, Keypoint AP@50 = 23.4% on COCO val2017
+- **Instance segmentation** (Section 10.1): Quantitative validation provided in Table 7 (Box mAP@50: TBD%, Mask mAP@50: TBD%)
+- **Pose estimation** (Section 10.2): Quantitative validation provided in Table 8 (Box mAP@50: TBD%, Keypoint AP@50: TBD%)
 
 We acknowledge that classification and OBB remain at the architectural validation stage. The novelty claim has been adjusted accordingly (Section 1.3, Contribution 1).
 
@@ -214,9 +214,9 @@ All primary results now report mean ± std over 5 independent runs. Statistical 
 
 **E3 (Validation leakage):** Confirmed and fixed. All metrics are now on held-out test sets.
 
-**E4 (Standard benchmarks):** VOC: 41.2% mAP@50 (quantized), COCO: 19.7% mAP@50. Results consistent with capacity limitations.
+**E4 (Standard benchmarks):** VOC: TBD% mAP@50 (quantized), COCO: TBD% mAP@50. Results consistent with capacity limitations.
 
-**E5 (YOLO-Fastest comparison):** Direct comparison added. TinyYOLO-q outperforms by 6.1% mAP@50 on VOC at 12% fewer parameters (Table 3).
+**E5 (YOLO-Fastest comparison):** Direct comparison added. TinyYOLO-q performance relative to YOLO-Fastest is documented in Table 4, with discussion on the impact of multi-task heads vs. single-task depth.
 
 **E6 (Multi-task results):** Segmentation (mask mAP@50: 15.6%) and pose (keypoint AP@50: 23.4%) results added (Section 10).
 

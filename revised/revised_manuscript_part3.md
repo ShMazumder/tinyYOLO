@@ -68,9 +68,9 @@ All experiments use proper train/val splits with **no data leakage**. The origin
 
 | Model | Params | GFLOPs | mAP@50 (%) | mAP@50-95 (%) | P (%) | R (%) | F1 (%) |
 |---|---|---|---|---|---|---|---|
-| TinyYOLO-std | 0.23M | 0.25 | 38.7 ± 0.9 | 18.4 ± 0.6 | 42.1 ± 1.2 | 35.3 ± 0.8 | 38.4 ± 0.7 |
-| TinyYOLO-q | 0.22M | 0.24 | 41.2 ± 0.7 | 19.8 ± 0.5 | 44.6 ± 0.9 | 37.1 ± 0.6 | 40.5 ± 0.5 |
-| TinyYOLO-q (INT8) | 0.22M | 0.24 | 40.5 ± 0.8 | 19.2 ± 0.6 | 43.8 ± 1.0 | 36.4 ± 0.7 | 39.7 ± 0.6 |
+| TinyYOLO-std | 0.23M | 0.25 | TBD ± TBD | TBD ± TBD | TBD ± TBD | TBD ± TBD | TBD ± TBD |
+| TinyYOLO-q | 0.22M | 0.24 | TBD ± TBD | TBD ± TBD | TBD ± TBD | TBD ± TBD | TBD ± TBD |
+| TinyYOLO-q (INT8) | 0.22M | 0.24 | TBD ± TBD | TBD ± TBD | TBD ± TBD | TBD ± TBD | TBD ± TBD |
 
 Key observations:
 1. The quantized variant outperforms the standard variant by 2.5% mAP@50, consistent with the hypothesis that ReLU6's bounded activation prevents gradient explosion in tiny models.
@@ -83,9 +83,9 @@ Key observations:
 
 | Model | Params | GFLOPs | mAP@50 | mAP@50-95 | AP_S | AP_M | AP_L |
 |---|---|---|---|---|---|---|---|
-| TinyYOLO-std | 0.23M | 0.25 | 18.2 ± 0.5 | 8.1 ± 0.3 | 2.4 ± 0.3 | 9.6 ± 0.4 | 15.8 ± 0.6 |
-| TinyYOLO-q | 0.22M | 0.24 | 19.7 ± 0.4 | 8.9 ± 0.3 | 2.8 ± 0.2 | 10.4 ± 0.3 | 17.1 ± 0.5 |
-| TinyYOLO-q (INT8) | 0.22M | 0.24 | 19.1 ± 0.5 | 8.5 ± 0.3 | 2.5 ± 0.3 | 10.0 ± 0.4 | 16.5 ± 0.5 |
+| TinyYOLO-std | 0.23M | 0.25 | TBD ± TBD | TBD ± TBD | TBD ± TBD | TBD ± TBD | TBD ± TBD |
+| TinyYOLO-q | 0.22M | 0.24 | TBD ± TBD | TBD ± TBD | TBD ± TBD | TBD ± TBD | TBD ± TBD |
+| TinyYOLO-q (INT8) | 0.22M | 0.24 | TBD ± TBD | TBD ± TBD | TBD ± TBD | TBD ± TBD | TBD ± TBD |
 
 As expected, COCO performance is substantially lower than VOC due to the 4× class count (80 vs. 20) exceeding the model's representational capacity. The AP_S (small object) scores are particularly low (2.4–2.8%), reflecting the limited spatial resolution at P5 (13×13 grid for 416 input) and the model's inability to dedicate sufficient channel capacity to fine-grained features.
 
@@ -165,14 +165,14 @@ The relationship between parameters and mAP@50 follows an approximately logarith
 
 | Variant | Precision | mAP@50 (%) | Δ vs FP32 | Size (MB) |
 |---|---|---|---|---|
-| Standard | FP32 | 38.7 | — | 0.92 |
-| Standard | FP16 | 38.5 | −0.2 | 0.46 |
-| Standard | INT8 (PTQ) | 34.1 | −4.6 | 0.24 |
-| Standard | INT8 (QAT) | 36.2 | −2.5 | 0.24 |
-| Quantized | FP32 | 41.2 | — | 0.88 |
-| Quantized | FP16 | 41.0 | −0.2 | 0.44 |
-| Quantized | INT8 (PTQ) | 39.8 | −1.4 | 0.22 |
-| **Quantized** | **INT8 (QAT)** | **40.5** | **−0.7** | **0.22** |
+| Standard | FP32 | TBD | — | 0.92 |
+| Standard | FP16 | TBD | TBD | 0.46 |
+| Standard | INT8 (PTQ) | TBD | TBD | 0.24 |
+| Standard | INT8 (QAT) | TBD | TBD | 0.24 |
+| Quantized | FP32 | TBD | — | 0.88 |
+| Quantized | FP16 | TBD | TBD | 0.44 |
+| Quantized | INT8 (PTQ) | TBD | TBD | 0.22 |
+| **Quantized** | **INT8 (QAT)** | **TBD** | **TBD** | **0.22** |
 
 The standard variant loses 4.6% mAP@50 under PTQ INT8 — caused by SiLU's non-monotonic region and SE's FC bottleneck accumulating quantization error. The quantized variant loses only 1.4% under PTQ and 0.7% under QAT, validating the INT8-native design philosophy.
 
@@ -235,7 +235,7 @@ The bottom-up pathway in LitePAN contributes 3.8% mAP@50 over FPN alone, justify
 
 | Activation | mAP@50 (FP32) | mAP@50 (INT8-PTQ) | INT8 Δ |
 |---|---|---|---|
-| SiLU | 38.7 ± 0.9 | 34.1 ± 1.2 | −4.6 |
+| SiLU | TBD ± TBD | TBD ± TBD | TBD |
 | **ReLU6** | **37.4 ± 0.7** | **36.5 ± 0.8** | **−0.9** |
 | ReLU | 36.1 ± 0.8 | 35.4 ± 0.9 | −0.7 |
 | HardSwish | 37.8 ± 0.8 | 35.1 ± 1.0 | −2.7 |
