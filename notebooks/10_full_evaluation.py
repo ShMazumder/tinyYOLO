@@ -1,7 +1,8 @@
 # %% [markdown]
-# # TinyYOLO — Complete Evaluation Pipeline
+# # TinyYOLO — Complete Evaluation Pipeline (R1 Updated)
 # Run all steps sequentially on Google Colab.
 # Each cell is independent — run them in order.
+# R1 features: seed control, warmup, mosaic, TAL, quantization.
 
 # %% Step 0: Setup
 import sys, os
@@ -17,18 +18,18 @@ from tinyYOLO.utils.env import print_env_report
 print_env_report()
 
 # %% Step 1: Train Standard Variant (if not already done)
-# Skip this cell if you already have results from a previous run
-os.system("python scripts/train.py --task det --variant standard --imgsz 320 --epochs 100")
+# R1: Added --seed 42 --warmup 3 for deterministic training with linear LR warmup
+os.system("python scripts/train.py --task det --variant standard --imgsz 320 --epochs 100 --seed 42 --warmup 3")
 
 # %% Step 2: Train Quantized Variant
-os.system("python scripts/train.py --task det --variant quantized --imgsz 320 --epochs 100")
+os.system("python scripts/train.py --task det --variant quantized --imgsz 320 --epochs 100 --seed 42 --warmup 3")
 
 # %% Step 3: Resolution Ablation (standard variant at 4 resolutions)
 for res in [160, 224, 416, 640]:
     print(f"\n{'='*60}")
     print(f"  Resolution Ablation: {res}×{res}")
     print(f"{'='*60}")
-    os.system(f"python scripts/train.py --task det --variant standard --imgsz {res} --epochs 50")
+    os.system(f"python scripts/train.py --task det --variant standard --imgsz {res} --epochs 50 --seed 42 --warmup 3")
 
 # %% Step 4: Run Metrics Report Notebook
 os.system("python notebooks/09_metrics_report.py")
@@ -37,6 +38,13 @@ os.system("python notebooks/09_metrics_report.py")
 os.system("python scripts/export.py"
           " --weights experiments/results/tinyYOLO-det-std-320/best.pt"
           " --task det --variant standard --imgsz 320 --formats onnx")
+
+# %% Step 5b: INT8 Quantization (R1 NEW)
+# Post-Training Quantization of the quantized variant
+os.system("python scripts/quantize.py --mode ptq"
+          " --weights experiments/results/tinyYOLO-det-q-320/best.pt"
+          " --task det --variant quantized --data coco128.yaml"
+          " --imgsz 320 --n-calib 100 --backend qnnpack")
 
 # %% Step 6: Cross-Experiment Comparison
 import json
@@ -146,17 +154,17 @@ if results_dir.exists():
 # ```bash
 # # Quick reference — copy-paste individual commands as needed:
 #
-# # Train standard
-# python scripts/train.py --task det --variant standard --imgsz 320 --epochs 100
+# # Train standard (R1: with seed + warmup)
+# python scripts/train.py --task det --variant standard --imgsz 320 --epochs 100 --seed 42 --warmup 3
 #
-# # Train quantized
-# python scripts/train.py --task det --variant quantized --imgsz 320 --epochs 100
+# # Train quantized (R1: with seed + warmup)
+# python scripts/train.py --task det --variant quantized --imgsz 320 --epochs 100 --seed 42 --warmup 3
 #
 # # Resolution sweep
-# python scripts/train.py --task det --variant standard --imgsz 160 --epochs 50
-# python scripts/train.py --task det --variant standard --imgsz 224 --epochs 50
-# python scripts/train.py --task det --variant standard --imgsz 416 --epochs 50
-# python scripts/train.py --task det --variant standard --imgsz 640 --epochs 50
+# python scripts/train.py --task det --variant standard --imgsz 160 --epochs 50 --seed 42 --warmup 3
+# python scripts/train.py --task det --variant standard --imgsz 224 --epochs 50 --seed 42 --warmup 3
+# python scripts/train.py --task det --variant standard --imgsz 416 --epochs 50 --seed 42 --warmup 3
+# python scripts/train.py --task det --variant standard --imgsz 640 --epochs 50 --seed 42 --warmup 3
 #
 # # Metrics report
 # python notebooks/09_metrics_report.py
@@ -164,6 +172,11 @@ if results_dir.exists():
 # # ONNX export
 # python scripts/export.py --weights experiments/results/tinyYOLO-det-std-320/best.pt --task det --variant standard --imgsz 320 --formats onnx
 #
+# # INT8 Quantization (R1 NEW)
+# python scripts/quantize.py --mode ptq --weights experiments/results/tinyYOLO-det-q-320/best.pt --data coco128.yaml --n-calib 100
+# python scripts/quantize.py --mode qat --weights experiments/results/tinyYOLO-det-q-320/best.pt --data coco128.yaml --epochs 10
+#
 # # Benchmark
 # python scripts/benchmark_models.py
 # ```
+

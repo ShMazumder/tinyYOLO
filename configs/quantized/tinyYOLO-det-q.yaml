@@ -43,8 +43,10 @@ training:
   lrf: 0.01
   weight_decay: 0.0001
   weight_decay_no_bias: true
-  warmup_epochs: 5
+  warmup_epochs: 5  # R1: linear warmup (per-iteration granularity)
   scheduler: cosine
+  seed: 42  # R1: deterministic training
+  assignment: tal  # R1: Task-Aligned Label Assignment (k=10)
 
 augmentation:
   mosaic: 1.0
@@ -56,4 +58,5 @@ augmentation:
   scale: 0.5
   fliplr: 0.5
   grayscale: 0.1
-  perspective: 0.2
+  perspective: 0.15  # R1: reduced from 0.2
+  mosaic_disable_pct: 0.1  # R1: disable mosaic for last 10% of training
