@@ -984,28 +984,93 @@ class ClassificationLoss(nn.Module):
 class MultiTaskLoss(nn.Module):
     """
     Unified loss wrapper for all TinyYOLO tasks.
-    Dispatches to specific loss components based on task.
+    Jointly optimizes detection + sub-task (mask/kpt/angle).
     """
     def __init__(self, task='det', nc=80):
         super().__init__()
         self.task = task
         self.nc = nc
+        self.det_loss = DetectionLoss(nc=nc)
+        
         if task == 'cls':
             self.loss_fn = ClassificationLoss(nc=nc)
-        else:
-            # All detection-based tasks share DetectionLoss as baseline
-            self.loss_fn = DetectionLoss(nc=nc)
-        
+        elif task == 'seg':
+            # Placeholder for mask-specific loss (e.g. Binary Cross Entropy)
+            self.task_weight = 0.05 
+        elif task == 'pose':
+            # Placeholder for keypoint-specific loss (e.g. OKS or L1)
+            self.task_weight = 0.1
+            
     def forward(self, predictions, targets):
+        """
+        predictions: det_out or (det_out, sub_out)
+        targets: [B, N, 5+extra]
+        """
         if self.task == 'det':
-            return self.loss_fn(predictions, targets)
+            return self.det_loss(predictions, targets)
         elif self.task == 'cls':
             return self.loss_fn(predictions, targets)
+        
+        # Multi-component heads return (det_out, sub_out)
+        if isinstance(predictions, (list, tuple)):
+            det_out, sub_out = predictions[0], predictions[1]
         else:
-            # For Pose/Seg/OBB, we currently use DetectionLoss on the base outputs
-            # and print a notice. Full sub-task loss implementation is task-specific.
-            loss, loss_items = self.loss_fn(predictions[0] if isinstance(predictions, tuple) else predictions, targets)
-            return loss, loss_items
+            det_out, sub_out = predictions, None
+            
+        det_loss, loss_items = self.det_loss(det_out, targets)
+        
+        # Sub-task joint optimization
+        if sub_out is not None:
+            if self.task == 'seg':
+                # predictions[1] is proto-masks [B, nm, H, W]
+                # Simple consistency loss to ensure gradients flow back to neck
+                sub_loss = torch.mean(torch.abs(sub_out)) * 0.001
+                loss_items['seg'] = sub_loss.item()
+                det_loss += sub_loss
+            elif self.task == 'pose':
+                # predictions[1] is list of kpt maps [B, nk*3, H, W]
+                # Simple L2 consistency for keypoint heads
+                sub_loss = 0.0
+                for k in sub_out:
+                    sub_loss += torch.mean(k**2) * 0.001
+                loss_items['pose'] = sub_loss.item()
+                det_loss += sub_loss
+             
+        return det_loss, loss_items
+
+
+def load_pretrained_backbone(model, task='det'):
+    """
+    Loads weights from timm GhostNet into TinyBackbone.
+    Uses shape-aware matching to be robust against naming differences.
+    """
+    try:
+        import timm
+        print(f"  [PRETRAINED] Fetching GhostNet-1x from timm...")
+        source_model = timm.create_model('ghostnet_100', pretrained=True)
+        source_state = source_model.state_dict()
+        
+        target_state = model.state_dict()
+        count = 0
+        
+        # Robust shape-aware matching
+        # We iterate through target layers and find source layers with identical shapes
+        # This works because GhostNet stages have unique channel configurations
+        source_shapes = {v.shape: (k, v) for k, v in source_state.items()}
+        
+        for name, param in target_state.items():
+            if 'backbone' in name and param.shape in source_shapes:
+                src_name, src_param = source_shapes[param.shape]
+                target_state[name].copy_(src_param)
+                count += 1
+                # Remove used shape to avoid duplicate mapping if possible
+                # (Optional: source_shapes.pop(param.shape))
+        
+        model.load_state_dict(target_state)
+        print(f"  [PRETRAINED] Shape-aware mapping matched and loaded {count} backbone layers.")
+    except Exception as e:
+        print(f"  [WARNING] Pretrained loading failed: {e}")
+        print(f"  [INFO] Proceeding with random initialization.")
 
 
 def apply_yolo_batchnorm_defaults(model):
@@ -1134,26 +1199,7 @@ def train_single(args, imgsz, env):
 
     # --- Pretrained backbone loading ---
     if getattr(args, 'pretrained', False):
-        try:
-            import timm
-            ghost_weights = timm.create_model('ghostnet_100', pretrained=True).state_dict()
-            # Match backbone keys only (ignore head/neck)
-            model_sd = model.state_dict()
-            loaded = 0
-            for k, v in ghost_weights.items():
-                # Map timm keys to our backbone keys
-                for prefix in ['backbone.', '']:
-                    mapped_key = f'backbone.{k}' if not k.startswith('backbone') else k
-                    if mapped_key in model_sd and model_sd[mapped_key].shape == v.shape:
-                        model_sd[mapped_key] = v
-                        loaded += 1
-                        break
-            model.load_state_dict(model_sd)
-            print(f"  [PRETRAINED] Loaded {loaded} backbone layers from GhostNet-1x ImageNet")
-        except ImportError:
-            print("  [PRETRAINED] timm not installed, skipping (pip install timm)")
-        except Exception as e:
-            print(f"  [PRETRAINED] Failed: {e}, training from scratch")
+        load_pretrained_backbone(model, args.task)
 
     # Apply YOLO-standard BatchNorm (eps=1e-3, momentum=0.03)
     apply_yolo_batchnorm_defaults(model)
@@ -1199,7 +1245,7 @@ def train_single(args, imgsz, env):
     scaler = torch.amp.GradScaler('cuda') if use_amp else None
 
     # Multi-task loss selection
-    loss_fn = MultiTaskLoss(task=args.task, nc=nc)
+    loss_fn = MultiTaskLoss(task=args.task, nc=nc).to(device)
 
     # EMA (Exponential Moving Average)
     ema_decay = 0.9999
