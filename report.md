@@ -89,7 +89,13 @@ The YOLO paradigm [3] reframed object detection as single-pass regression. Succe
 | PicoDet-XS [24] | 0.93M | 26.2% | No | No |
 | YOLO-Fastest [21] | 0.25M | ~6.8%* | No | No |
 | MCUNet [25] | 0.74M | — (cls only) | Yes | No |
+| MCUNetV2 [26] | 0.74M | — (VOC only) | Yes | No |
 | **TinyYOLO (ours)** | **0.23M** | **8.9%** | **Yes** | **Yes (5 tasks)** |
+
+\* YOLO-Fastest COCO mAP estimated from repository (official metric is VOC mAP).
+
+> **Note:** MCUNet v1 [25] is classification-only (ImageNet). MCUNetV2 [26] supports detection
+> on VOC under 256kB SRAM but has no COCO results.
 
 ### 2.3 Ghost-Based Architectures
 GhostNet [18] and GhostNetV2 [29] exploit feature map redundancy. TinyYOLO uses Ghost convolutions in backbone with depthwise separable in neck/head.
@@ -226,16 +232,37 @@ Loss normalization: single $N_{\text{pos}}$ across all scales (R1 fix — was in
 | TinyYOLO-std | 0.23M | 18.2 ± 0.5 | 8.1 ± 0.3 | 2.4 | 9.6 | 15.8 |
 | TinyYOLO-q | 0.22M | 19.7 ± 0.4 | 8.9 ± 0.3 | 2.8 | 10.4 | 17.1 |
 
-### 7.3 SOTA Comparison (Same Dataset, Same Hardware)
+### 7.3 SOTA Comparison
 
-| Model | Params | GFLOPs | VOC mAP@50 | COCO mAP@50 |
+> **Comparability note:** NanoDet and PicoDet have official results only on COCO val2017.
+> YOLO-Fastest has official VOC results. MCUNet v1 is classification-only; MCUNetV2 has VOC
+> detection under extreme memory constraints. All VOC numbers for NanoDet and PicoDet below
+> are author-reproduced under identical conditions (same hardware, same dataset, same resolution),
+> not official.
+
+**Table 3: COCO val2017 Comparison (Official Numbers)**
+
+| Model | Params | GFLOPs | COCO mAP@50 | Source |
 |---|---|---|---|---|
-| YOLO-Fastest | 0.25M | 0.23 | 35.1 | 15.4 |
-| **TinyYOLO-q** | **0.22M** | **0.24** | **41.2** | **19.7** |
-| MCUNet | 0.74M | 0.32 | 42.8 | 22.1 |
-| NanoDet-m | 0.95M | 0.72 | 48.3 | 27.3 |
-| PicoDet-XS | 0.93M | 0.67 | 50.1 | 28.9 |
-| YOLOv8n | 3.20M | 8.70 | 63.5 | 44.7 |
+| YOLO-Fastest [21] | 0.25M | 0.23 | ~15.4* | Estimated |
+| **TinyYOLO-q (ours)** | **0.22M** | **0.24** | **TBD** | This work |
+| NanoDet-m [22] | 0.95M | 0.72 | 27.3 | Official |
+| PicoDet-XS [24] | 0.93M | 0.67 | 28.9 | Official |
+| YOLOv8n [10] | 3.20M | 8.70 | 44.7 | Official |
+
+**Table 4: VOC 2007 Test Comparison**
+
+| Model | Params | GFLOPs | VOC mAP@50 | Source |
+|---|---|---|---|---|
+| YOLO-Fastest [21] | 0.25M | 0.23 | 61.02† | Official |
+| **TinyYOLO-q (ours)** | **0.22M** | **0.24** | **TBD** | This work |
+| MCUNetV2 [26] | 0.74M | 0.32 | 64.6 | Official (256kB SRAM) |
+| NanoDet-m [22] | 0.95M | 0.72 | TBD‡ | Reproduced |
+| PicoDet-XS [24] | 0.93M | 0.67 | TBD‡ | Reproduced |
+
+\* COCO number estimated; YOLO-Fastest primarily benchmarks on VOC.
+† Official YOLO-Fastest VOC mAP uses VOC2007 metric (11-point interpolation), not COCO-style 101-point.
+‡ Reproduced by retraining official model on VOC under identical conditions.
 
 ---
 

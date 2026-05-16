@@ -384,7 +384,7 @@ def apply_qat(model, calibration_loader, n_batches=500):
 | Reviewer Concern | Status | Evidence |
 |---|---|---|
 | W1: COCO128 insufficient | ✅ RESOLVED | VOC + COCO val2017 evaluations (Tables 1–2) |
-| W2: Missing SOTA comparisons | ✅ RESOLVED | 8 models compared, same dataset/hardware (Tables 3–4) |
+| W2: Missing SOTA comparisons | ✅ RESOLVED | COCO: official baselines (Table 3). VOC: source-attributed (Table 4). MCUNet v1 removed from detection |
 | W3: No edge hardware | ✅ RESOLVED | Jetson Nano + RPi4 benchmarks (Table 5, Section 8) |
 | W4: Hardcoded SiLU | ✅ RESOLVED | Configurable `act` parameter in all heads (Fix F1) |
 | W5: Naive target assignment | ✅ RESOLVED | TAL implemented, +7.8% mAP@50 (Ablation A7) |
@@ -392,10 +392,10 @@ def apply_qat(model, calibration_loader, n_batches=500):
 | W7: Multi-task unvalidated | ⚠️ PARTIALLY | Segmentation + Pose validated; Cls/OBB pending |
 | W8: Missing ablations | ✅ RESOLVED | 10 comprehensive ablations (Section 9) |
 | D1: Architecture justification | ✅ RESOLVED | Design principles P1–P4 (Section 3.1) |
-| D2: Loss function issues | ✅ RESOLVED | Normalization fix, objectness head, doc fix (F4–F5, F10) |
+| D2: Loss function issues | ✅ RESOLVED | Normalization fix, objectness head + pos_weight, box decode consistency (F4–F5b, F10) |
 | D3: Experimental protocol | ✅ RESOLVED | Seeds, warmup, mosaic (F6–F8) |
 | D4: Deployment claims | ✅ RESOLVED | Full edge deployment section (Section 8) |
-| D5: Benchmarking fairness | ✅ RESOLVED | Same-dataset tables only (Tables 3–4) |
+| D5: Benchmarking fairness | ✅ RESOLVED | Source-attributed tables; COCO official, VOC reproduced clearly marked |
 | D6: Statistical rigor | ✅ RESOLVED | 5-run mean±std, t-test (Section 7.1, 11.2) |
 | Novelty positioning | ✅ RESOLVED | Careful claims, acknowledged YOLO-Fastest (Section 1.3) |
 

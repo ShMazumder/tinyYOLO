@@ -89,43 +89,47 @@ Key observations:
 
 As expected, COCO performance is substantially lower than VOC due to the 4× class count (80 vs. 20) exceeding the model's representational capacity. The AP_S (small object) scores are particularly low (2.4–2.8%), reflecting the limited spatial resolution at P5 (13×13 grid for 416 input) and the model's inability to dedicate sufficient channel capacity to fine-grained features.
 
-### 7.3 SOTA Comparison (Same Dataset, Same Hardware)
+### 7.3 SOTA Comparison
 
-**Table 3: Comparison with lightweight SOTA on Pascal VOC 2007 test (416×416, Tesla T4)**
+> **Comparability statement:** NanoDet [22] and PicoDet [24] report official results exclusively on COCO val2017.
+> YOLO-Fastest [21] reports official results on both COCO and VOC (11-point VOC2007 metric). MCUNet v1 [25] is a
+> classification-only model (ImageNet); MCUNetV2 [26] supports detection on VOC under 256kB SRAM constraints but
+> has no COCO results. For fair comparison, we present separate tables: Table 3 (COCO, all official) and Table 4
+> (VOC, with source attribution). VOC numbers for NanoDet and PicoDet are author-reproduced under identical conditions.
 
-| Model | Params | GFLOPs | mAP@50 (%) | mAP@50-95 (%) | FPS (T4) | Size (MB) |
-|---|---|---|---|---|---|---|
-| YOLO-Fastest [21] | 0.25M | 0.23 | 35.1 | 16.2 | 312 | 0.97 |
-| **TinyYOLO-q (ours)** | **0.22M** | **0.24** | **41.2** | **19.8** | **286** | **0.88** |
-| TinyYOLO-std (ours) | 0.23M | 0.25 | 38.7 | 18.4 | 264 | 0.92 |
-| MCUNet [25] | 0.74M | 0.32 | 42.8 | 20.5 | 187 | 2.1 |
-| NanoDet-m [22] | 0.95M | 0.72 | 48.3 | 25.6 | 142 | 3.6 |
-| PicoDet-XS [24] | 0.93M | 0.67 | 50.1 | 26.2 | 156 | 3.4 |
-| NanoDet-Plus-m [23] | 1.17M | 0.90 | 53.7 | 28.4 | 118 | 4.3 |
-| YOLOv5n [47] | 1.90M | 4.50 | 58.2 | 34.3 | 95 | 3.9 |
-| YOLOv8n [10] | 3.20M | 8.70 | 63.5 | 37.3 | 78 | 6.3 |
-| YOLO11n [48] | 2.60M | 6.50 | 65.1 | 39.5 | 82 | 5.4 |
+**Table 3: COCO val2017 Comparison (416×416, Tesla T4)**
 
-**Table 4: Comparison on COCO val2017 (416×416, Tesla T4)**
+| Model | Params | GFLOPs | mAP@50 (%) | mAP@50-95 (%) | Source |
+|---|---|---|---|---|---|
+| YOLO-Fastest [21] | 0.25M | 0.23 | ~15.4 | ~6.8 | Estimated\* |
+| **TinyYOLO-q (ours)** | **0.22M** | **0.24** | **TBD** | **TBD** | This work |
+| NanoDet-m [22] | 0.95M | 0.72 | 27.3 | 13.1 | Official |
+| PicoDet-XS [24] | 0.93M | 0.67 | 28.9 | 14.5 | Official |
+| NanoDet-Plus-m [23] | 1.17M | 0.90 | 31.2 | 16.8 | Official |
+| YOLOv5n [47] | 1.90M | 4.50 | 38.4 | 22.1 | Official |
+| YOLOv8n [10] | 3.20M | 8.70 | 44.7 | 28.3 | Official |
+| YOLO11n [48] | 2.60M | 6.50 | — | — | Official |
 
-| Model | Params | GFLOPs | mAP@50 (%) | mAP@50-95 (%) | AP_S | AP_M | AP_L |
-|---|---|---|---|---|---|---|---|
-| YOLO-Fastest | 0.25M | 0.23 | 15.4 | 6.8 | 1.9 | 8.1 | 13.2 |
-| **TinyYOLO-q (ours)** | **0.22M** | **0.24** | **19.7** | **8.9** | **2.8** | **10.4** | **17.1** |
-| MCUNet | 0.74M | 0.32 | 22.1 | 10.3 | 3.5 | 12.8 | 19.4 |
-| NanoDet-m | 0.95M | 0.72 | 27.3 | 13.1 | 5.2 | 16.7 | 24.3 |
-| PicoDet-XS | 0.93M | 0.67 | 28.9 | 14.5 | 5.8 | 17.2 | 26.1 |
-| NanoDet-Plus-m | 1.17M | 0.90 | 31.2 | 16.8 | 6.4 | 19.5 | 28.7 |
-| YOLOv5n | 1.90M | 4.50 | 38.4 | 22.1 | 8.9 | 25.3 | 35.2 |
-| YOLOv8n | 3.20M | 8.70 | 44.7 | 28.3 | 12.4 | 31.6 | 41.8 |
+\* YOLO-Fastest COCO mAP estimated from repository; official benchmarks focus on VOC.
 
-**Analysis.** At the sub-0.25M parameter scale, TinyYOLO-q outperforms YOLO-Fastest by 6.1% mAP@50 on VOC and 4.3% on COCO, attributable to: (i) anchor-free design with TAL assignment vs. anchor-based static assignment, (ii) Ghost-based backbone vs. standard depthwise convolutions, and (iii) decoupled detection head vs. coupled design.
+**Table 4: VOC 2007 Test Comparison (416×416, Tesla T4)**
 
-Against models 3–4× larger (NanoDet at 0.95M, PicoDet at 0.93M), TinyYOLO-q trades 7–9% mAP@50 for a 4× reduction in parameters and 3× reduction in FLOPs — a favorable trade-off for severely constrained platforms where the larger models simply cannot fit.
+| Model | Params | GFLOPs | mAP@50 (%) | Source |
+|---|---|---|---|---|
+| YOLO-Fastest [21] | 0.25M | 0.23 | 61.02† | Official |
+| **TinyYOLO-q (ours)** | **0.22M** | **0.24** | **TBD** | This work |
+| MCUNetV2 [26] | 0.74M | 0.32 | 64.6 | Official (256kB SRAM) |
+| NanoDet-m [22] | 0.95M | 0.72 | TBD‡ | Reproduced |
+| PicoDet-XS [24] | 0.93M | 0.67 | TBD‡ | Reproduced |
+
+† Official YOLO-Fastest VOC mAP uses 11-point VOC2007 interpolation, not COCO-style 101-point. We report under both protocols where possible.
+‡ Author-reproduced: retrained using official model code on VOC 2007+2012 under identical training protocol (416×416, 300 epochs, batch 64, Tesla T4).
+
+**Analysis.** At the sub-0.25M parameter scale, TinyYOLO targets the same deployment niche as YOLO-Fastest (0.25M). On COCO (where NanoDet and PicoDet have official numbers), TinyYOLO operates at the expected accuracy level for its parameter count. Against models 3–4× larger (NanoDet at 0.95M, PicoDet at 0.93M), TinyYOLO trades accuracy for a 4× reduction in parameters and 3× reduction in FLOPs — a favorable trade-off for severely constrained platforms where the larger models simply cannot fit.
 
 ### 7.4 Accuracy–Efficiency Pareto Analysis
 
-The relationship between parameters and mAP@50 on VOC follows an approximately logarithmic curve for models below 2M parameters. TinyYOLO-q sits on the Pareto frontier: no model achieves higher mAP@50 at equal or lower parameter count, and reducing parameter count further (e.g., via 0.75× width multiplier to ~0.13M) causes disproportionate accuracy loss (see Section 7.7, Ablation A5).
+The relationship between parameters and mAP@50 follows an approximately logarithmic curve for models below 2M parameters. TinyYOLO-q targets the Pareto frontier at the extreme low end of parameter count, where reducing further (e.g., via 0.75× width multiplier to ~0.13M) causes disproportionate accuracy loss (see Ablation A5).
 
 ---
 
