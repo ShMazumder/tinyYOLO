@@ -28,6 +28,10 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
+try:
+    from tqdm import tqdm
+except ImportError:
+    tqdm = None
 from torchvision import transforms
 import numpy as np
 import random
@@ -1052,10 +1056,21 @@ def train_single(args, imgsz, env):
 
         n_total_iters = len(dataloader)
 
-        # Progress reporting interval (every ~10% of batches)
-        progress_interval = max(1, n_total_iters // 10)
+        # tqdm progress bar for batch-level visibility
+        if tqdm is not None:
+            pbar = tqdm(
+                dataloader, total=n_total_iters,
+                desc=f"  Epoch {epoch+1}/{epochs}",
+                bar_format="  {desc} |{bar:25}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {postfix}]",
+                leave=False,
+            )
+        else:
+            pbar = dataloader
+        _batch_idx = 0
 
-        for batch_idx, (images, targets) in enumerate(dataloader):
+        for images, targets in pbar:
+            batch_idx = _batch_idx
+            _batch_idx += 1
             images = images.to(device, non_blocking=True)
             targets = targets.to(device, non_blocking=True)
 
@@ -1095,14 +1110,10 @@ def train_single(args, imgsz, env):
                 epoch_losses[k] += loss_dict.get(k, 0)
             n_batches += 1
 
-            # Print progress every ~10% of batches
-            if (batch_idx + 1) % progress_interval == 0 or (batch_idx + 1) == n_total_iters:
-                pct = (batch_idx + 1) / n_total_iters * 100
+            # Update tqdm postfix with running average loss
+            if tqdm is not None and hasattr(pbar, 'set_postfix'):
                 avg_loss = epoch_losses['total'] / n_batches
-                elapsed_so_far = time.time() - t0
-                print(f"    Epoch {epoch+1}/{epochs} ▸ {pct:3.0f}% "
-                      f"({batch_idx+1}/{n_total_iters}) "
-                      f"loss={avg_loss:.4f} [{elapsed_so_far:.1f}s]", flush=True)
+                pbar.set_postfix_str(f"loss={avg_loss:.4f}")
 
         scheduler.step()
 
