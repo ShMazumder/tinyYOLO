@@ -34,13 +34,14 @@ All results report mean ± std over 5 independent runs with fixed seeds {42, 123
 
 > *"The paper entirely omits comparison with NanoDet, PicoDet, YOLO-Fastest, MCUNet..."*
 
-**Fix:** Tables 3 and 4 now provide direct comparisons against NanoDet (0.95M), NanoDet-Plus (1.17M), PicoDet-XS (0.93M), YOLO-Fastest (0.25M), MCUNet (0.74M), YOLOv5n (1.90M), YOLOv8n (3.20M), and YOLO11n (2.60M) on **identical datasets (VOC and COCO) at identical resolution (416×416) on identical hardware (Tesla T4)**.
+**Fix:** We now provide two separate comparison tables with explicit source attribution:
 
-For models with available pretrained weights (NanoDet, PicoDet, YOLOv5n, YOLOv8n, YOLO11n), we used official checkpoints fine-tuned to our training protocol. For YOLO-Fastest, we retrained from the official repository with identical settings.
+- **Table 3 (COCO val2017):** Uses official published numbers for NanoDet (0.95M), NanoDet-Plus (1.17M), PicoDet-XS (0.93M), YOLOv5n (1.90M), and YOLOv8n (3.20M). YOLO-Fastest COCO mAP is estimated (official benchmarks focus on VOC).
+- **Table 4 (VOC 2007 test):** Uses official YOLO-Fastest VOC mAP (61.02%, 11-point interpolation) and official MCUNetV2 VOC mAP (64.6%, 256kB SRAM). NanoDet and PicoDet VOC numbers are **author-reproduced** under identical conditions (same hardware, dataset, resolution, protocol) and explicitly marked as such.
 
-TinyYOLO-q achieves 41.2% mAP@50 on VOC, outperforming YOLO-Fastest (35.1%) by 6.1% while using 12% fewer parameters, establishing its position at the sub-0.25M Pareto frontier.
+**Important correction:** MCUNet v1 [25] is a classification-only model (ImageNet). We now reference MCUNetV2 [26] for detection comparisons, which is the appropriate baseline. This inconsistency in the original submission has been corrected.
 
-**Manuscript changes:** Section 7.3–7.4 added. Tables 3–4 added.
+**Manuscript changes:** Section 7.3 restructured with comparability statement. Tables 3–4 now include a "Source" column (Official / Reproduced / Estimated).
 
 ---
 
