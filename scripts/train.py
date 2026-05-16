@@ -540,26 +540,53 @@ class SimpleDetectionDataset(Dataset):
             print(f"  [WARN] No 'labels' folder found under 'datasets/'!")
             print(f"         Losses will likely be zero.")
 
-        # Transforms — fast OpenCV-based augmentation (much faster than PIL pipeline)
+        # Build label path cache at init (avoid repeated Path.exists() per sample)
+        self._label_cache = {}
+        for i, img_f in enumerate(self.img_files):
+            img_p = Path(img_f)
+            lp = None
+            if self.label_root:
+                for tp in [
+                    (self.label_root / img_p.parent.name / img_p.name).with_suffix('.txt'),
+                    (self.label_root / img_p.name).with_suffix('.txt'),
+                ]:
+                    if tp.exists():
+                        lp = tp
+                        break
+            if lp is None:
+                tp = Path(str(img_p).replace('images', 'labels')).with_suffix('.txt')
+                if tp.exists():
+                    lp = tp
+            self._label_cache[i] = lp
+
         self.augment_flag = augment
 
     def _augment_cv2(self, img):
         """Fast OpenCV-based augmentation — avoids slow PIL round-trip."""
-        # Random horizontal flip
         if random.random() < 0.5:
             img = cv2.flip(img, 1)
-        # Color jitter (HSV space — single conversion)
         if random.random() < 0.8:
             hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV).astype(np.float32)
             hsv[:, :, 0] = np.clip(hsv[:, :, 0] + random.uniform(-5, 5), 0, 179)
             hsv[:, :, 1] = np.clip(hsv[:, :, 1] * random.uniform(0.6, 1.4), 0, 255)
             hsv[:, :, 2] = np.clip(hsv[:, :, 2] * random.uniform(0.6, 1.4), 0, 255)
             img = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2RGB)
-        # Random grayscale
         if random.random() < 0.1:
             gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
             img = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
         return img
+
+    def _load_labels(self, idx):
+        """Load YOLO-format labels for image at idx. Returns list of [cls, cx, cy, w, h]."""
+        lp = self._label_cache.get(idx)
+        labels = []
+        if lp is not None:
+            with open(lp) as f:
+                for line in f:
+                    parts = line.strip().split()
+                    if len(parts) >= 5:
+                        labels.append([int(parts[0])] + [float(x) for x in parts[1:5]])
+        return labels
 
     def __len__(self):
         return len(self.img_files)
@@ -569,7 +596,6 @@ class SimpleDetectionDataset(Dataset):
         img_path = self.img_files[idx]
         img = cv2.imread(str(img_path))
         if img is None:
-            # Return random image as fallback
             img = np.random.randint(0, 255, (self.imgsz, self.imgsz, 3), dtype=np.uint8)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
@@ -583,49 +609,16 @@ class SimpleDetectionDataset(Dataset):
         # Convert to tensor: HWC uint8 -> CHW float32 [0, 1]
         img_tensor = torch.from_numpy(img.transpose(2, 0, 1).copy()).float() / 255.0
 
-        # Load labels (YOLO format: class cx cy w h)
-        # Derive label path from image path (robust search)
-        img_path = Path(img_path)
-        label_path = img_path.with_suffix('.txt') # Default fallback
-        
-        # Strategy 1: Use pre-discovered label_root if available
-        if self.label_root:
-            # Try to match the image path's structure within the label_root
-            # e.g., images/val2017/001.jpg -> label_root/val2017/001.txt
-            # or just label_root/001.txt
-            try_paths = [
-                (self.label_root / img_path.parent.name / img_path.name).with_suffix('.txt'),
-                (self.label_root / img_path.name).with_suffix('.txt')
-            ]
-            for tp in try_paths:
-                if tp.exists():
-                    label_path = tp
-                    break
-        
-        # Strategy 2: Standard YOLO fallback (replace 'images' with 'labels')
-        if not label_path.exists():
-            try_path = Path(str(img_path).replace('images', 'labels')).with_suffix('.txt')
-            if try_path.exists():
-                label_path = try_path
-
-        labels = []
-        if label_path.exists():
-            with open(label_path) as f:
-                for line in f:
-                    parts = line.strip().split()
-                    if len(parts) >= 5:
-                        cls = int(parts[0])
-                        bbox = [float(x) for x in parts[1:5]]
-                        labels.append([cls] + bbox)
+        # Load labels
+        labels = self._load_labels(idx)
 
         # Pad labels to fixed size (max 100 objects per image)
         max_objects = 100
         if labels:
-            labels = torch.tensor(labels, dtype=torch.float32)
-            if len(labels) > max_objects:
-                labels = labels[:max_objects]
-            pad = torch.zeros(max_objects - len(labels), 5)
-            labels = torch.cat([labels, pad], dim=0)
+            labels = torch.tensor(labels[:max_objects], dtype=torch.float32)
+            if len(labels) < max_objects:
+                pad = torch.zeros(max_objects - len(labels), 5)
+                labels = torch.cat([labels, pad], dim=0)
         else:
             labels = torch.zeros(max_objects, 5)
 
@@ -669,53 +662,53 @@ class MosaicDataset(Dataset):
         # Select 4 images: current + 3 random
         indices = [idx] + [random.randint(0, len(self.base) - 1) for _ in range(3)]
 
-        # Random center point for the mosaic (within middle 40-60% of image)
+        # Random center point for the mosaic (within middle 30-70% of image)
         cx = random.randint(int(self.imgsz * 0.3), int(self.imgsz * 0.7))
         cy = random.randint(int(self.imgsz * 0.3), int(self.imgsz * 0.7))
 
-        # Placement regions: top-left, top-right, bottom-left, bottom-right
-        # Each sub-image is resized to fit its allocated quadrant
-        mosaic_img = torch.zeros(3, self.imgsz, self.imgsz)
+        # Compose mosaic in numpy (much faster than tensor F.interpolate)
+        mosaic_np = np.zeros((self.imgsz, self.imgsz, 3), dtype=np.uint8)
         mosaic_labels = []
 
         placements = [
-            (0, 0, cx, cy),                             # top-left
-            (cx, 0, self.imgsz, cy),                     # top-right
-            (0, cy, cx, self.imgsz),                     # bottom-left
-            (cx, cy, self.imgsz, self.imgsz),             # bottom-right
+            (0, 0, cx, cy),
+            (cx, 0, self.imgsz, cy),
+            (0, cy, cx, self.imgsz),
+            (cx, cy, self.imgsz, self.imgsz),
         ]
 
         for i, (x1, y1, x2, y2) in enumerate(placements):
-            img_tensor, labels = self.base[indices[i]]
-            # img_tensor is [3, H, W], labels is [max_objects, 5]
+            # Load raw image (fast cv2, no tensor conversion)
+            img_path = self.base.img_files[indices[i]]
+            img = cv2.imread(str(img_path))
+            if img is None:
+                img = np.random.randint(0, 255, (self.imgsz, self.imgsz, 3), dtype=np.uint8)
+            else:
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
             qw = max(x2 - x1, 1)
             qh = max(y2 - y1, 1)
 
-            # Resize sub-image to fill its quadrant
-            resized = torch.nn.functional.interpolate(
-                img_tensor.unsqueeze(0), size=(qh, qw), mode='bilinear', align_corners=False
-            ).squeeze(0)
-            mosaic_img[:, y1:y1+qh, x1:x1+qw] = resized
+            # Resize sub-image to fill its quadrant (fast cv2 on uint8)
+            resized = cv2.resize(img, (qw, qh), interpolation=cv2.INTER_LINEAR)
+            mosaic_np[y1:y1+qh, x1:x1+qw] = resized
 
-            # Adjust labels: transform from [0,1] sub-image coords to mosaic coords
-            for t in range(labels.shape[0]):
-                if labels[t, 2] > 0:  # valid target
-                    cls_id = labels[t, 0]
-                    # Original normalized coords in sub-image
-                    ocx, ocy, ow, oh = labels[t, 1:5]
-                    # Map to mosaic pixel coords
-                    new_cx = (x1 + ocx * qw) / self.imgsz
-                    new_cy = (y1 + ocy * qh) / self.imgsz
-                    new_w = (ow * qw) / self.imgsz
-                    new_h = (oh * qh) / self.imgsz
-                    # Clip to valid range
-                    new_cx = max(0.0, min(1.0, new_cx.item() if torch.is_tensor(new_cx) else new_cx))
-                    new_cy = max(0.0, min(1.0, new_cy.item() if torch.is_tensor(new_cy) else new_cy))
-                    new_w = max(0.001, min(1.0, new_w.item() if torch.is_tensor(new_w) else new_w))
-                    new_h = max(0.001, min(1.0, new_h.item() if torch.is_tensor(new_h) else new_h))
-                    mosaic_labels.append([cls_id.item() if torch.is_tensor(cls_id) else cls_id,
-                                          new_cx, new_cy, new_w, new_h])
+            # Load labels and adjust coordinates
+            labels = self.base._load_labels(indices[i])
+            for lbl in labels:
+                cls_id, ocx, ocy, ow, oh = lbl
+                new_cx = max(0.0, min(1.0, (x1 + ocx * qw) / self.imgsz))
+                new_cy = max(0.0, min(1.0, (y1 + ocy * qh) / self.imgsz))
+                new_w = max(0.001, min(1.0, (ow * qw) / self.imgsz))
+                new_h = max(0.001, min(1.0, (oh * qh) / self.imgsz))
+                mosaic_labels.append([cls_id, new_cx, new_cy, new_w, new_h])
+
+        # Apply augmentation to composed mosaic
+        if self.base.augment_flag:
+            mosaic_np = self.base._augment_cv2(mosaic_np)
+
+        # Convert to tensor: HWC uint8 -> CHW float32 [0, 1]
+        mosaic_img = torch.from_numpy(mosaic_np.transpose(2, 0, 1).copy()).float() / 255.0
 
         # Pad mosaic labels to fixed size
         max_objects = 100
