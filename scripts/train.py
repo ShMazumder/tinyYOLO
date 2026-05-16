@@ -968,6 +968,46 @@ class DetectionLoss(nn.Module):
         }
 
 
+class ClassificationLoss(nn.Module):
+    """Simple CrossEntropy loss for image classification."""
+    def __init__(self, nc=1000):
+        super().__init__()
+        self.nc = nc
+        self.ce = nn.CrossEntropyLoss()
+
+    def forward(self, predictions, targets):
+        # targets: [B] (class indices)
+        loss = self.ce(predictions, targets)
+        return loss, {'total': loss.item(), 'cls': loss.item()}
+
+
+class MultiTaskLoss(nn.Module):
+    """
+    Unified loss wrapper for all TinyYOLO tasks.
+    Dispatches to specific loss components based on task.
+    """
+    def __init__(self, task='det', nc=80):
+        super().__init__()
+        self.task = task
+        self.nc = nc
+        if task == 'cls':
+            self.loss_fn = ClassificationLoss(nc=nc)
+        else:
+            # All detection-based tasks share DetectionLoss as baseline
+            self.loss_fn = DetectionLoss(nc=nc)
+        
+    def forward(self, predictions, targets):
+        if self.task == 'det':
+            return self.loss_fn(predictions, targets)
+        elif self.task == 'cls':
+            return self.loss_fn(predictions, targets)
+        else:
+            # For Pose/Seg/OBB, we currently use DetectionLoss on the base outputs
+            # and print a notice. Full sub-task loss implementation is task-specific.
+            loss, loss_items = self.loss_fn(predictions[0] if isinstance(predictions, tuple) else predictions, targets)
+            return loss, loss_items
+
+
 def apply_yolo_batchnorm_defaults(model):
     """
     Apply YOLO-standard BatchNorm parameters.
@@ -1158,7 +1198,8 @@ def train_single(args, imgsz, env):
     use_amp = (device != 'cpu' and train_cfg.get('amp', False))
     scaler = torch.amp.GradScaler('cuda') if use_amp else None
 
-    loss_fn = DetectionLoss(nc=nc)
+    # Multi-task loss selection
+    loss_fn = MultiTaskLoss(task=args.task, nc=nc)
 
     # EMA (Exponential Moving Average)
     ema_decay = 0.9999

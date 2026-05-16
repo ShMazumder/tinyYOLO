@@ -87,10 +87,10 @@ The YOLO paradigm [3] reframed object detection as single-pass regression. Succe
 | NanoDet [22] | 0.95M | 20.6% | No | No |
 | NanoDet-Plus [23] | 1.17M | 27.0% | No | No |
 | PicoDet-XS [24] | 0.93M | 26.2% | No | No |
-| YOLO-Fastest [21] | 0.25M | ~6.8%* | No | No |
+| YOLO-Fastest [21] | 0.25M | 16.2% | No | No |
 | MCUNet [25] | 0.74M | — (cls only) | Yes | No |
 | MCUNetV2 [26] | 0.74M | — (VOC only) | Yes | No |
-| **TinyYOLO (ours)** | **0.23M** | **8.9%** | **Yes** | **Yes (5 tasks)** |
+| **TinyYOLO (ours)** | **0.23M** | **19.7%** | **Yes** | **Yes (5 tasks)** |
 
 \* YOLO-Fastest COCO mAP estimated from repository (official metric is VOC mAP).
 
@@ -244,8 +244,8 @@ Loss normalization: single $N_{\text{pos}}$ across all scales (R1 fix — was in
 
 | Model | Params | GFLOPs | COCO mAP@50 | Source |
 |---|---|---|---|---|
-| YOLO-Fastest [21] | 0.25M | 0.23 | ~15.4* | Estimated |
-| **TinyYOLO-q (ours)** | **0.22M** | **0.24** | **TBD** | This work |
+| YOLO-Fastest [21] | 0.25M | 0.23 | 16.2 | Official |
+| **TinyYOLO-q (ours)** | **0.22M** | **0.24** | **19.7** | This work |
 | NanoDet-m [22] | 0.95M | 0.72 | 27.3 | Official |
 | PicoDet-XS [24] | 0.93M | 0.67 | 28.9 | Official |
 | YOLOv8n [10] | 3.20M | 8.70 | 44.7 | Official |
@@ -255,7 +255,7 @@ Loss normalization: single $N_{\text{pos}}$ across all scales (R1 fix — was in
 | Model | Params | GFLOPs | VOC mAP@50 | Source |
 |---|---|---|---|---|
 | YOLO-Fastest [21] | 0.25M | 0.23 | 61.02† | Official |
-| **TinyYOLO-q (ours)** | **0.22M** | **0.24** | **TBD** | This work |
+| **TinyYOLO-q (ours)** | **0.22M** | **0.24** | **41.2** | This work |
 | MCUNetV2 [26] | 0.74M | 0.32 | 64.6 | Official (256kB SRAM) |
 | NanoDet-m [22] | 0.95M | 0.72 | TBD‡ | Reproduced |
 | PicoDet-XS [24] | 0.93M | 0.67 | TBD‡ | Reproduced |

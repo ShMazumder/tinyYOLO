@@ -13,7 +13,8 @@ def decode_predictions(outputs, imgsz, conf_thresh=0.25, nc=80):
     Decode multi-scale model outputs into bounding boxes.
 
     Args:
-        outputs: List of [B, 4+nc, H, W] tensors from model (3 scales).
+        outputs: List of [B, 5+nc, H, W] tensors from model (3 scales).
+                 Channels: 4 (bbox) + 1 (obj) + nc (classes)
         imgsz: Input image size.
         conf_thresh: Confidence threshold for filtering.
         nc: Number of classes.

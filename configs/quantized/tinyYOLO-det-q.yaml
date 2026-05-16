@@ -37,7 +37,7 @@ quantization:
   calibration_batches: 100
 
 training:
-  epochs: 120
+  epochs: 150
   optimizer: AdamW
   lr0: 0.001
   lrf: 0.01
