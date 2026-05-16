@@ -71,7 +71,7 @@ def detect_environment():
     if os.environ.get('COLAB_GPU') or os.environ.get('COLAB_RELEASE_TAG'):
         env['platform'] = 'colab'
         env['data_dir'] = '/content/datasets'
-        env['recommended_workers'] = 2
+        env['recommended_workers'] = 4  # Colab has 2 vCPUs but benefits from 4 workers
     elif os.environ.get('KAGGLE_KERNEL_RUN_TYPE'):
         env['platform'] = 'kaggle'
         env['data_dir'] = '/kaggle/working/datasets'
@@ -89,17 +89,19 @@ def detect_environment():
         env['recommended_workers'] = min(os.cpu_count() or 4, 8)
 
     # --- Batch Size Recommendation ---
+    # TinyYOLO is only 0.21M params — GPU memory is rarely the bottleneck.
+    # Larger batches improve GPU utilization by reducing data-loading stalls.
     mem = env['gpu_memory_gb']
     if mem >= 40:       # A100 80GB, A100 40GB
-        env['recommended_batch_size'] = 128
+        env['recommended_batch_size'] = 256
     elif mem >= 20:     # A5000, 3090, 4090
+        env['recommended_batch_size'] = 128
+    elif mem >= 10:     # T4 (15GB), 3080, 2080Ti
         env['recommended_batch_size'] = 64
-    elif mem >= 10:     # 3080, 2080Ti
-        env['recommended_batch_size'] = 32
     elif mem >= 6:      # 3060, 2060
-        env['recommended_batch_size'] = 16
+        env['recommended_batch_size'] = 32
     elif env['gpu_available']:
-        env['recommended_batch_size'] = 8
+        env['recommended_batch_size'] = 16
     else:
         env['recommended_batch_size'] = 4  # CPU
 

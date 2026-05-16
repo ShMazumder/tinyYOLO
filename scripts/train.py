@@ -971,10 +971,13 @@ def train_single(args, imgsz, env):
     use_mosaic = not args.quick and epochs > 10
     mosaic_disable_epoch = int(epochs * 0.9) if use_mosaic else 0
     dataset = MosaicDataset(base_dataset, imgsz=imgsz, enable=use_mosaic)
+    n_workers = max(train_cfg['workers'], 2)
     dataloader = DataLoader(
         dataset, batch_size=batch, shuffle=True,
-        num_workers=min(train_cfg['workers'], 4),
+        num_workers=n_workers,
         pin_memory=(device != 'cpu'), drop_last=True,
+        persistent_workers=(n_workers > 0),
+        prefetch_factor=4 if n_workers > 0 else None,
     )
     print(f"  Dataset: {len(dataset)} images, {len(dataloader)} batches")
     if use_mosaic:
@@ -1031,8 +1034,10 @@ def train_single(args, imgsz, env):
         val_dir = train_dir
     val_dataset = SimpleDetectionDataset(val_dir, imgsz=imgsz, augment=False)
     val_loader = DataLoader(val_dataset, batch_size=batch, shuffle=False,
-                            num_workers=min(train_cfg['workers'], 4),
-                            pin_memory=(device != 'cpu'))
+                            num_workers=n_workers,
+                            pin_memory=(device != 'cpu'),
+                            persistent_workers=(n_workers > 0),
+                            prefetch_factor=4 if n_workers > 0 else None)
     print(f"  Val Dataset: {len(val_dataset)} images")
 
     # --- Training loop ---
