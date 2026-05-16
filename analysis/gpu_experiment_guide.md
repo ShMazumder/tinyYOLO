@@ -1,7 +1,7 @@
 # TinyYOLO R1 — GPU Experiment Execution Guide
 
 > Step-by-step commands to run all remaining experimental work on a GPU workstation.
-> Estimated total time: **~24–40 hours** on a single T4/V100 GPU.
+> Estimated total time: **~12–20 hours** on a single T4 GPU (Kaggle: ~64s/epoch).
 
 ---
 
@@ -14,6 +14,7 @@
 !git clone https://github.com/ShMazumder/tinyYOLO.git /content/tinyYOLO
 %cd /content/tinyYOLO
 !pip install -e . -q
+!pip install tqdm -q
 
 # Verify GPU
 !python -c "import torch; print(f'GPU: {torch.cuda.get_device_name(0)}, CUDA {torch.version.cuda}')"
@@ -54,7 +55,8 @@ print(f'Model:   {info[\"total_params_M\"]}M params — OK ✓')
 ## Phase 1: Pascal VOC Training — 5 Seeds (~10–15 hours)
 
 > **Purpose:** Primary benchmark (Table 1 in manuscript). 5 independent runs for mean ± std.
-> **Expected time:** ~2–3 hours per seed on T4 at 416×416.
+> **Expected time:** ~1.5 hours per seed on T4/Kaggle at 416×416 (64s/epoch × 300 epochs).
+> ~4.5 hours per seed on Colab (265s/epoch × 300 epochs).
 
 ### 1.1 Download VOC dataset (automatic, ~2 GB)
 
@@ -520,16 +522,16 @@ scp -r user@gpu-host:~/tinyYOLO/experiments/results/ \
 
 ## Time Estimates Summary
 
-| Phase | Task | GPU Hours | Priority |
-|-------|------|-----------|----------|
-| 1 | VOC 5 seeds × 2 variants | ~20–30h | 🔴 **Mandatory** |
-| 2 | COCO 3 seeds | ~18–30h | 🔴 **Mandatory** |
-| 3 | Ablation studies (10 experiments) | ~8–10h | 🔴 **Mandatory** |
-| 4 | Multi-task (seg + pose) | ~4–6h | 🟡 Recommended |
-| 5 | Quantization (PTQ + QAT) | ~1–2h | 🟡 Recommended |
-| 6 | ONNX export + sizes | ~10 min | 🟢 Quick |
-| 7 | Edge hardware | ~2h + hardware | 🟡 Recommended |
-| 8 | Results collection | ~30 min | 🟢 Quick |
+| Phase | Task | GPU Hours (Kaggle T4) | GPU Hours (Colab T4) | Priority |
+|-------|------|----------------------|---------------------|----------|
+| 1 | VOC 5 seeds × 2 variants | ~15h | ~45h | 🔴 **Mandatory** |
+| 2 | COCO 3 seeds | ~10–15h | ~30h | 🔴 **Mandatory** |
+| 3 | Ablation studies (10 experiments) | ~4–5h | ~12h | 🔴 **Mandatory** |
+| 4 | Multi-task (seg + pose) | ~2–3h | ~6h | 🟡 Recommended |
+| 5 | Quantization (PTQ + QAT) | ~1h | ~1h | 🟡 Recommended |
+| 6 | ONNX export + sizes | ~10 min | ~10 min | 🟢 Quick |
+| 7 | Edge hardware | ~2h + hardware | ~2h + hardware | 🟡 Recommended |
+| 8 | Results collection | ~30 min | ~30 min | 🟢 Quick |
 
 > [!TIP]
 > **Parallelization:** If you have multiple GPUs or multiple Colab/Kaggle sessions, run Phases 1, 2, and 3 in parallel. Each seed is independent.
@@ -545,8 +547,11 @@ scp -r user@gpu-host:~/tinyYOLO/experiments/results/ \
 |-------|----------|
 | `FileNotFoundError: Dataset not found` | Run the download command from Phase 1.1 or 2.1 first |
 | `CUDA out of memory` | Reduce `--batch` (try 16, 8, or 4) |
+| `Notebook OOM on multi-seed runs` | Training cache auto-skips datasets >5 GB. Restart kernel between seeds if needed |
 | `Mosaic too slow` | Add `--quick` to disable mosaic, or reduce `--epochs` |
 | `VOC download fails` | `pip install ultralytics --upgrade` then retry |
 | `ONNX export fails` | `pip install onnx>=1.14.0 onnxruntime>=1.15.0` |
 | Colab disconnects | Use Colab Pro, or split into shorter runs with checkpoint resume |
 | `ModuleNotFoundError: tinyYOLO` | Run `pip install -e .` from the project root |
+| `No module named 'tqdm'` | Run `pip install tqdm` |
+| Slow epoch time (>120s on T4) | Ensure latest `train.py` with vectorized loss. Push/pull latest code |

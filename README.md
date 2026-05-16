@@ -4,7 +4,7 @@
 
 **A modular, research-grade tiny object detection framework built on PyTorch + Ultralytics.**
 
-Cherry-picks the best innovations from YOLOv1–v26 into ultra-lightweight models (0.07M–0.29M parameters) designed for edge deployment. Features INT8-native dual-variant architecture, Task-Aligned Label Assignment (TAL), dedicated objectness head, CIoU loss, mosaic augmentation, deterministic training with seed control, and comprehensive evaluation metrics (P/R/F1/mAP@50/mAP@50-95) with full report generation.
+Cherry-picks the best innovations from YOLOv1–v26 into ultra-lightweight models (0.07M–0.29M parameters) designed for edge deployment. Features INT8-native dual-variant architecture, Task-Aligned Label Assignment (TAL), dedicated objectness head, vectorized CIoU loss, mosaic augmentation with RAM caching, tqdm progress monitoring, deterministic training with seed control, and comprehensive evaluation metrics (P/R/F1/mAP@50/mAP@50-95) with full report generation.
 
 **Evaluated on:** Pascal VOC 2007+2012 (16.5K images) and COCO val2017 (5K images) with edge deployment validated on Jetson Nano and Raspberry Pi 4.
 
@@ -62,6 +62,7 @@ pip install -r requirements.txt
 !git clone https://github.com/ShMazumder/tinyYOLO.git /content/tinyYOLO
 %cd /content/tinyYOLO
 !pip install -e . -q
+!pip install tqdm -q
 ```
 
 ### Kaggle
@@ -71,6 +72,7 @@ pip install -r requirements.txt
 !git clone https://github.com/ShMazumder/tinyYOLO.git /kaggle/working/tinyYOLO
 import sys; sys.path.insert(0, '/kaggle/working/tinyYOLO')
 !pip install -e /kaggle/working/tinyYOLO -q
+!pip install tqdm -q
 ```
 
 ### RunPod / Vast.ai
@@ -257,18 +259,26 @@ Input (160/224/320/416/640)
 
 ### `scripts/train.py` — Training
 
-Full training pipeline with COCO128 auto-download, CIoU loss, AMP, EMA, per-epoch metrics, and full report generation.
+Full training pipeline with COCO128 auto-download, vectorized CIoU loss, AMP, EMA, per-epoch metrics, tqdm progress bars, and full report generation.
 
 **What happens when you run training:**
 1. Auto-detects environment (Colab/Kaggle/RunPod/local) and configures batch size, workers, device
-2. Downloads COCO128 dataset automatically (if not cached)
-3. Builds model, applies YOLO-standard BatchNorm (`eps=1e-3, momentum=0.03`)
-4. Trains with AdamW (separate weight decay groups) + cosine LR + AMP + gradient clipping
-5. Uses **CIoU box loss** + BCE classification + BCE objectness (weighted 2.0 / 1.0 / 1.0)
-6. Computes **P/R/F1/mAP@50/mAP@50-95** at regular intervals via NMS + IoU matching
-7. Saves best checkpoint by **mAP@50** (not just loss)
-8. Generates full report: training curves, confusion matrix, per-class breakdown
-9. Saves config, history, metrics as JSON
+2. Downloads dataset automatically (if not cached)
+3. **Pre-caches images in RAM** (if dataset <5 GB and memory allows) — eliminates disk I/O
+4. Builds model, applies YOLO-standard BatchNorm (`eps=1e-3, momentum=0.03`)
+5. Trains with AdamW (separate weight decay groups) + cosine LR + AMP + gradient clipping
+6. Uses **vectorized CIoU box loss** + BCE classification + BCE objectness (weighted 2.0 / 1.0 / 1.0)
+7. Computes **P/R/F1/mAP@50/mAP@50-95** at regular intervals via NMS + IoU matching
+8. Displays **tqdm progress bars** (single-line updates per epoch)
+9. Saves best checkpoint by **mAP@50** (not just loss)
+10. Generates full report: training curves, confusion matrix, per-class breakdown
+11. Saves config, history, metrics as JSON
+
+**Training speed (benchmarked):**
+| Platform | Epoch Time (VOC 16.5K, 416×416) | 300 Epochs |
+|----------|-------------------------------|------------|
+| Kaggle T4 (30 GB RAM) | **64s** | ~5.3h |
+| Colab T4 (12.7 GB RAM) | **265s** | ~22h |
 
 **Output structure per experiment:**
 ```
