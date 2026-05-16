@@ -4,7 +4,7 @@
 
 **A modular, research-grade tiny object detection framework built on PyTorch + Ultralytics.**
 
-Cherry-picks the best innovations from YOLOv1–v26 into ultra-lightweight models (0.07M–0.29M parameters) designed for edge deployment. Features INT8-native dual-variant architecture, Task-Aligned Label Assignment (TAL), dedicated objectness head, vectorized CIoU loss, mosaic augmentation with RAM caching, tqdm progress monitoring, deterministic training with seed control, and comprehensive evaluation metrics (P/R/F1/mAP@50/mAP@50-95) with full report generation.
+Cherry-picks the best innovations from YOLOv1–v26 into ultra-lightweight models (0.07M–0.29M parameters) designed for edge deployment. Features INT8-native dual-variant architecture, multi-GPU training via Distributed Data Parallel (DDP), a unified Multi-Task Loss framework (Detection, Segmentation, Pose, Cls, OBB), Task-Aligned Label Assignment (TAL), dedicated objectness head, vectorized CIoU loss, mosaic augmentation with RAM caching, tqdm progress monitoring, deterministic training with seed control, and comprehensive evaluation metrics (P/R/F1/mAP@50/mAP@50-95) with full report generation.
 
 **Evaluated on:** Pascal VOC 2007+2012 (16.5K images) and COCO val2017 (5K images) with edge deployment validated on Jetson Nano and Raspberry Pi 4.
 
