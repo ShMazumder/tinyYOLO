@@ -571,7 +571,7 @@ class SimpleDetectionDataset(Dataset):
         except ImportError:
             avail_gb = 999  # assume enough if psutil not available
         est_gb = len(self.img_files) * imgsz * imgsz * 3 / (1024 ** 3)
-        self._use_cache = (est_gb < avail_gb * 0.6)  # only cache if fits in 60% of free RAM
+        self._use_cache = (est_gb < avail_gb * 0.4)  # only cache if fits in 40% of free RAM
         if self._use_cache:
             print(f"  [CACHE] Pre-loading {len(self.img_files)} images into RAM (~{est_gb:.1f} GB)...")
             for i, fp in enumerate(self.img_files):
@@ -1045,7 +1045,14 @@ def train_single(args, imgsz, env):
     use_mosaic = not args.quick and epochs > 10
     mosaic_disable_epoch = int(epochs * 0.9) if use_mosaic else 0
     dataset = MosaicDataset(base_dataset, imgsz=imgsz, enable=use_mosaic)
-    n_workers = min(train_cfg['workers'], max(os.cpu_count() or 2, 2))
+    # When images are cached in RAM, workers=0 (no disk I/O to parallelize)
+    # This also prevents forked workers from duplicating the cache (OOM)
+    if base_dataset._use_cache:
+        n_workers = 0
+        print(f"  Workers:  0 (images cached in RAM, no disk I/O needed)")
+    else:
+        n_workers = min(train_cfg['workers'], max(os.cpu_count() or 2, 2))
+        print(f"  Workers:  {n_workers}")
     dataloader = DataLoader(
         dataset, batch_size=batch, shuffle=True,
         num_workers=n_workers,
@@ -1107,11 +1114,12 @@ def train_single(args, imgsz, env):
         print(f"  [WARN] No validation directory specified, using training dir (not recommended)")
         val_dir = train_dir
     val_dataset = SimpleDetectionDataset(val_dir, imgsz=imgsz, augment=False)
+    val_workers = 0 if val_dataset._use_cache else n_workers
     val_loader = DataLoader(val_dataset, batch_size=batch, shuffle=False,
-                            num_workers=n_workers,
+                            num_workers=val_workers,
                             pin_memory=(device != 'cpu'),
-                            persistent_workers=(n_workers > 0),
-                            prefetch_factor=4 if n_workers > 0 else None)
+                            persistent_workers=(val_workers > 0),
+                            prefetch_factor=4 if val_workers > 0 else None)
     print(f"  Val Dataset: {len(val_dataset)} images")
 
     # --- Training loop ---
