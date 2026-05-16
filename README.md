@@ -321,6 +321,19 @@ python scripts/train.py \
   --compile            # torch.compile() for 1.5-2x speedup (PyTorch 2.0+)
 ```
 
+### Multi-GPU Training (DDP)
+
+TinyYOLO supports Distributed Data Parallel (DDP) via `torchrun`. This is recommended for multi-GPU nodes (e.g., 2x T4 or 8x A100).
+
+```bash
+# Example: 2-GPU training on a single node
+torchrun --nproc_per_node=2 scripts/train.py --task det --batch 256 --pretrained --compile
+```
+
+*Note: The `--batch` flag represents the TOTAL batch size across all GPUs. Each GPU will handle `batch / n_gpus` images.*
+
+---
+
 **Train every task:**
 
 ```bash

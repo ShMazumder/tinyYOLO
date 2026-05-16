@@ -28,6 +28,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
+from torch.utils.data.distributed import DistributedSampler
 try:
     from tqdm import tqdm
 except ImportError:
@@ -36,6 +37,8 @@ from torchvision import transforms
 import numpy as np
 import cv2
 import random
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
 
 from tinyYOLO.utils.env import detect_environment, get_training_config, print_env_report
 from tinyYOLO.models import build_model
@@ -1048,30 +1051,43 @@ def train_single(args, imgsz, env):
     else:
         print(f"  Train images: {train_dir}")
 
+    # Distributed settings
+    rank = int(os.environ.get('RANK', -1))
+    world_size = int(os.environ.get('WORLD_SIZE', 1))
+
     # SimpleDetectionDataset handles both single path and list of paths
     base_dataset = SimpleDetectionDataset(train_dir, imgsz=imgsz, augment=True)
     # Wrap with mosaic augmentation (disabled for quick tests and last 10% of epochs)
     use_mosaic = not args.quick and epochs > 10
     mosaic_disable_epoch = int(epochs * 0.9) if use_mosaic else 0
     dataset = MosaicDataset(base_dataset, imgsz=imgsz, enable=use_mosaic)
+
+    # DDP Sampler
+    sampler = DistributedSampler(dataset, shuffle=True) if rank != -1 else None
+    
     # When images are cached in RAM, workers=0 (no disk I/O to parallelize)
-    # This also prevents forked workers from duplicating the cache (OOM)
     if base_dataset._use_cache:
         n_workers = 0
-        print(f"  Workers:  0 (images cached in RAM, no disk I/O needed)")
+        if rank in (-1, 0):
+            print(f"  Workers:  0 (images cached in RAM, no disk I/O needed)")
     else:
         n_workers = min(train_cfg['workers'], max(os.cpu_count() or 2, 2))
-        print(f"  Workers:  {n_workers}")
+        if rank in (-1, 0):
+            print(f"  Workers:  {n_workers}")
+
     dataloader = DataLoader(
-        dataset, batch_size=batch, shuffle=True,
+        dataset, batch_size=batch // world_size if rank != -1 else batch,
+        shuffle=(sampler is None),
+        sampler=sampler,
         num_workers=n_workers,
         pin_memory=(device != 'cpu'), drop_last=True,
         persistent_workers=(n_workers > 0),
         prefetch_factor=4 if n_workers > 0 else None,
     )
-    print(f"  Dataset: {len(dataset)} images, {len(dataloader)} batches")
-    if use_mosaic:
-        print(f"  Mosaic:  ON (disabled after epoch {mosaic_disable_epoch})")
+    if rank in (-1, 0):
+        print(f"  Dataset: {len(dataset)} images, {len(dataloader)} batches")
+        if use_mosaic:
+            print(f"  Mosaic:  ON (disabled after epoch {mosaic_disable_epoch})")
 
     # --- Setup training ---
     model = model.to(device)
@@ -1102,13 +1118,22 @@ def train_single(args, imgsz, env):
     # Apply YOLO-standard BatchNorm (eps=1e-3, momentum=0.03)
     apply_yolo_batchnorm_defaults(model)
 
+    # SyncBN for DDP
+    if rank != -1:
+        model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
+        model = DDP(model, device_ids=[int(os.environ['LOCAL_RANK'])], find_unused_parameters=True)
+        if rank == 0:
+            print("  [DDP] SyncBatchNorm and DDP wrapping enabled")
+
     # --- torch.compile for 1.5-2x speedup ---
     if getattr(args, 'compile', False):
         if hasattr(torch, 'compile'):
             model = torch.compile(model, mode="reduce-overhead")
-            print("  [COMPILE] torch.compile(mode='reduce-overhead') enabled")
+            if rank in (-1, 0):
+                print("  [COMPILE] torch.compile(mode='reduce-overhead') enabled")
         else:
-            print("  [COMPILE] Requires PyTorch 2.0+, skipping")
+            if rank in (-1, 0):
+                print("  [COMPILE] Requires PyTorch 2.0+, skipping")
 
     model.train()
 
@@ -1172,6 +1197,9 @@ def train_single(args, imgsz, env):
     print(f"  {'-'*88}")
 
     for epoch in range(epochs):
+        if rank != -1:
+            sampler.set_epoch(epoch)
+            
         model.train()
         epoch_losses = {'box': 0, 'cls': 0, 'obj': 0, 'total': 0}
         n_batches = 0
@@ -1255,12 +1283,14 @@ def train_single(args, imgsz, env):
         elapsed = time.time() - t0
         lr = scheduler.get_last_lr()[0]
 
-        # --- Evaluation ---
+        # --- Evaluation (Master Rank only) ---
         epoch_metrics = {'precision': 0, 'recall': 0, 'f1': 0, 'mAP50': 0, 'mAP50_95': 0}
         is_eval_epoch = ((epoch + 1) % eval_every == 0) or (epoch + 1 == epochs)
 
-        if is_eval_epoch:
-            model.eval()
+        if is_eval_epoch and rank in (-1, 0):
+            # Use module directly for evaluation if in DDP
+            eval_model = model.module if hasattr(model, 'module') else model
+            eval_model.eval()
             det_metrics = DetectionMetrics(nc=nc, conf_thresh=0.15)
 
             with torch.no_grad():
@@ -1268,7 +1298,7 @@ def train_single(args, imgsz, env):
                     val_images = val_images.to(device, non_blocking=True)
                     val_targets = val_targets.to(device, non_blocking=True)
 
-                    val_outputs = model(val_images)
+                    val_outputs = eval_model(val_images)
                     if isinstance(val_outputs, tuple):
                         val_outputs = val_outputs[0]
 
@@ -1282,72 +1312,85 @@ def train_single(args, imgsz, env):
                     det_metrics.update(pred_list, gt_list)
 
             epoch_metrics = det_metrics.compute()
-            model.train()
+            eval_model.train()
 
-        # Print row
-        p = epoch_metrics.get('precision', 0)
-        r = epoch_metrics.get('recall', 0)
-        f1 = epoch_metrics.get('f1', 0)
-        m50 = epoch_metrics.get('mAP50', 0)
+        # Barrier to sync ranks before saving/printing
+        if rank != -1:
+            dist.barrier()
 
+        if rank in (-1, 0):
+            # Print row
+            p = epoch_metrics.get('precision', 0)
+            r = epoch_metrics.get('recall', 0)
+            f1 = epoch_metrics.get('f1', 0)
+            m50 = epoch_metrics.get('mAP50', 0)
 
-        print(f"  {epoch+1:>4}/{epochs} "
-              f"{epoch_losses['box']:>8.4f} {epoch_losses['cls']:>8.4f} "
-              f"{epoch_losses['obj']:>8.4f} {epoch_losses['total']:>8.4f} "
-              f"{p:>6.3f} {r:>6.3f} {f1:>6.3f} {m50:>7.4f} "
-              f"{lr:>10.6f} {elapsed:>5.1f}s", flush=True)
+            print(f"  {epoch+1:>4}/{epochs} "
+                  f"{epoch_losses['box']:>8.4f} {epoch_losses['cls']:>8.4f} "
+                  f"{epoch_losses['obj']:>8.4f} {epoch_losses['total']:>8.4f} "
+                  f"{p:>6.3f} {r:>6.3f} {f1:>6.3f} {m50:>7.4f} "
+                  f"{lr:>10.6f} {elapsed:>5.1f}s", flush=True)
 
-        history.append({
-            'epoch': epoch + 1,
-            'lr': lr,
-            'time': round(elapsed, 1),
-            **epoch_losses,
-            'precision': round(p, 4),
-            'recall': round(r, 4),
-            'f1': round(f1, 4),
-            'mAP50': round(m50, 4),
-            'mAP50_95': round(epoch_metrics.get('mAP50_95', 0), 4),
-        })
+            history.append({
+                'epoch': epoch + 1,
+                'lr': lr,
+                'time': round(elapsed, 1),
+                **epoch_losses,
+                'precision': round(p, 4),
+                'recall': round(r, 4),
+                'f1': round(f1, 4),
+                'mAP50': round(m50, 4),
+                'mAP50_95': round(epoch_metrics.get('mAP50_95', 0), 4),
+            })
 
-        # Save best (by mAP if available, else by loss)
-        def _clean_state_dict(sd):
-            """Strip thop profiler keys from state dict."""
-            return {k: v for k, v in sd.items()
-                    if not k.endswith(('total_ops', 'total_params'))}
+            # Save best (by mAP if available, else by loss)
+            def _clean_state_dict(m):
+                """Strip thop profiler keys and DDP module prefix from state dict."""
+                sd = m.module.state_dict() if hasattr(m, 'module') else m.state_dict()
+                return {k: v for k, v in sd.items()
+                        if not k.endswith(('total_ops', 'total_params'))}
 
-        if is_eval_epoch and m50 > best_map:
-            best_map = m50
-            torch.save(_clean_state_dict(model.state_dict()), results_dir / 'best.pt')
-        elif epoch_losses['total'] < best_loss:
-            best_loss = epoch_losses['total']
-            if not is_eval_epoch:
-                torch.save(_clean_state_dict(model.state_dict()), results_dir / 'best.pt')
+            if is_eval_epoch and m50 > best_map:
+                best_map = m50
+                torch.save(_clean_state_dict(model), results_dir / 'best.pt')
+            elif epoch_losses['total'] < best_loss:
+                best_loss = epoch_losses['total']
+                if not is_eval_epoch:
+                    torch.save(_clean_state_dict(model), results_dir / 'best.pt')
 
-    # --- Save final results ---
-    torch.save(_clean_state_dict(model.state_dict()), results_dir / 'last.pt')
-    torch.save(ema_model, results_dir / 'ema.pt')
+    # --- Save final results (Master Rank only) ---
+    if rank in (-1, 0):
+        torch.save(_clean_state_dict(model), results_dir / 'last.pt')
+        torch.save(ema_model, results_dir / 'ema.pt')
 
-    # Final evaluation with full report
-    print(f"\n  Running final evaluation...")
-    model.eval()
-    final_metrics_calc = DetectionMetrics(nc=nc, conf_thresh=0.15)
+        # Final evaluation with full report
+        print(f"\n  Running final evaluation...")
+        eval_model = model.module if hasattr(model, 'module') else model
+        eval_model.eval()
+        final_metrics_calc = DetectionMetrics(nc=nc, conf_thresh=0.15)
 
-    with torch.no_grad():
-        for val_images, val_targets in val_loader:
-            val_images = val_images.to(device, non_blocking=True)
-            val_targets = val_targets.to(device, non_blocking=True)
+        with torch.no_grad():
+            for val_images, val_targets in val_loader:
+                val_images = val_images.to(device, non_blocking=True)
+                val_targets = val_targets.to(device, non_blocking=True)
 
-            val_outputs = model(val_images)
-            if isinstance(val_outputs, tuple):
-                val_outputs = val_outputs[0]
+                val_outputs = eval_model(val_images)
+                if isinstance(val_outputs, tuple):
+                    val_outputs = val_outputs[0]
 
-            pred_list = decode_predictions(val_outputs, imgsz, conf_thresh=0.15, nc=nc)
-            pred_list = non_max_suppression(pred_list, iou_thresh=0.45)
-            gt_list = decode_targets(val_targets, imgsz)
-            final_metrics_calc.update(pred_list, gt_list)
+                pred_list = decode_predictions(val_outputs, imgsz, conf_thresh=0.15, nc=nc)
+                pred_list = non_max_suppression(pred_list, iou_thresh=0.45)
+                gt_list = decode_targets(val_targets, imgsz)
+                final_metrics_calc.update(pred_list, gt_list)
 
-    final_metrics = final_metrics_calc.compute()
-    print_metrics_report(final_metrics)
+        final_metrics = final_metrics_calc.compute()
+        print_metrics_report(final_metrics)
+    else:
+        # Non-master ranks can skip the final report generation
+        final_metrics = epoch_metrics 
+
+    if rank != -1:
+        dist.barrier()
 
     # Save config with final metrics
     config = {
@@ -1413,33 +1456,34 @@ def train_single(args, imgsz, env):
         },
     }
 
-    with open(results_dir / 'config.json', 'w') as f:
-        json.dump(config, f, indent=2)
-    with open(results_dir / 'history.json', 'w') as f:
-        json.dump(history, f, indent=2)
+    if rank in (-1, 0):
+        with open(results_dir / 'config.json', 'w') as f:
+            json.dump(config, f, indent=2)
+        with open(results_dir / 'history.json', 'w') as f:
+            json.dump(history, f, indent=2)
 
-    # Generate full report (curves, confusion matrix, per-class)
-    try:
-        generate_full_report(final_metrics, history, results_dir)
-    except Exception as e:
-        print(f"  [WARN] Report generation error: {e}")
-        # Fallback: basic loss curves
+        # Generate full report (curves, confusion matrix, per-class)
         try:
-            plot_training_curves(history, results_dir / 'training_curves.png')
-        except Exception:
-            pass
+            generate_full_report(final_metrics, history, results_dir)
+        except Exception as e:
+            print(f"  [WARN] Report generation error: {e}")
+            # Fallback: basic loss curves
+            try:
+                plot_training_curves(history, results_dir / 'training_curves.png')
+            except Exception:
+                pass
 
-    print(f"\n  Results saved to: {results_dir}")
-    print(f"  Best mAP@50:      {best_map:.4f}")
-    print(f"  Best total loss:   {best_loss:.4f}")
-    print(f"  Outputs:")
-    print(f"    best.pt, last.pt, ema.pt      — Model checkpoints")
-    print(f"    config.json                    — Hyperparameters & augmentation report")
-    print(f"    history.json                   — Per-epoch losses + metrics")
-    print(f"    metrics.json                   — Final P/R/F1/mAP/confusion matrix")
-    print(f"    training_curves.png            — Loss + accuracy curves")
-    print(f"    confusion_matrix.png           — Confusion matrix heatmap")
-    print(f"    per_class_report.txt           — Per-class P/R/F1/AP breakdown")
+        print(f"\n  Results saved to: {results_dir}")
+        print(f"  Best mAP@50:      {best_map:.4f}")
+        print(f"  Best total loss:   {best_loss:.4f}")
+        print(f"  Outputs:")
+        print(f"    best.pt, last.pt, ema.pt      — Model checkpoints")
+        print(f"    config.json                    — Hyperparameters & augmentation report")
+        print(f"    history.json                   — Per-epoch losses + metrics")
+        print(f"    metrics.json                   — Final P/R/F1/mAP/confusion matrix")
+        print(f"    training_curves.png            — Loss + accuracy curves")
+        print(f"    confusion_matrix.png           — Confusion matrix heatmap")
+        print(f"    per_class_report.txt           — Per-class P/R/F1/AP breakdown")
 
     return model_name
 
@@ -1447,19 +1491,36 @@ def train_single(args, imgsz, env):
 def main():
     args = parse_args()
 
+    # DDP Initialization
+    world_size = int(os.environ.get('WORLD_SIZE', 1))
+    rank = int(os.environ.get('RANK', -1))
+    local_rank = int(os.environ.get('LOCAL_RANK', -1))
+
+    if rank != -1:
+        dist.init_process_group(backend='nccl' if torch.cuda.is_available() else 'gloo')
+        torch.cuda.set_device(local_rank)
+        args.device = f'cuda:{local_rank}'
+        print(f"  [DDP] Initialized Rank {rank}/{world_size} on {args.device}")
+
     env = detect_environment()
-    print_env_report(env)
+    if rank in (-1, 0):
+        print_env_report(env)
 
     imgsz_list = [int(s.strip()) for s in args.imgsz.split(',')]
 
     if args.sweep or len(imgsz_list) > 1:
-        print(f"\n  Running resolution sweep: {imgsz_list}")
+        if rank in (-1, 0):
+            print(f"\n  Running resolution sweep: {imgsz_list}")
         for imgsz in imgsz_list:
             train_single(args, imgsz, env)
     else:
         train_single(args, imgsz_list[0], env)
 
-    print("\n  All training complete! ✓")
+    if rank != -1:
+        dist.destroy_process_group()
+
+    if rank in (-1, 0):
+        print("\n  All training complete! ✓")
 
 
 if __name__ == '__main__':
