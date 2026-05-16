@@ -73,6 +73,10 @@ def parse_args():
     parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate')
     parser.add_argument('--seed', type=int, default=42, help='Random seed for reproducibility')
     parser.add_argument('--warmup', type=int, default=3, help='Warmup epochs')
+    parser.add_argument('--pretrained', action='store_true',
+                        help='Load ImageNet-pretrained GhostNet backbone (reduces epochs needed)')
+    parser.add_argument('--compile', action='store_true',
+                        help='Use torch.compile() for 1.5-2x speedup (PyTorch 2.0+)')
     return parser.parse_args()
 
 
@@ -1072,8 +1076,39 @@ def train_single(args, imgsz, env):
     # --- Setup training ---
     model = model.to(device)
 
+    # --- Pretrained backbone loading ---
+    if getattr(args, 'pretrained', False):
+        try:
+            import timm
+            ghost_weights = timm.create_model('ghostnet_100', pretrained=True).state_dict()
+            # Match backbone keys only (ignore head/neck)
+            model_sd = model.state_dict()
+            loaded = 0
+            for k, v in ghost_weights.items():
+                # Map timm keys to our backbone keys
+                for prefix in ['backbone.', '']:
+                    mapped_key = f'backbone.{k}' if not k.startswith('backbone') else k
+                    if mapped_key in model_sd and model_sd[mapped_key].shape == v.shape:
+                        model_sd[mapped_key] = v
+                        loaded += 1
+                        break
+            model.load_state_dict(model_sd)
+            print(f"  [PRETRAINED] Loaded {loaded} backbone layers from GhostNet-1x ImageNet")
+        except ImportError:
+            print("  [PRETRAINED] timm not installed, skipping (pip install timm)")
+        except Exception as e:
+            print(f"  [PRETRAINED] Failed: {e}, training from scratch")
+
     # Apply YOLO-standard BatchNorm (eps=1e-3, momentum=0.03)
     apply_yolo_batchnorm_defaults(model)
+
+    # --- torch.compile for 1.5-2x speedup ---
+    if getattr(args, 'compile', False):
+        if hasattr(torch, 'compile'):
+            model = torch.compile(model, mode="reduce-overhead")
+            print("  [COMPILE] torch.compile(mode='reduce-overhead') enabled")
+        else:
+            print("  [COMPILE] Requires PyTorch 2.0+, skipping")
 
     model.train()
 

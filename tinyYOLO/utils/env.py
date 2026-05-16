@@ -96,8 +96,8 @@ def detect_environment():
         env['recommended_batch_size'] = 256
     elif mem >= 20:     # A5000, 3090, 4090
         env['recommended_batch_size'] = 128
-    elif mem >= 10:     # T4 (15GB), 3080, 2080Ti
-        env['recommended_batch_size'] = 64
+    elif mem >= 10:     # T4 (15GB), 3080, 2080Ti — TinyYOLO uses ~2.9GB at batch=64
+        env['recommended_batch_size'] = 128
     elif mem >= 6:      # 3060, 2060
         env['recommended_batch_size'] = 32
     elif env['gpu_available']:

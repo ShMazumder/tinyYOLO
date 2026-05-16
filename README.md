@@ -317,6 +317,8 @@ python scripts/train.py \
   --name my_exp        # Custom experiment name
   --quick              # Quick test: 5 epochs only
   --sweep              # Run at each resolution in --imgsz
+  --pretrained         # Load ImageNet GhostNet backbone (halves epochs needed)
+  --compile            # torch.compile() for 1.5-2x speedup (PyTorch 2.0+)
 ```
 
 **Train every task:**
