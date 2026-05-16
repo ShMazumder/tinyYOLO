@@ -122,9 +122,13 @@ def get_training_config(env=None, imgsz=320):
     if env is None:
         env = detect_environment()
 
-    # Scale batch size with resolution (quadratic relationship)
-    scale = (320 / imgsz) ** 2
-    batch = max(1, int(env['recommended_batch_size'] * scale))
+    # Light batch scaling for resolution — less aggressive for tiny models
+    # Only scale down for very large resolutions (>= 640)
+    if imgsz >= 640:
+        scale = (416 / imgsz) ** 2
+        batch = max(8, int(env['recommended_batch_size'] * scale))
+    else:
+        batch = env['recommended_batch_size']
 
     config = {
         'device': env['recommended_device'],

@@ -561,8 +561,39 @@ class SimpleDetectionDataset(Dataset):
 
         self.augment_flag = augment
 
+        # --- Cache all images in RAM (eliminates disk I/O bottleneck) ---
+        self._img_cache = [None] * len(self.img_files)
+        import psutil
+        avail_gb = psutil.virtual_memory().available / (1024 ** 3) if 'psutil' in sys.modules else 999
+        try:
+            import psutil as _ps
+            avail_gb = _ps.virtual_memory().available / (1024 ** 3)
+        except ImportError:
+            avail_gb = 999  # assume enough if psutil not available
+        est_gb = len(self.img_files) * imgsz * imgsz * 3 / (1024 ** 3)
+        self._use_cache = (est_gb < avail_gb * 0.6)  # only cache if fits in 60% of free RAM
+        if self._use_cache:
+            print(f"  [CACHE] Pre-loading {len(self.img_files)} images into RAM (~{est_gb:.1f} GB)...")
+            for i, fp in enumerate(self.img_files):
+                img = cv2.imread(str(fp))
+                if img is not None:
+                    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                    img = cv2.resize(img, (imgsz, imgsz), interpolation=cv2.INTER_LINEAR)
+                    self._img_cache[i] = img
+                if (i + 1) % 5000 == 0:
+                    print(f"    {i+1}/{len(self.img_files)} cached", flush=True)
+            print(f"  [CACHE] Done — {sum(1 for x in self._img_cache if x is not None)} images in RAM")
+        else:
+            print(f"  [CACHE] Skipped (need ~{est_gb:.1f} GB, only {avail_gb:.1f} GB free)")
+            self._use_cache = False
+
+        # Pre-cache labels too
+        self._labels_cache = {}
+        for i in range(len(self.img_files)):
+            self._labels_cache[i] = self._load_labels_from_file(i)
+
     def _augment_cv2(self, img):
-        """Fast OpenCV-based augmentation — avoids slow PIL round-trip."""
+        """Fast OpenCV-based augmentation."""
         if random.random() < 0.5:
             img = cv2.flip(img, 1)
         if random.random() < 0.8:
@@ -576,8 +607,8 @@ class SimpleDetectionDataset(Dataset):
             img = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
         return img
 
-    def _load_labels(self, idx):
-        """Load YOLO-format labels for image at idx. Returns list of [cls, cx, cy, w, h]."""
+    def _load_labels_from_file(self, idx):
+        """Load YOLO-format labels from disk."""
         lp = self._label_cache.get(idx)
         labels = []
         if lp is not None:
@@ -588,21 +619,28 @@ class SimpleDetectionDataset(Dataset):
                         labels.append([int(parts[0])] + [float(x) for x in parts[1:5]])
         return labels
 
+    def _load_labels(self, idx):
+        """Get labels (from cache)."""
+        return self._labels_cache.get(idx, [])
+
+    def _load_image(self, idx):
+        """Get image as numpy RGB array, resized to imgsz."""
+        if self._use_cache and self._img_cache[idx] is not None:
+            return self._img_cache[idx].copy()  # copy to allow in-place augment
+        # Fallback: load from disk
+        img = cv2.imread(str(self.img_files[idx]))
+        if img is None:
+            return np.random.randint(0, 255, (self.imgsz, self.imgsz, 3), dtype=np.uint8)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        return cv2.resize(img, (self.imgsz, self.imgsz), interpolation=cv2.INTER_LINEAR)
+
     def __len__(self):
         return len(self.img_files)
 
     def __getitem__(self, idx):
-        # Load image
-        img_path = self.img_files[idx]
-        img = cv2.imread(str(img_path))
-        if img is None:
-            img = np.random.randint(0, 255, (self.imgsz, self.imgsz, 3), dtype=np.uint8)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = self._load_image(idx)
 
-        # Resize with fast interpolation
-        img = cv2.resize(img, (self.imgsz, self.imgsz), interpolation=cv2.INTER_LINEAR)
-
-        # Apply augmentation (OpenCV-native, no PIL)
+        # Apply augmentation
         if self.augment_flag:
             img = self._augment_cv2(img)
 
@@ -678,13 +716,8 @@ class MosaicDataset(Dataset):
         ]
 
         for i, (x1, y1, x2, y2) in enumerate(placements):
-            # Load raw image (fast cv2, no tensor conversion)
-            img_path = self.base.img_files[indices[i]]
-            img = cv2.imread(str(img_path))
-            if img is None:
-                img = np.random.randint(0, 255, (self.imgsz, self.imgsz, 3), dtype=np.uint8)
-            else:
-                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            # Load image from cache (or disk fallback)
+            img = self.base._load_image(indices[i])
 
             qw = max(x2 - x1, 1)
             qh = max(y2 - y1, 1)
