@@ -17,7 +17,7 @@
     <style>
         /* CSS variables & Premium Dark Theme Design System */
         :root {
-            --bg-base: #5a5c61;
+            --bg-base: #060913;
             --bg-surface: rgba(15, 23, 42, 0.6);
             --bg-drawer: rgba(10, 15, 30, 0.95);
             --border-glow: rgba(255, 255, 255, 0.05);
@@ -752,36 +752,40 @@
 
         .flow-path {
             fill: none;
-            stroke: rgba(255, 255, 255, 0.04);
+            stroke: rgba(255, 255, 255, 0.15); /* Clear, elegant translucent routing lines */
             stroke-width: 1.5;
             transition: var(--transition-smooth);
         }
 
         /* Active Connection Glow */
         .flow-path.active-path {
-            stroke: rgba(var(--accent-glow-rgb), 0.2);
-            stroke-width: 2;
+            stroke: rgba(var(--accent-glow-rgb), 0.7); /* Highly visible saturated neon path */
+            stroke-width: 2.5;
+            filter: drop-shadow(0 0 3px var(--accent-glow)); /* Beautiful neon line glow */
         }
 
         /* Flow Pulse Animation Paths */
         .pulse-path {
             fill: none;
             stroke: var(--accent-glow);
-            stroke-width: 2.5;
+            stroke-width: 3.5; /* Bold glowing signal particle */
             stroke-linecap: round;
-            stroke-dasharray: 20, 1000;
+            stroke-dasharray: 40, 1000; /* Distinct pulse particle length */
             stroke-dashoffset: 0;
             opacity: 0;
-            filter: drop-shadow(0 0 4px var(--accent-glow));
+            filter: drop-shadow(0 0 6px var(--accent-glow)); /* Vibrant neon particle drop-shadow */
         }
 
         .pulse-path.animating {
-            animation: flowPulse 2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+            animation: flowPulse 2.2s cubic-bezier(0.25, 1, 0.5, 1) forwards;
         }
 
         @keyframes flowPulse {
             0% {
                 stroke-dashoffset: 1000;
+                opacity: 1;
+            }
+            80% {
                 opacity: 1;
             }
             100% {
@@ -795,7 +799,7 @@
             position: absolute;
             z-index: 10;
             width: 136px;
-            background: rgba(15, 23, 42, 0.8);
+            background: rgba(15, 23, 42, 0.45);
             border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 12px;
             padding: 10px 12px;
@@ -803,26 +807,66 @@
             flex-direction: column;
             gap: 6px;
             cursor: pointer;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
             transition: var(--transition-smooth);
         }
 
-        .diagram-node:hover {
-            transform: scale(1.04) translateY(-3px);
-            border-color: var(--accent-glow);
-            box-shadow: 0 0 20px rgba(var(--accent-glow-rgb), 0.15);
-            background: rgba(15, 23, 42, 0.95);
+        /* Hover glows tailored exactly to node categories! */
+        .diagram-node.node-backbone:hover {
+            border-color: var(--color-backbone);
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.35);
+            background: rgba(59, 130, 246, 0.12);
+            transform: scale(1.05) translateY(-4px);
+        }
+
+        .diagram-node.node-neck:hover {
+            border-color: var(--color-neck);
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.35);
+            background: rgba(16, 185, 129, 0.12);
+            transform: scale(1.05) translateY(-4px);
+        }
+
+        .diagram-node.node-head:hover {
+            border-color: var(--color-head);
+            box-shadow: 0 0 20px rgba(236, 72, 153, 0.35);
+            background: rgba(236, 72, 153, 0.12);
+            transform: scale(1.05) translateY(-4px);
+        }
+
+        .diagram-node.node-special:hover {
+            border-color: var(--color-purple);
+            box-shadow: 0 0 20px rgba(168, 85, 247, 0.35);
+            background: rgba(168, 85, 247, 0.12);
+            transform: scale(1.05) translateY(-4px);
         }
 
         .diagram-node:active {
             transform: scale(1.0);
         }
 
-        /* Stage Color Accents */
-        .node-backbone { border-left: 3px solid var(--color-backbone); }
-        .node-neck { border-left: 3px solid var(--color-neck); }
-        .node-head { border-left: 3px solid var(--color-head); }
-        .node-special { border-left: 3px solid var(--color-purple); }
+        /* Category Color Glassmorphism & Translucent Borders */
+        .node-backbone {
+            border: 1.5px solid rgba(59, 130, 246, 0.25);
+            border-left: 4px solid var(--color-backbone);
+            background: rgba(59, 130, 246, 0.04);
+        }
+        .node-neck {
+            border: 1.5px solid rgba(16, 185, 129, 0.25);
+            border-left: 4px solid var(--color-neck);
+            background: rgba(16, 185, 129, 0.04);
+        }
+        .node-head {
+            border: 1.5px solid rgba(236, 72, 153, 0.25);
+            border-left: 4px solid var(--color-head);
+            background: rgba(236, 72, 153, 0.04);
+        }
+        .node-special {
+            border: 1.5px solid rgba(168, 85, 247, 0.25);
+            border-left: 4px solid var(--color-purple);
+            background: rgba(168, 85, 247, 0.04);
+        }
 
         .node-title {
             font-family: var(--font-head);
