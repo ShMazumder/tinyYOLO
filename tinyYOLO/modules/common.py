@@ -127,6 +127,17 @@ class GhostBottleneck(nn.Module):
         else:
             self.shortcut = nn.Identity()
 
+        # Resilient quantized addition block
+        try:
+            import torch.ao.quantization as ao_quant
+            self.add = ao_quant.QFunctional()
+        except (ImportError, AttributeError):
+            try:
+                import torch.nn.quantized as nn_quant
+                self.add = nn_quant.FloatFunctional()
+            except (ImportError, AttributeError):
+                self.add = None
+
     def forward(self, x):
         residual = self.shortcut(x)
         y = self.ghost1(x)
@@ -135,6 +146,8 @@ class GhostBottleneck(nn.Module):
         if self.se is not None:
             y = self.se(y)
         y = self.ghost2(y)
+        if self.add is not None:
+            return self.add.add(y, residual)
         return y + residual
 
 
