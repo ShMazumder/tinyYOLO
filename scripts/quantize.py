@@ -376,11 +376,17 @@ def export_quantized(model, imgsz, output_path, fmt='onnx'):
             size_mb = output_path.stat().st_size / 1e6
             print(f"  Exported ONNX: {output_path} ({size_mb:.2f} MB)")
         except Exception as e:
-            import traceback
-            traceback.print_exc()
-            print(f"  [WARN] ONNX export failed: {e}")
-            print(f"  [INFO] INT8 quantized ONNX export may require onnxruntime-tools")
-            print(f"         pip install onnxruntime onnxruntime-tools")
+            print(f"\n  [WARN] Native PyTorch ONNX export is not supported for eager-mode quantized CPU models.")
+            print(f"         Reason: {e}")
+            print(f"         (Note: PyTorch eager quantization uses proprietary C++ packed parameters that cannot be directly mapped to ONNX).")
+            print(f"         Your calibrated INT8 PyTorch checkpoint (.pt) was successfully created and saved!")
+            print(f"\n  [INFO] Recommended Production Deployment Path:")
+            print(f"         To deploy a high-performance quantized INT8 model on ONNX Runtime, use the standard ONNX quantization workflow:")
+            print(f"         1. Export the Float32 model to ONNX:")
+            print(f"            python scripts/export.py --weights experiments/results/crime-detection-yolo-run/best.pt --imgsz {imgsz}")
+            print(f"         2. Quantize the ONNX model to INT8 using ONNX Runtime:")
+            print(f"            pip install onnxruntime")
+            print(f"            python -c \"import onnxruntime.quantization as q; q.quantize_dynamic('experiments/results/crime-detection-yolo-run/exports/best.onnx', '{output_path}')\"")
     else:
         print(f"  [SKIP] Unknown format: {fmt}")
 
