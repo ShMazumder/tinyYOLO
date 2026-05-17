@@ -35,6 +35,22 @@ from tinyYOLO.models import build_model
 from tinyYOLO.utils.env import detect_environment
 
 
+class QuantizedWrapper(nn.Module):
+    """Wrapper that inserts QuantStub and DeQuantStub around the model for eager-mode static quantization."""
+    def __init__(self, model):
+        super().__init__()
+        import torch.ao.quantization as ao_quant
+        self.quant = ao_quant.QuantStub()
+        self.dequant = ao_quant.DeQuantStub()
+        self.model = model
+
+    def forward(self, x):
+        x = self.quant(x)
+        x = self.model(x)
+        x = self.dequant(x)
+        return x
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description='TinyYOLO Quantization')
     parser.add_argument('--mode', type=str, default='ptq',
@@ -83,13 +99,19 @@ def _load_model_and_weights(args):
         checkpoint = torch.load(args.weights, map_location='cpu')
         state_dict = checkpoint['model'] if isinstance(checkpoint, dict) and 'model' in checkpoint else checkpoint
         
-        # Strip both '_orig_mod.' (torch.compile) and 'module.' (DDP wrapper) prefixes
+        # Strip '_orig_mod.' (compile), 'module.' (DDP), and 'model.' (quant wrapper) prefixes precisely
         # Filter out thop profiler keys
         cleaned_state_dict = {}
         for k, v in state_dict.items():
             if k.endswith(('total_ops', 'total_params')):
                 continue
-            k_clean = k.replace('_orig_mod.', '').replace('module.', '')
+            k_clean = k
+            if k_clean.startswith('_orig_mod.'):
+                k_clean = k_clean[len('_orig_mod.'):]
+            if k_clean.startswith('module.'):
+                k_clean = k_clean[len('module.'):]
+            if k_clean.startswith('model.'):
+                k_clean = k_clean[len('model.'):]
             cleaned_state_dict[k_clean] = v
             
         model.load_state_dict(cleaned_state_dict)
@@ -133,10 +155,12 @@ def apply_ptq(model, calibration_loader, n_batches=500, backend='qnnpack'):
     """
     torch.backends.quantized.engine = backend
 
+    wrapped_model = QuantizedWrapper(model)
+
     # Set quantization configuration
     # Per-channel symmetric for weights, per-tensor asymmetric for activations
     if backend == 'qnnpack':
-        model.qconfig = quant.QConfig(
+        wrapped_model.qconfig = quant.QConfig(
             activation=quant.observer.MinMaxObserver.with_args(
                 dtype=torch.quint8, qscheme=torch.per_tensor_affine
             ),
@@ -145,11 +169,11 @@ def apply_ptq(model, calibration_loader, n_batches=500, backend='qnnpack'):
             ),
         )
     else:
-        model.qconfig = quant.get_default_qconfig(backend)
+        wrapped_model.qconfig = quant.get_default_qconfig(backend)
 
     # Prepare model for calibration (inserts observer modules)
-    model.eval()
-    quant.prepare(model, inplace=True)
+    wrapped_model.eval()
+    quant.prepare(wrapped_model, inplace=True)
 
     # Run calibration forward passes
     print(f"\n  Running PTQ calibration ({n_batches} batches)...")
@@ -158,7 +182,7 @@ def apply_ptq(model, calibration_loader, n_batches=500, backend='qnnpack'):
         for i, (images, _) in enumerate(calibration_loader):
             if i >= n_batches:
                 break
-            model(images)
+            wrapped_model(images)
             n_images += images.shape[0]
             if (i + 1) % 100 == 0:
                 print(f"    Calibrated {i + 1}/{n_batches} batches ({n_images} images)")
@@ -166,7 +190,7 @@ def apply_ptq(model, calibration_loader, n_batches=500, backend='qnnpack'):
     print(f"  Calibration complete: {n_images} images processed")
 
     # Convert to quantized model
-    model_int8 = quant.convert(model.eval(), inplace=False)
+    model_int8 = quant.convert(wrapped_model.eval(), inplace=False)
 
     # Compute model size
     fp32_size = sum(p.numel() * p.element_size() for p in model.parameters()) / 1e6
@@ -213,16 +237,17 @@ def apply_qat(model, train_loader, epochs=10, lr=1e-4, backend='qnnpack'):
 
     torch.backends.quantized.engine = backend
 
-    model.train()
-    model.qconfig = quant.get_default_qat_qconfig(backend)
-    quant.prepare_qat(model, inplace=True)
+    wrapped_model = QuantizedWrapper(model)
+    wrapped_model.train()
+    wrapped_model.qconfig = quant.get_default_qat_qconfig(backend)
+    quant.prepare_qat(wrapped_model, inplace=True)
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
+    optimizer = torch.optim.AdamW(wrapped_model.parameters(), lr=lr, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
 
-    # Infer nc from model (look for cls_preds output channels)
+    # Infer nc from wrapped_model (look for cls_preds output channels)
     nc = 80
-    for name, module in model.named_modules():
+    for name, module in wrapped_model.named_modules():
         if hasattr(module, 'nc'):
             nc = module.nc
             break
@@ -232,18 +257,18 @@ def apply_qat(model, train_loader, epochs=10, lr=1e-4, backend='qnnpack'):
     history = []
 
     for epoch in range(epochs):
-        model.train()
+        wrapped_model.train()
         epoch_loss = 0.0
         n_batches = 0
 
         for images, targets in train_loader:
             optimizer.zero_grad()
-            outputs = model(images)
+            outputs = wrapped_model(images)
             if isinstance(outputs, tuple):
                 outputs = outputs[0]
             loss, loss_dict = loss_fn(outputs, targets)
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=10.0)
+            torch.nn.utils.clip_grad_norm_(wrapped_model.parameters(), max_norm=10.0)
             optimizer.step()
 
             epoch_loss += loss_dict['total']
@@ -257,11 +282,11 @@ def apply_qat(model, train_loader, epochs=10, lr=1e-4, backend='qnnpack'):
 
         # Freeze observer and batch norm stats in last 25% of QAT
         if epoch >= int(epochs * 0.75):
-            model.apply(quant.disable_observer)
-            model.apply(torch.nn.intrinsic.qat.freeze_bn_stats)
+            wrapped_model.apply(quant.disable_observer)
+            wrapped_model.apply(torch.nn.intrinsic.qat.freeze_bn_stats)
 
     # Convert to INT8
-    model_int8 = quant.convert(model.eval(), inplace=False)
+    model_int8 = quant.convert(wrapped_model.eval(), inplace=False)
 
     stats = {
         'method': 'QAT',

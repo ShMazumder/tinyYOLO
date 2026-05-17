@@ -92,14 +92,20 @@ def export_torchscript(model, imgsz, output_path):
 def _clean_state_dict(state_dict):
     """Remove profiler metadata keys injected by PyTorch profiler/thop.
 
-    Also strips distributed training (DDP 'module.') and compilation
-    ('_orig_mod.') prefixes from state_dict keys.
+    Also strips distributed training (DDP 'module.'), compilation
+    ('_orig_mod.'), and quantized wrapper ('model.') prefixes from state_dict keys.
     """
     cleaned = {}
     for k, v in state_dict.items():
         if k.endswith(('total_ops', 'total_params')):
             continue
-        k_clean = k.replace('_orig_mod.', '').replace('module.', '')
+        k_clean = k
+        if k_clean.startswith('_orig_mod.'):
+            k_clean = k_clean[len('_orig_mod.'):]
+        if k_clean.startswith('module.'):
+            k_clean = k_clean[len('module.'):]
+        if k_clean.startswith('model.'):
+            k_clean = k_clean[len('model.'):]
         cleaned[k_clean] = v
     return cleaned
 
