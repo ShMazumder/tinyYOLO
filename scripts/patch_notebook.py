@@ -2,7 +2,8 @@
 TinyYOLO Notebook Patcher
 =========================
 Programmatically update the Google Colab custom dataset notebook
-to use the new robust ONNX export and ONNX Runtime quantization workflow.
+to use the new robust ONNX export and ONNX Runtime quantization workflow,
+along with robust validation dataset search logic.
 """
 
 import json
@@ -81,6 +82,50 @@ QAT_SOURCE = [
     "    --mode dynamic"
 ]
 
+INFERENCE_SOURCE = [
+    "# %% Execute inference on validation sample\n",
+    "# ----------------- SELECT TARGET MODEL WEIGHTS -----------------\n",
+    "# Option 1: Standard FP32 Weights\n",
+    "TARGET_WEIGHTS = str(run_folders[-1] / \"best.pt\") if run_folders else \"best.pt\"\n",
+    "\n",
+    "# Option 2: INT8 PTQ Quantized Weights (uncomment to test!)\n",
+    "# TARGET_WEIGHTS = str(run_folders[-1] / \"quantized\" / \"model_int8_ptq.pt\") if run_folders else \"\"\n",
+    "\n",
+    "# Option 3: INT8 QAT Fine-Tuned Weights (uncomment to test!)\n",
+    "# TARGET_WEIGHTS = str(run_folders[-1] / \"quantized\" / \"model_int8_qat.pt\") if run_folders else \"\"\n",
+    "# ---------------------------------------------------------------\n",
+    "\n",
+    "current_nc = nc if 'nc' in locals() else custom_config['nc']\n",
+    "current_names = names if 'names' in locals() else custom_config['names']\n",
+    "\n",
+    "if run_folders:\n",
+    "    weights_path = Path(TARGET_WEIGHTS)\n",
+    "    \n",
+    "    # Dynamically find the first image in the validation folder (supporting multiple formats)\n",
+    "    val_images = sorted(list(dataset_dir.glob(\"val/images/*\")))\n",
+    "    if not val_images:\n",
+    "        val_images = sorted(list(dataset_dir.glob(\"images/val/*\")))\n",
+    "    if not val_images:\n",
+    "        val_images = sorted(list(dataset_dir.glob(\"valid/images/*\")))\n",
+    "    if not val_images:\n",
+    "        val_images = sorted(list(dataset_dir.glob(\"images/valid/*\")))\n",
+    "\n",
+    "    if weights_path.exists() and val_images:\n",
+    "        print(f\"\u2713 Loading target weights: {weights_path}\")\n",
+    "        print(f\"\u2713 Found test image: {val_images[0]}\")\n",
+    "        run_custom_inference(\n",
+    "            image_path=val_images[0],\n",
+    "            weights_path=str(weights_path),\n",
+    "            nc=current_nc,\n",
+    "            class_names=current_names,\n",
+    "            imgsz=IMGSZ\n",
+    "        )\n",
+    "    else:\n",
+    "        print(f\"\u26a0\ufe0f Error: target weights ({weights_path}) or validation images folder is empty. Please verify paths!\")\n",
+    "else:\n",
+    "    print(\"\u26a0\ufe0f Error: No trained run folders found. Please run the training cell first!\")"
+]
+
 
 def patch_notebook():
     if not NOTEBOOK_PATH.exists():
@@ -92,6 +137,7 @@ def patch_notebook():
 
     ptq_patched = False
     qat_patched = False
+    infer_patched = False
 
     for cell in nb_data.get('cells', []):
         if cell.get('cell_type') == 'code':
@@ -104,13 +150,17 @@ def patch_notebook():
                 cell['source'] = [line + '\n' if not line.endswith('\n') else line for line in QAT_SOURCE]
                 qat_patched = True
                 print("  [SUCCESS] Patched QAT Fine-Tuning Cell!")
+            elif cell_id == 'run_inference_code':
+                cell['source'] = [line + '\n' if not line.endswith('\n') else line for line in INFERENCE_SOURCE]
+                infer_patched = True
+                print("  [SUCCESS] Patched Inference Execution Cell!")
 
-    if ptq_patched or qat_patched:
+    if ptq_patched or qat_patched or infer_patched:
         with open(NOTEBOOK_PATH, 'w') as f:
             json.dump(nb_data, f, indent=1)
         print("  [SUCCESS] Notebook saved successfully!")
     else:
-        print("  [WARN] Target cells ('ptq_calib' / 'qat_fine_tuning') not found. No patches applied.")
+        print("  [WARN] Target cells not found. No patches applied.")
 
 
 if __name__ == '__main__':
