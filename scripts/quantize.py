@@ -188,9 +188,13 @@ def apply_ptq(model, calibration_loader, n_batches=500, backend='qnnpack'):
     else:
         wrapped_model.qconfig = quant.get_default_qconfig(backend)
 
-    # Exclude task-specific regression/class heads from INT8 quantization to preserve bbox/class accuracy
+    # Exclude task-specific regression/class heads from INT8 quantization to preserve bbox/class accuracy,
+    # but keep DequantizedHeadWrapper active so that its DeQuantStub gets converted.
     if hasattr(model, 'head'):
-        model.head.qconfig = None
+        if isinstance(model.head, DequantizedHeadWrapper):
+            model.head.head.qconfig = None
+        else:
+            model.head.qconfig = None
 
     # Prepare model for calibration (inserts observer modules)
     wrapped_model.eval()
@@ -262,9 +266,13 @@ def apply_qat(model, train_loader, epochs=10, lr=1e-4, backend='qnnpack'):
     wrapped_model.train()
     wrapped_model.qconfig = quant.get_default_qat_qconfig(backend)
 
-    # Exclude task-specific regression/class heads from INT8 quantization to preserve bbox/class accuracy
+    # Exclude task-specific regression/class heads from INT8 quantization to preserve bbox/class accuracy,
+    # but keep DequantizedHeadWrapper active so that its DeQuantStub gets converted.
     if hasattr(model, 'head'):
-        model.head.qconfig = None
+        if isinstance(model.head, DequantizedHeadWrapper):
+            model.head.head.qconfig = None
+        else:
+            model.head.qconfig = None
 
     quant.prepare_qat(wrapped_model, inplace=True)
 
