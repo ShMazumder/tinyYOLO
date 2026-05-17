@@ -162,3 +162,26 @@ def decode_targets(targets, imgsz):
         results.append(gt)
 
     return results
+
+
+def postprocess_detections(outputs, conf_thres=0.25, iou_thres=0.45, imgsz=416):
+    """
+    Convenience wrapper to decode predictions, apply NMS, and normalize coordinates to [0, 1].
+    """
+    # 1. Decode predictions (outputs are in imgsz pixel space)
+    nc = outputs[0].shape[1] - 5
+    dets_list = decode_predictions(outputs, imgsz=imgsz, conf_thresh=conf_thres, nc=nc)
+    
+    # 2. Apply Non-Maximum Suppression (NMS)
+    nms_list = non_max_suppression(dets_list, iou_thresh=iou_thres)
+    
+    # 3. Normalize coordinates from [0, imgsz] to [0, 1] for relative scaling in plotting
+    results = []
+    for dets in nms_list:
+        if len(dets) > 0:
+            dets_norm = dets.clone()
+            dets_norm[:, :4] = dets_norm[:, :4] / imgsz
+            results.append(dets_norm)
+        else:
+            results.append(dets)
+    return results
