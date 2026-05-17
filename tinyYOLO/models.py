@@ -30,6 +30,26 @@ class TinyYOLOModel(nn.Module):
         self.head = head
         self.task = task
 
+    def load_state_dict(self, state_dict, strict=True, *args, **kwargs):
+        """
+        Overridden to automatically strip compilation (_orig_mod.) and 
+        DDP (module.) prefixes recursively from state dict keys.
+        """
+        cleaned_state_dict = {}
+        for k, v in state_dict.items():
+            if k.endswith(('total_ops', 'total_params')):
+                continue
+            k_clean = k
+            while k_clean.startswith('_orig_mod.') or k_clean.startswith('module.'):
+                if k_clean.startswith('_orig_mod.'):
+                    k_clean = k_clean[len('_orig_mod.'):]
+                if k_clean.startswith('module.'):
+                    k_clean = k_clean[len('module.'):]
+            if k_clean.startswith('model.'):
+                k_clean = k_clean[len('model.'):]
+            cleaned_state_dict[k_clean] = v
+        return super().load_state_dict(cleaned_state_dict, strict=strict, *args, **kwargs)
+
     def forward(self, x):
         features = self.backbone(x)
 
