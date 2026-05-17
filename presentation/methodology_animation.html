@@ -665,6 +665,37 @@
             box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
         }
 
+        /* Speed Control Buttons */
+        .speed-btn {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            color: var(--text-secondary);
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-align: center;
+            cursor: pointer;
+            transition: var(--transition-fast);
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .speed-btn:hover {
+            background: rgba(255, 255, 255, 0.04);
+            border-color: rgba(255, 255, 255, 0.1);
+            color: var(--text-primary);
+        }
+
+        .speed-btn.active {
+            background: var(--accent-bg-glow);
+            border-color: var(--accent-glow);
+            color: var(--text-primary);
+            box-shadow: 0 0 10px rgba(var(--accent-glow-rgb), 0.15);
+        }
+
         /* Run Inference Button */
         .run-btn {
             background: linear-gradient(135deg, var(--accent-glow) 0%, rgba(var(--accent-glow-rgb), 0.7) 100%);
@@ -1583,6 +1614,16 @@
                         <div class="stat-item">COCO mAP@50: <span id="stat-map">18.2%</span></div>
                     </div>
                 </div>
+
+                <!-- Animation Speed Preset Selector -->
+                <div class="panel-section" style="margin-top: 8px;">
+                    <div class="section-title">Animation Speed</div>
+                    <div class="speed-selector" style="display: flex; gap: 8px;">
+                        <button class="speed-btn active" onclick="setAnimationSpeed(1.0, this)" title="Standard speed">1.0x</button>
+                        <button class="speed-btn" onclick="setAnimationSpeed(0.5, this)" title="Slow execution (inspect details)">0.5x</button>
+                        <button class="speed-btn" onclick="setAnimationSpeed(2.0, this)" title="Fast propagation">2.0x</button>
+                    </div>
+                </div>
                 
                 <!-- Run Simulation Button -->
                 <button class="run-btn" onclick="runInference()" style="width: 100%; margin-top: 12px;">
@@ -1898,8 +1939,9 @@
 
     <!-- Scripting for Interactivity -->
     <script>
-        // Onboarding walkthrough load flags
+        // Onboarding walkthrough load flags and Speed multiplier
         let isInitialLoad = true;
+        let animationSpeedMultiplier = 1.0;
 
         // Coordinate points of nodes for drawing connecting lines
         const nodeCoordinates = {
@@ -2544,6 +2586,17 @@
             if (statMap) statMap.innerText = data.map;
         }
 
+        // Set Animation Speed Multiplier
+        function setAnimationSpeed(speed, btnEl) {
+            animationSpeedMultiplier = speed;
+            
+            // Update active state in speed buttons
+            document.querySelectorAll('.speed-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            if (btnEl) btnEl.classList.add('active');
+        }
+
         // Smooth scroll to a target vertical section
         function scrollToSection(className) {
             const el = document.querySelector('.' + className);
@@ -2565,6 +2618,11 @@
             
             const overlay = document.getElementById('screen-overlay');
             if (overlay) overlay.innerHTML = '';
+
+            // Reset all static connection path highlights before running new wave
+            document.querySelectorAll('.flow-path').forEach(path => {
+                path.classList.remove('active-path');
+            });
 
             // Automatically advance to Step 3: Run Inference
             goToStep(3);
@@ -2607,20 +2665,27 @@
                 setTimeout(() => {
                     const el = document.getElementById(`pulse-${step.from}-${step.to}`);
                     if (el) {
+                        el.style.animationDuration = `${2.2 / animationSpeedMultiplier}s`;
                         el.classList.remove('animating');
                         void el.offsetWidth; // trigger reflow
                         el.classList.add('animating');
+                    }
+
+                    // Highlight the corresponding static edge line (flow pathway)
+                    const edgeEl = document.getElementById(`path-${step.from}-${step.to}`);
+                    if (edgeEl) {
+                        edgeEl.classList.add('active-path');
                     }
                     
                     const nodeEl = document.querySelector(`[onclick="openDrawer('${step.from}')"]`);
                     if (nodeEl) {
                         nodeEl.classList.add('pulse-highlight');
-                        setTimeout(() => nodeEl.classList.remove('pulse-highlight'), 600);
+                        setTimeout(() => nodeEl.classList.remove('pulse-highlight'), 600 / animationSpeedMultiplier);
                     }
-                }, step.delay);
+                }, step.delay / animationSpeedMultiplier);
             });
 
-            // Trigger final Output screen activations at timeline completion
+            // Trigger final Output screen activations at timeline completion (scaled by multiplier)
             setTimeout(() => {
                 if (statusDot) statusDot.classList.add('active');
                 if (statusText) {
@@ -2648,7 +2713,7 @@
                 if (tipEl) {
                     tipEl.innerHTML = "<strong>✨ Inference Successful!</strong> Active predictions have rendered on the screen viewport. Swap task decoders in Column 3 to view high-fidelity task overlays.";
                 }
-            }, 2600);
+            }, 2600 / animationSpeedMultiplier);
         }
 
         // Slide out drawer details mapping content
