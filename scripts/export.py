@@ -90,20 +90,16 @@ def export_torchscript(model, imgsz, output_path):
 def _clean_state_dict(state_dict):
     """Remove profiler metadata keys injected by PyTorch profiler/thop.
 
-    When using thop or torch profiler to measure GFLOPs, PyTorch injects
-    buffer keys like 'backbone.stage1.total_ops' and 'backbone.stage1.total_params'
-    into the model's state_dict. These are NOT model parameters — they are
-    profiling metadata stored as zero-dimensional tensors.
-
-    If not removed before export, these keys cause:
-      - ONNX export failure: shape mismatch (scalar vs. expected tensor)
-      - State dict loading errors: unexpected keys in checkpoint
-      - TensorRT conversion failure: unrecognized layers
-
-    This function strips all keys ending in 'total_ops' or 'total_params'.
+    Also strips distributed training (DDP 'module.') and compilation
+    ('_orig_mod.') prefixes from state_dict keys.
     """
-    return {k: v for k, v in state_dict.items()
-            if not k.endswith(('total_ops', 'total_params'))}
+    cleaned = {}
+    for k, v in state_dict.items():
+        if k.endswith(('total_ops', 'total_params')):
+            continue
+        k_clean = k.replace('_orig_mod.', '').replace('module.', '')
+        cleaned[k_clean] = v
+    return cleaned
 
 
 def main():

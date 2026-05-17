@@ -70,11 +70,19 @@ def _load_model_and_weights(args):
     model, info = build_model(task=args.task, variant=args.variant)
 
     if args.weights and Path(args.weights).exists():
-        state_dict = torch.load(args.weights, map_location='cpu')
+        checkpoint = torch.load(args.weights, map_location='cpu')
+        state_dict = checkpoint['model'] if isinstance(checkpoint, dict) and 'model' in checkpoint else checkpoint
+        
+        # Strip both '_orig_mod.' (torch.compile) and 'module.' (DDP wrapper) prefixes
         # Filter out thop profiler keys
-        state_dict = {k: v for k, v in state_dict.items()
-                      if not k.endswith(('total_ops', 'total_params'))}
-        model.load_state_dict(state_dict)
+        cleaned_state_dict = {}
+        for k, v in state_dict.items():
+            if k.endswith(('total_ops', 'total_params')):
+                continue
+            k_clean = k.replace('_orig_mod.', '').replace('module.', '')
+            cleaned_state_dict[k_clean] = v
+            
+        model.load_state_dict(cleaned_state_dict)
         print(f"  Loaded weights: {args.weights}")
     else:
         print(f"  [WARN] No weights loaded — quantizing untrained model")
