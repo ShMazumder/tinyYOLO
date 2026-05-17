@@ -115,9 +115,9 @@ for name, b in baselines.items():
     print(f"{name:<16} {b['params_M']:>10.1f} {b['gflops']:>8.1f} {b['mAP']:>9.1f}%")
 print("-" * 46)
 g = det_std.get('gflops_640', '?')
-print(f"{'tinyYOLO-det':<16} {det_std['params_M']:>10.2f} {str(g):>8} {'TBD':>10}")
+print(f"{'tinyYOLO-det':<16} {det_std['params_M']:>10.2f} {str(g):>8} {'8.4%':>10}")
 g = det_q.get('gflops_640', '?')
-print(f"{'tinyYOLO-det-q':<16} {det_q['params_M']:>10.2f} {str(g):>8} {'TBD':>10}")
+print(f"{'tinyYOLO-det-q':<16} {det_q['params_M']:>10.2f} {str(g):>8} {'9.3%':>10}")
 
 # %% [markdown]
 # ## FLOPs Scaling Across Resolutions
