@@ -35,20 +35,37 @@ from tinyYOLO.models import build_model
 from tinyYOLO.utils.env import detect_environment
 
 
+class DequantizedHeadWrapper(nn.Module):
+    """Wrapper that dequantizes inputs before feeding them to the task-specific head, preserving FP32 precision."""
+    def __init__(self, head):
+        super().__init__()
+        import torch.ao.quantization as ao_quant
+        self.dequant = ao_quant.DeQuantStub()
+        self.head = head
+
+    def forward(self, x):
+        if isinstance(x, (list, tuple)):
+            # Handle multiple scales from LitePAN neck
+            return self.head([self.dequant(t) for t in x])
+        return self.head(self.dequant(x))
+
+
 class QuantizedWrapper(nn.Module):
-    """Wrapper that inserts QuantStub and DeQuantStub around the model for eager-mode static quantization."""
+    """Wrapper that inserts QuantStub at the input to convert images from Float32 to quantized INT8."""
     def __init__(self, model):
         super().__init__()
         import torch.ao.quantization as ao_quant
         self.quant = ao_quant.QuantStub()
-        self.dequant = ao_quant.DeQuantStub()
+        
+        # Wrap the head to dequantize neck features back to Float32 before predictions
+        if hasattr(model, 'head') and not isinstance(model.head, DequantizedHeadWrapper):
+            model.head = DequantizedHeadWrapper(model.head)
+            
         self.model = model
 
     def forward(self, x):
         x = self.quant(x)
-        x = self.model(x)
-        x = self.dequant(x)
-        return x
+        return self.model(x)
 
 
 def parse_args():
