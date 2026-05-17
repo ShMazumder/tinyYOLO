@@ -132,11 +132,31 @@ def main():
     weights_path = Path(args.weights)
 
     if weights_path.exists():
-        state_dict = torch.load(weights_path, map_location='cpu')
-        # Filter out thop profiler keys — see _clean_state_dict docstring
+        checkpoint = torch.load(weights_path, map_location='cpu')
+        state_dict = checkpoint['model'] if isinstance(checkpoint, dict) and 'model' in checkpoint else checkpoint
         state_dict = _clean_state_dict(state_dict)
-        model.load_state_dict(state_dict)
-        print(f"  Loaded weights: {weights_path}")
+        try:
+            model.load_state_dict(state_dict)
+            print(f"  Loaded weights: {weights_path}")
+        except RuntimeError as e:
+            # Self-healing auto-detection of variant mismatch
+            has_eca_keys = any('attn3.conv.weight' in k for k in state_dict.keys())
+            has_standard_keys = any('attn3.conv.0.weight' in k for k in state_dict.keys())
+            
+            detected_variant = None
+            if has_eca_keys and not has_standard_keys and args.variant == 'standard':
+                detected_variant = 'quantized'
+            elif has_standard_keys and not has_eca_keys and args.variant == 'quantized':
+                detected_variant = 'standard'
+                
+            if detected_variant:
+                print(f"  [INFO] Variant mismatch detected between CLI argument and checkpoint.")
+                print(f"         Auto-rebuilding model with variant='{detected_variant}' to match checkpoint perfectly.")
+                model, info = build_model(task=args.task, variant=detected_variant, nc=nc)
+                model.load_state_dict(state_dict)
+                print(f"  Loaded weights successfully after auto-healing! ✓")
+            else:
+                raise e
     else:
         print(f"  [WARN] Weights not found, exporting untrained model")
 

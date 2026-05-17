@@ -131,8 +131,28 @@ def _load_model_and_weights(args):
                 k_clean = k_clean[len('model.'):]
             cleaned_state_dict[k_clean] = v
             
-        model.load_state_dict(cleaned_state_dict)
-        print(f"  Loaded weights: {args.weights}")
+        try:
+            model.load_state_dict(cleaned_state_dict)
+            print(f"  Loaded weights: {args.weights}")
+        except RuntimeError as e:
+            # Self-healing auto-detection of variant mismatch
+            has_eca_keys = any('attn3.conv.weight' in k for k in cleaned_state_dict.keys())
+            has_standard_keys = any('attn3.conv.0.weight' in k for k in cleaned_state_dict.keys())
+            
+            detected_variant = None
+            if has_eca_keys and not has_standard_keys and args.variant == 'standard':
+                detected_variant = 'quantized'
+            elif has_standard_keys and not has_eca_keys and args.variant == 'quantized':
+                detected_variant = 'standard'
+                
+            if detected_variant:
+                print(f"  [INFO] Variant mismatch detected between CLI argument and checkpoint.")
+                print(f"         Auto-rebuilding model with variant='{detected_variant}' to match checkpoint perfectly.")
+                model, info = build_model(task=args.task, variant=detected_variant, nc=nc)
+                model.load_state_dict(cleaned_state_dict)
+                print(f"  Loaded weights successfully after auto-healing! ✓")
+            else:
+                raise e
     else:
         print(f"  [WARN] No weights loaded — quantizing untrained model")
 
