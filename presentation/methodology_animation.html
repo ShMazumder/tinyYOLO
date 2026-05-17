@@ -1,0 +1,2811 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TinyYOLO — Interactive Methodology Blueprint</title>
+    <!-- Premium Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@300;400;500;600&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- KaTeX Scientific Equation Renderer -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
+    
+    <style>
+        /* CSS variables & Premium Dark Theme Design System */
+        :root {
+            --bg-base: #5a5c61;
+            --bg-surface: rgba(15, 23, 42, 0.6);
+            --bg-drawer: rgba(10, 15, 30, 0.95);
+            --border-glow: rgba(255, 255, 255, 0.05);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            
+            /* Themes (Dynamic Standard vs. Quantized) */
+            --accent-glow: #00f2fe;
+            --accent-glow-rgb: 0, 242, 254;
+            --accent-bg-glow: rgba(0, 242, 254, 0.1);
+            
+            /* Sub-module Colors */
+            --color-backbone: #3b82f6;
+            --color-neck: #10b981;
+            --color-head: #ec4899;
+            --color-quant: #f59e0b;
+            --color-purple: #a855f7;
+            
+            --font-head: 'Outfit', sans-serif;
+            --font-body: 'Inter', sans-serif;
+            --font-code: 'Fira Code', monospace;
+            --transition-smooth: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+            --transition-fast: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* Quantized Green Overlay Mode */
+        body.quantized-mode {
+            --accent-glow: #10b981;
+            --accent-glow-rgb: 16, 185, 129;
+            --accent-bg-glow: rgba(16, 185, 129, 0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-primary);
+            font-family: var(--font-body);
+            overflow-x: hidden;
+            overflow-y: auto;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        /* Animated grid background */
+        body::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: 
+                linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        /* Glowing ambient lights */
+        .ambient-glow {
+            position: absolute;
+            width: 600px;
+            height: 600px;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--accent-bg-glow) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 2;
+            filter: blur(80px);
+            transition: var(--transition-smooth);
+        }
+
+        .glow-top-left { top: -200px; left: -200px; }
+        .glow-bottom-right { bottom: -200px; right: -200px; }
+
+        /* Dashboard Header */
+        header {
+            width: 100%;
+            padding: 24px 4% 20px 4%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-glow);
+            z-index: 10;
+            background: rgba(6, 9, 19, 0.8);
+            backdrop-filter: blur(12px);
+            position: sticky;
+            top: 0;
+        }
+
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: var(--accent-glow);
+            box-shadow: 0 0 15px var(--accent-glow);
+            transition: var(--transition-smooth);
+        }
+
+        .logo-title {
+            font-family: var(--font-head);
+            font-weight: 700;
+            font-size: 1.5rem;
+            letter-spacing: -0.5px;
+        }
+
+        .logo-title span {
+            color: var(--accent-glow);
+            transition: var(--transition-smooth);
+        }
+
+        .meta-tags {
+            display: flex;
+            gap: 16px;
+            font-size: 0.8rem;
+        }
+
+        .meta-badge {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 6px 12px;
+            border-radius: 20px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .meta-badge strong {
+            color: var(--text-primary);
+            margin-left: 4px;
+        }
+
+        /* Layout Main Section */
+        .dashboard-container {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 24px;
+            padding: 24px 4%;
+            flex-grow: 1;
+            z-index: 5;
+            position: relative;
+        }
+
+        /* Left Control Panel */
+        .control-panel {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-glow);
+            border-radius: 16px;
+            padding: 24px;
+            backdrop-filter: blur(12px);
+            display: flex;
+            flex-direction: column;
+            gap: 28px;
+            height: fit-content;
+            position: sticky;
+            top: 100px;
+        }
+
+        .panel-section {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .section-title {
+            font-family: var(--font-head);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-muted);
+            font-weight: 600;
+            border-left: 2px solid var(--accent-glow);
+            padding-left: 8px;
+            transition: var(--transition-smooth);
+        }
+
+         /* Slider Controls */
+        .sample-image-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+
+        .sample-img-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1.5px solid rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: var(--transition-fast);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+        }
+
+        .sample-img-card:hover {
+            border-color: rgba(var(--accent-glow-rgb), 0.4);
+            background: rgba(var(--accent-glow-rgb), 0.02);
+            transform: translateY(-2px);
+        }
+
+        .sample-img-card.active {
+            border-color: var(--accent-glow);
+            background: rgba(var(--accent-glow-rgb), 0.06);
+            box-shadow: 0 0 12px rgba(var(--accent-glow-rgb), 0.25);
+        }
+
+        .sample-thumb {
+            width: 100%;
+            height: 48px;
+            object-fit: cover;
+            opacity: 0.7;
+            transition: var(--transition-fast);
+        }
+
+        .sample-img-card.active .sample-thumb,
+        .sample-img-card:hover .sample-thumb {
+            opacity: 1.0;
+        }
+
+        .sample-title {
+            font-size: 0.65rem;
+            font-weight: 500;
+            padding: 6px 2px;
+            color: var(--text-secondary);
+            font-family: var(--font-body);
+            text-align: center;
+            width: 100%;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .sample-img-card.active .sample-title {
+            color: var(--text-primary);
+        }
+
+        /* Node Image Thumbnail inside canvas */
+        .node-img-container {
+            width: 100%;
+            height: 38px;
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 4px;
+        }
+
+        .node-img-thumb {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Dynamic Layer-by-Layer Feature Maps Styling */
+        .feature-map-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        .feature-map-item {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .feature-map-label {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            font-family: var(--font-code);
+        }
+
+        .feature-map-visual {
+            width: 100%;
+            height: 90px;
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+            background: #000;
+        }
+
+        .feature-map-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: var(--transition-fast);
+        }
+
+        /* 1. Stem Conv edge extraction (high pass) */
+        .stem-conv-1 .feature-map-img {
+            filter: grayscale(1) contrast(3) invert(0.8) brightness(1.1);
+        }
+
+        .stem-conv-2 .feature-map-img {
+            filter: grayscale(1) contrast(4) invert(0.2) brightness(0.9) saturate(0);
+        }
+
+        /* 2. Low-to-Mid Features (Stage 1 & 2 structural contours) */
+        .stage-feat-1 .feature-map-img {
+            filter: grayscale(1) contrast(5) blur(1px) brightness(1.2);
+        }
+
+        .stage-feat-2 .feature-map-img {
+            filter: grayscale(1) contrast(6) invert(1) blur(1px) brightness(0.8);
+        }
+
+        /* 3. Deep Features (Stage 3 & 4 semantic blobs) */
+        .deep-feat-1 .feature-map-img {
+            filter: grayscale(1) contrast(8) blur(3px) brightness(1.4) hue-rotate(90deg);
+        }
+
+        .deep-feat-2 .feature-map-img {
+            filter: grayscale(1) contrast(9) blur(4px) brightness(0.6) hue-rotate(180deg);
+        }
+
+        /* 4. Attention Overlays (radial heatmap overlay) */
+        .attn-heatmap {
+            position: relative;
+        }
+
+        .attn-heatmap::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at var(--attn-x, 50%) var(--attn-y, 50%), rgba(239, 68, 68, 0.75) 0%, rgba(245, 158, 11, 0.4) 30%, transparent 60%);
+            mix-blend-mode: color-dodge;
+            animation: pulse-glow 2s infinite ease-in-out;
+            pointer-events: none;
+        }
+
+        /* 5. LitePAN Fusion (Screen blending/color-dodge multi-scale) */
+        .fusion-map-1 .feature-map-img {
+            filter: grayscale(1) contrast(4) brightness(1.1);
+        }
+
+        .fusion-map-1::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(45deg, rgba(59, 130, 246, 0.3), rgba(16, 185, 129, 0.3));
+            mix-blend-mode: screen;
+            pointer-events: none;
+        }
+
+        .fusion-map-2 .feature-map-img {
+            filter: grayscale(1) contrast(5) invert(0.1) brightness(0.9);
+        }
+
+        .fusion-map-2::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle, rgba(168, 85, 247, 0.3) 0%, transparent 70%);
+            mix-blend-mode: color-dodge;
+            pointer-events: none;
+        }
+
+        /* 6. Prediction Heads Decoders */
+        .head-cls-map {
+            position: relative;
+        }
+
+        .head-cls-map .feature-map-img {
+            filter: grayscale(1) contrast(6) brightness(1.3);
+        }
+
+        .head-cls-map::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at var(--attn-x, 50%) var(--attn-y, 50%), rgba(236, 72, 153, 0.8) 0%, transparent 50%);
+            mix-blend-mode: screen;
+            pointer-events: none;
+        }
+
+        .head-reg-map .feature-map-img {
+            filter: grayscale(1) contrast(4) brightness(0.8);
+        }
+
+        .head-reg-map::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border: 2px dashed rgba(var(--accent-glow-rgb), 0.7);
+            background: rgba(var(--accent-glow-rgb), 0.05);
+            pointer-events: none;
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { opacity: 0.7; }
+            50% { opacity: 1.0; }
+        }
+
+        /* Classification Prediction Card */
+        .classification-card {
+            position: absolute;
+            bottom: 12px;
+            left: 12px;
+            right: 12px;
+            background: rgba(10, 15, 30, 0.9);
+            border: 1px solid var(--border-glow);
+            border-radius: 8px;
+            padding: 10px;
+            backdrop-filter: blur(10px);
+            font-family: var(--font-body);
+            transform: translateY(20px);
+            opacity: 0;
+            transition: var(--transition-smooth);
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        .classification-card.active {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .class-card-title {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-family: var(--font-head);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding-bottom: 4px;
+        }
+
+        .class-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 4px;
+        }
+
+        .class-name {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            width: 105px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .class-bar-container {
+            flex-grow: 1;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .class-bar {
+            height: 100%;
+            border-radius: 3px;
+            width: 0;
+            transition: width 1.5s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .class-val {
+            font-size: 0.65rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            width: 32px;
+            text-align: right;
+            font-family: var(--font-code);
+        }
+
+        /* Slider Controls */
+        .slider-wrapper {
+            position: relative;
+            margin-top: 8px;
+        }
+
+        .slider-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .slider-label strong {
+            color: var(--accent-glow);
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 3px;
+            outline: none;
+            border: 1px solid rgba(255, 255, 255, 0.02);
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--accent-glow);
+            cursor: pointer;
+            box-shadow: 0 0 10px var(--accent-glow);
+            transition: var(--transition-fast);
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        .slider-ticks {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 6px;
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            padding: 0 2px;
+        }
+
+        /* Option Selector Boxes */
+        .option-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .option-btn {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            color: var(--text-secondary);
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            text-align: left;
+            cursor: pointer;
+            transition: var(--transition-fast);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .option-btn:hover {
+            background: rgba(255, 255, 255, 0.04);
+            border-color: rgba(255, 255, 255, 0.1);
+            color: var(--text-primary);
+        }
+
+        .option-btn.active {
+            background: var(--accent-bg-glow);
+            border-color: var(--accent-glow);
+            color: var(--text-primary);
+            box-shadow: 0 0 10px rgba(var(--accent-glow-rgb), 0.1);
+        }
+
+        .option-badge {
+            font-size: 0.65rem;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: var(--text-muted);
+        }
+
+        .option-btn.active .option-badge {
+            background: var(--accent-glow);
+            color: var(--bg-base);
+            font-weight: 600;
+        }
+
+        /* Toggle Variant Switch */
+        .toggle-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            padding: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .toggle-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition-fast);
+            text-align: center;
+            font-family: var(--font-head);
+        }
+
+        .toggle-btn.active {
+            color: var(--bg-base);
+            font-weight: 700;
+        }
+
+        .toggle-std.active {
+            background: #00f2fe;
+            box-shadow: 0 0 12px rgba(0, 242, 254, 0.4);
+        }
+
+        .toggle-quant.active {
+            background: #10b981;
+            box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
+        }
+
+        /* Run Inference Button */
+        .run-btn {
+            background: linear-gradient(135deg, var(--accent-glow) 0%, rgba(var(--accent-glow-rgb), 0.7) 100%);
+            color: var(--bg-base);
+            border: none;
+            padding: 14px 20px;
+            border-radius: 10px;
+            font-family: var(--font-head);
+            font-weight: 700;
+            font-size: 0.95rem;
+            cursor: pointer;
+            box-shadow: 0 0 20px rgba(var(--accent-glow-rgb), 0.2);
+            transition: var(--transition-smooth);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            letter-spacing: 0.5px;
+        }
+
+        .run-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 0 30px rgba(var(--accent-glow-rgb), 0.4);
+        }
+
+        .run-btn:active {
+            transform: translateY(0);
+        }
+
+        .run-btn svg {
+            transition: var(--transition-smooth);
+        }
+
+        .run-btn:hover svg {
+            transform: translateX(4px);
+        }
+
+        /* Model Stats Card */
+        .stats-card {
+            background: rgba(0, 0, 0, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            border-radius: 10px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .stat-item span {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        /* Right Canvas Section */
+        .diagram-outer-container {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-glow);
+            border-radius: 16px;
+            backdrop-filter: blur(12px);
+            position: relative;
+            overflow: auto;
+            display: flex;
+            flex-direction: column;
+            box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.5);
+            min-height: 850px;
+        }
+
+        /* Fixed Dimensions for Absolute Alignment Grid */
+        .diagram-canvas {
+            width: 1100px;
+            height: 800px;
+            position: relative;
+            flex-shrink: 0;
+            margin: auto;
+        }
+
+        /* Background SVG Layer for Connecting Curves */
+        .svg-connections {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .flow-path {
+            fill: none;
+            stroke: rgba(255, 255, 255, 0.04);
+            stroke-width: 1.5;
+            transition: var(--transition-smooth);
+        }
+
+        /* Active Connection Glow */
+        .flow-path.active-path {
+            stroke: rgba(var(--accent-glow-rgb), 0.2);
+            stroke-width: 2;
+        }
+
+        /* Flow Pulse Animation Paths */
+        .pulse-path {
+            fill: none;
+            stroke: var(--accent-glow);
+            stroke-width: 2.5;
+            stroke-linecap: round;
+            stroke-dasharray: 20, 1000;
+            stroke-dashoffset: 0;
+            opacity: 0;
+            filter: drop-shadow(0 0 4px var(--accent-glow));
+        }
+
+        .pulse-path.animating {
+            animation: flowPulse 2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+        }
+
+        @keyframes flowPulse {
+            0% {
+                stroke-dashoffset: 1000;
+                opacity: 1;
+            }
+            100% {
+                stroke-dashoffset: 0;
+                opacity: 0.1;
+            }
+        }
+
+        /* Diagram Component Card (Node) */
+        .diagram-node {
+            position: absolute;
+            z-index: 10;
+            width: 136px;
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 10px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+            transition: var(--transition-smooth);
+        }
+
+        .diagram-node:hover {
+            transform: scale(1.04) translateY(-3px);
+            border-color: var(--accent-glow);
+            box-shadow: 0 0 20px rgba(var(--accent-glow-rgb), 0.15);
+            background: rgba(15, 23, 42, 0.95);
+        }
+
+        .diagram-node:active {
+            transform: scale(1.0);
+        }
+
+        /* Stage Color Accents */
+        .node-backbone { border-left: 3px solid var(--color-backbone); }
+        .node-neck { border-left: 3px solid var(--color-neck); }
+        .node-head { border-left: 3px solid var(--color-head); }
+        .node-special { border-left: 3px solid var(--color-purple); }
+
+        .node-title {
+            font-family: var(--font-head);
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .node-desc {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+        }
+
+        .node-shape {
+            font-family: var(--font-code);
+            font-size: 0.6rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            padding: 3px 6px;
+            border-radius: 4px;
+            color: var(--accent-glow);
+            text-align: center;
+            font-weight: 500;
+            transition: var(--transition-smooth);
+        }
+
+        /* Quantization Mini-Node */
+        .quant-tag {
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            background: var(--color-quant);
+            border-radius: 50%;
+            border: 2px solid var(--bg-base);
+            top: -6px;
+            left: -6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.45rem;
+            font-weight: 900;
+            color: var(--bg-base);
+            opacity: 0;
+            transform: scale(0);
+            box-shadow: 0 0 8px var(--color-quant);
+            transition: var(--transition-smooth);
+            z-index: 12;
+            cursor: pointer;
+        }
+
+        body.quantized-mode .quant-tag {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        /* Node Pulse Highlight on Signal Pass */
+        .diagram-node.pulse-highlight {
+            animation: nodePulse 0.6s cubic-bezier(0.16, 1, 0.3, 1) 3 alternate;
+            border-color: var(--accent-glow) !important;
+            box-shadow: 0 0 25px var(--accent-glow) !important;
+        }
+
+        @keyframes nodePulse {
+            from {
+                background: rgba(15, 23, 42, 0.8);
+            }
+            to {
+                background: var(--accent-bg-glow);
+            }
+        }
+
+        /* Interactive Drawer (Slide Out Details Panel) */
+        .drawer-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            z-index: 99;
+            opacity: 0;
+            pointer-events: none;
+            transition: var(--transition-smooth);
+        }
+
+        .drawer-overlay.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .drawer {
+            position: fixed;
+            top: 0;
+            right: -520px;
+            width: 500px;
+            height: 100vh;
+            background: var(--bg-drawer);
+            border-left: 1px solid var(--border-glow);
+            box-shadow: -10px 0 40px rgba(0, 0, 0, 0.6);
+            z-index: 100;
+            transition: var(--transition-smooth);
+            display: flex;
+            flex-direction: column;
+            padding: 40px;
+            overflow-y: auto;
+        }
+
+        .drawer.open {
+            right: 0;
+        }
+
+        .drawer-close {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            color: var(--text-secondary);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: var(--transition-fast);
+        }
+
+        .drawer-close:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text-primary);
+        }
+
+        .drawer-header {
+            margin-bottom: 30px;
+        }
+
+        .drawer-subtitle {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--accent-glow);
+            margin-bottom: 8px;
+            transition: var(--transition-smooth);
+        }
+
+        .drawer-title {
+            font-family: var(--font-head);
+            font-size: 1.75rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            color: var(--text-primary);
+        }
+
+        .drawer-content {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            font-size: 0.9rem;
+            line-height: 1.6;
+            color: var(--text-secondary);
+        }
+
+        .drawer-section {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding-bottom: 20px;
+        }
+
+        .drawer-section:last-child {
+            border-bottom: none;
+        }
+
+        .drawer-section-title {
+            font-family: var(--font-head);
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Latex style Math Block */
+        .math-block {
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 1.15rem;
+            font-style: italic;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+            color: #f1f5f9;
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            margin: 8px 0;
+            position: relative;
+        }
+
+        .math-block span.math-label {
+            font-family: var(--font-body);
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            position: absolute;
+            bottom: 4px;
+            right: 8px;
+            font-style: normal;
+        }
+
+        /* Sleek Carbon Code Block */
+        .code-block {
+            background: #090d16;
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 8px;
+            padding: 16px;
+            overflow-x: auto;
+            font-family: var(--font-code);
+            font-size: 0.75rem;
+            line-height: 1.5;
+            color: #e2e8f0;
+        }
+
+        .code-keyword { color: #f43f5e; }
+        .code-func { color: #3b82f6; }
+        .code-string { color: #10b981; }
+        .code-comment { color: #64748b; font-style: italic; }
+
+        /* Mock Display Screen Box */
+        .mock-screen-node {
+            position: absolute;
+            top: 60px;
+            right: 40px;
+            width: 320px;
+            height: 240px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: #000;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+            z-index: 15;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .mock-screen-bg {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0.55;
+            transition: var(--transition-smooth);
+        }
+
+        .mock-overlay {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        /* Custom Bounding Box overlays (Neon) */
+        .bbox {
+            position: absolute;
+            border: 2px solid #00f2fe;
+            background: rgba(0, 242, 254, 0.05);
+            border-radius: 4px;
+            box-shadow: 0 0 10px rgba(0, 242, 254, 0.3);
+            display: flex;
+            flex-direction: column;
+            opacity: 0;
+            transform: scale(0.9);
+            transition: var(--transition-smooth);
+        }
+
+        .bbox.active {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        .bbox-label {
+            background: #00f2fe;
+            color: #060913;
+            font-size: 0.55rem;
+            font-weight: 700;
+            padding: 1px 4px;
+            position: absolute;
+            bottom: 100%;
+            left: -2px;
+            border-radius: 3px 3px 0 0;
+            white-space: nowrap;
+        }
+
+        /* Segment mask overlay */
+        .seg-mask {
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at 55% 45%, rgba(236, 72, 153, 0.15) 0%, transparent 60%);
+            opacity: 0;
+            transition: var(--transition-smooth);
+        }
+
+        .seg-mask.active {
+            opacity: 1;
+        }
+
+        /* Keypoint dot overlay */
+        .keypoint-dot {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #cc66ff;
+            box-shadow: 0 0 8px #cc66ff;
+            opacity: 0;
+            transform: scale(0);
+            transition: var(--transition-smooth);
+        }
+
+        .keypoint-dot.active {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        .screen-status-bar {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            padding: 4px 10px;
+            font-size: 0.6rem;
+            font-family: var(--font-code);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            z-index: 3;
+        }
+
+        .screen-indicator {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #64748b;
+        }
+
+        .screen-indicator.active {
+            background: var(--accent-glow);
+            box-shadow: 0 0 6px var(--accent-glow);
+            animation: pulseCircle 1.5s infinite;
+        }
+
+        @keyframes pulseCircle {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.3); opacity: 0.4; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* Mini Label annotations on blueprint canvas */
+        .canvas-label {
+            position: absolute;
+            font-family: var(--font-head);
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            z-index: 2;
+        }
+
+        /* Details info grid */
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-top: 12px;
+        }
+
+        .info-block {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 8px;
+            padding: 12px;
+        }
+
+        .info-block-label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .info-block-val {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Lights -->
+    <div class="ambient-glow glow-top-left" id="glow-l"></div>
+    <div class="ambient-glow glow-bottom-right" id="glow-r"></div>
+
+    <!-- Header -->
+    <header>
+        <div class="logo-section">
+            <div class="logo-dot" id="logo-indicator"></div>
+            <h1 class="logo-title">TinyYOLO <span>Blueprint</span></h1>
+        </div>
+        <div class="meta-tags">
+            <div class="meta-badge">Framework: <strong>TinyYOLO-R1</strong></div>
+            <div class="meta-badge">Global Seeds: <strong>Deterministic (42)</strong></div>
+            <div class="meta-badge">Parameters: <strong id="header-param-count">0.23M</strong></div>
+        </div>
+    </header>
+
+    <!-- Layout Grid -->
+    <div class="dashboard-container">
+        
+        <!-- Left Side Controls Panel -->
+        <div class="control-panel">
+            
+            <!-- Variant Selector -->
+            <div class="panel-section">
+                <div class="section-title">Architecture Variant</div>
+                <div class="toggle-container">
+                    <button class="toggle-btn toggle-std active" onclick="setVariant('standard')">FP32 Standard</button>
+                    <button class="toggle-btn toggle-quant" onclick="setVariant('quantized')">INT8 Quant</button>
+                </div>
+            </div>
+
+            <!-- Resolution Slider -->
+            <div class="panel-section">
+                <div class="section-title">Input Resolution</div>
+                <div class="slider-wrapper">
+                    <div class="slider-label">
+                        <span>Image Size:</span>
+                        <strong><span id="res-val">416</span>×<span id="res-val-2">416</span></strong>
+                    </div>
+                    <input type="range" id="res-slider" min="0" max="4" value="3" oninput="updateResolution(this.value)">
+                    <div class="slider-ticks">
+                        <span>160</span>
+                        <span>224</span>
+                        <span>320</span>
+                        <span>416</span>
+                        <span>640</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sample Image Input Selector -->
+            <div class="panel-section">
+                <div class="section-title">Sample Input Image</div>
+                <div class="sample-image-grid">
+                    <div class="sample-img-card active" id="sample-img-traffic" onclick="setSampleImage('traffic')">
+                        <img src="https://images.unsplash.com/photo-1542282088-fe8426682b8f?q=80&w=150&auto=format&fit=crop" class="sample-thumb">
+                        <div class="sample-title">Traffic Scene</div>
+                    </div>
+                    <div class="sample-img-card" id="sample-img-pedestrian" onclick="setSampleImage('pedestrian')">
+                        <img src="https://images.unsplash.com/photo-1485738422979-f5c462d49f74?q=80&w=150&auto=format&fit=crop" class="sample-thumb">
+                        <div class="sample-title">Pedestrian</div>
+                    </div>
+                    <div class="sample-img-card" id="sample-img-sports" onclick="setSampleImage('sports')">
+                        <img src="https://images.unsplash.com/photo-1503376780353-7e6692767b70?q=80&w=150&auto=format&fit=crop" class="sample-thumb">
+                        <div class="sample-title">Sports Car</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Task Selector -->
+            <div class="panel-section">
+                <div class="section-title">Task Head Configuration</div>
+                <div class="option-grid">
+                    <button class="option-btn active" id="task-detect" onclick="setTask('detect')">
+                        <span>Object Detection</span>
+                        <span class="option-badge">0.23M</span>
+                    </button>
+                    <button class="option-btn" id="task-segment" onclick="setTask('segment')">
+                        <span>Instance Segmentation</span>
+                        <span class="option-badge">0.29M</span>
+                    </button>
+                    <button class="option-btn" id="task-pose" onclick="setTask('pose')">
+                        <span>Pose Estimation</span>
+                        <span class="option-badge">0.27M</span>
+                    </button>
+                    <button class="option-btn" id="task-obb" onclick="setTask('obb')">
+                        <span>Oriented BBox</span>
+                        <span class="option-badge">0.24M</span>
+                    </button>
+                    <button class="option-btn" id="task-classify" onclick="setTask('classify')">
+                        <span>Image Classification</span>
+                        <span class="option-badge">0.10M</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Run Simulation Button -->
+            <button class="run-btn" onclick="runInference()">
+                <span>Run Forward Prop</span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                    <polyline points="12 5 19 12 12 19"></polyline>
+                </svg>
+            </button>
+
+            <!-- Stats Module Card -->
+            <div class="panel-section">
+                <div class="section-title">Active Metrics</div>
+                <div class="stats-card">
+                    <div class="stat-item">Precision Mode: <span id="stat-precision">FP32 / FP16</span></div>
+                    <div class="stat-item">Model Parameter Size: <span id="stat-param-size">0.24 MB</span></div>
+                    <div class="stat-item">GFLOPs (416x416): <span id="stat-gflops">0.24 GFLOPs</span></div>
+                    <div class="stat-item">Jetson Nano Latency: <span id="stat-latency">48.6 ms (EMA)</span></div>
+                    <div class="stat-item">COCO mAP@50: <span id="stat-map">18.2%</span></div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Right Side Blueprint Grid -->
+        <div class="diagram-outer-container">
+            <div class="diagram-canvas">
+                
+                <!-- Background SVG Connections Grid -->
+                <svg class="svg-connections" id="svg-layer">
+                    <defs>
+                        <!-- Glow filter -->
+                        <filter id="svg-glow" x="-20%" y="-20%" width="140%" height="140%">
+                            <feGaussianBlur stdDeviation="4" result="blur" />
+                            <feMerge>
+                                <feMergeNode in="blur" />
+                                <feMergeNode in="SourceGraphic" />
+                            </feMerge>
+                        </filter>
+                    </defs>
+
+                    <!-- Static connector lines (rendered via JS to match coordinates exactly) -->
+                    <g id="static-paths"></g>
+
+                    <!-- Glowing Pulse paths overlay -->
+                    <g id="pulse-paths"></g>
+                </svg>
+
+                <!-- Annotations Labels -->
+                <div class="canvas-label" style="top: 25px; left: 80px; color: var(--color-backbone);">Stage 1: Feature Extractor (Backbone)</div>
+                <div class="canvas-label" style="top: 410px; left: 350px; color: var(--color-neck);">Stage 2: Multi-Scale Feature Fusion (LitePAN)</div>
+                <div class="canvas-label" style="top: 410px; left: 950px; color: var(--color-head);">Stage 3: Task Head Prediction</div>
+
+                <!-- NODES MAP -->
+
+                <!-- Input Image Node -->
+                <div class="diagram-node node-backbone" style="top: 60px; left: 40px; min-height: 80px;" onclick="openDrawer('input')">
+                    <div class="node-img-container">
+                        <img src="https://images.unsplash.com/photo-1542282088-fe8426682b8f?q=80&w=150&auto=format&fit=crop" class="node-img-thumb" id="node-input-thumb">
+                    </div>
+                    <div class="node-title" style="margin-top: 4px;">Input Image</div>
+                    <div class="node-shape" id="shape-input">1×3×416×416</div>
+                </div>
+
+                <!-- Stem Block -->
+                <div class="diagram-node node-backbone" style="top: 170px; left: 40px;" onclick="openDrawer('stem')">
+                    <div class="quant-tag" title="FakeQuant Node">Q</div>
+                    <div class="node-title">Stem Block</div>
+                    <div class="node-desc">3x3 Conv s=2 (BN/Act)</div>
+                    <div class="node-shape" id="shape-stem">1×16×208×208</div>
+                </div>
+
+                <!-- Stage 1 -->
+                <div class="diagram-node node-backbone" style="top: 280px; left: 40px;" onclick="openDrawer('stage1')">
+                    <div class="quant-tag" title="FakeQuant Node">Q</div>
+                    <div class="node-title">Stage 1 (P1)</div>
+                    <div class="node-desc">1x GhostBottleneck s=2</div>
+                    <div class="node-shape" id="shape-stage1">1×24×104×104</div>
+                </div>
+
+                <!-- Stage 2 (P3) -->
+                <div class="diagram-node node-backbone" style="top: 450px; left: 40px;" id="node-p3" onclick="openDrawer('stage2')">
+                    <div class="quant-tag" title="FakeQuant Node">Q</div>
+                    <div class="node-title">Stage 2 (P3)</div>
+                    <div class="node-desc">2x GhostBottleneck s=2</div>
+                    <div class="node-shape" id="shape-p3">1×40×52×52</div>
+                </div>
+
+                <!-- Stage 3 (P4) -->
+                <div class="diagram-node node-backbone" style="top: 560px; left: 40px;" onclick="openDrawer('stage3')">
+                    <div class="quant-tag" title="FakeQuant Node">Q</div>
+                    <div class="node-title">Stage 3 (P4)</div>
+                    <div class="node-desc">3x GhostBottleneck s=2</div>
+                    <div class="node-shape" id="shape-p4">1×80×26×26</div>
+                </div>
+
+                <!-- Stage 4 (P5) -->
+                <div class="diagram-node node-backbone" style="top: 670px; left: 40px;" onclick="openDrawer('stage4')">
+                    <div class="quant-tag" title="FakeQuant Node">Q</div>
+                    <div class="node-title">Stage 4 (P5)</div>
+                    <div class="node-desc">2x GhostBottleneck s=2</div>
+                    <div class="node-shape" id="shape-p5">1×160×13×13</div>
+                </div>
+
+                <!-- P4 Attention -->
+                <div class="diagram-node node-special" style="top: 560px; left: 200px;" onclick="openDrawer('attn4')">
+                    <div class="quant-tag" title="FakeQuant Node">Q</div>
+                    <div class="node-title" id="title-attn4">P4 Attention</div>
+                    <div class="node-desc" id="desc-attn4">LightSpatialAttn</div>
+                    <div class="node-shape" id="shape-attn4">1×80×26×26</div>
+                </div>
+
+                <!-- P5 Attention -->
+                <div class="diagram-node node-special" style="top: 670px; left: 200px;" onclick="openDrawer('attn5')">
+                    <div class="quant-tag" title="FakeQuant Node">Q</div>
+                    <div class="node-title" id="title-attn5">P5 Attention</div>
+                    <div class="node-desc" id="desc-attn5">SE Block</div>
+                    <div class="node-shape" id="shape-attn5">1×160×13×13</div>
+                </div>
+
+                <!-- NECK LATERAL PATHWAYS -->
+
+                <!-- Lateral L3 -->
+                <div class="diagram-node node-neck" style="top: 450px; left: 360px;" onclick="openDrawer('lat3')">
+                    <div class="quant-tag" title="FakeQuant Node">Q</div>
+                    <div class="node-title">Lateral L3</div>
+                    <div class="node-desc">1x1 ConvProj (40->64)</div>
+                    <div class="node-shape" id="shape-l3">1×64×52×52</div>
+                </div>
+
+                <!-- Lateral L4 -->
+                <div class="diagram-node node-neck" style="top: 560px; left: 360px;" onclick="openDrawer('lat4')">
+                    <div class="quant-tag" title="FakeQuant Node">Q</div>
+                    <div class="node-title">Lateral L4</div>
+                    <div class="node-desc">1x1 ConvProj (80->64)</div>
+                    <div class="node-shape" id="shape-l4">1×64×26×26</div>
+                </div>
+
+                <!-- Lateral L5 -->
+                <div class="diagram-node node-neck" style="top: 670px; left: 360px;" onclick="openDrawer('lat5')">
+                    <div class="quant-tag" title="FakeQuant Node">Q</div>
+                    <div class="node-title">Lateral L5</div>
+                    <div class="node-desc">1x1 ConvProj (160->64)</div>
+                    <div class="node-shape" id="shape-l5">1×64×13×13</div>
+                </div>
+
+                <!-- FPN F4 -->
+                <div class="diagram-node node-neck" style="top: 560px; left: 540px;" onclick="openDrawer('fpnf4')">
+                    <div class="quant-tag" title="FakeQuant Node">Q</div>
+                    <div class="node-title">FPN F4 Node</div>
+                    <div class="node-desc">Upsample + Cat + DW</div>
+                    <div class="node-shape" id="shape-f4">1×64×26×26</div>
+                </div>
+
+                <!-- FPN F3 -->
+                <div class="diagram-node node-neck" style="top: 450px; left: 540px;" onclick="openDrawer('fpnf3')">
+                    <div class="quant-tag" title="FakeQuant Node">Q</div>
+                    <div class="node-title">FPN F3 Node</div>
+                    <div class="node-desc">Upsample + Cat + DW</div>
+                    <div class="node-shape" id="shape-f3">1×64×52×52</div>
+                </div>
+
+                <!-- PAN N4 -->
+                <div class="diagram-node node-neck" style="top: 560px; left: 740px;" onclick="openDrawer('pann4')">
+                    <div class="quant-tag" title="FakeQuant Node">Q</div>
+                    <div class="node-title">PAN N4 Node</div>
+                    <div class="node-desc">Downsample + Cat + DW</div>
+                    <div class="node-shape" id="shape-n4">1×64×26×26</div>
+                </div>
+
+                <!-- PAN N5 -->
+                <div class="diagram-node node-neck" style="top: 670px; left: 740px;" onclick="openDrawer('pann5')">
+                    <div class="quant-tag" title="FakeQuant Node">Q</div>
+                    <div class="node-title">PAN N5 Node</div>
+                    <div class="node-desc">Downsample + Cat + DW</div>
+                    <div class="node-shape" id="shape-n5">1×64×13×13</div>
+                </div>
+
+                <!-- HEAD BRANCHES -->
+
+                <!-- Head P3 -->
+                <div class="diagram-node node-head" style="top: 450px; left: 940px;" onclick="openDrawer('head3')">
+                    <div class="quant-tag" title="FakeQuant Node">Q</div>
+                    <div class="node-title">Decoupled Head P3</div>
+                    <div class="node-desc">Scale 1/8 Output</div>
+                    <div class="node-shape" id="shape-h3">1×85×52×52</div>
+                </div>
+
+                <!-- Head P4 -->
+                <div class="diagram-node node-head" style="top: 560px; left: 940px;" onclick="openDrawer('head4')">
+                    <div class="quant-tag" title="FakeQuant Node">Q</div>
+                    <div class="node-title">Decoupled Head P4</div>
+                    <div class="node-desc">Scale 1/16 Output</div>
+                    <div class="node-shape" id="shape-h4">1×85×26×26</div>
+                </div>
+
+                <!-- Head P5 -->
+                <div class="diagram-node node-head" style="top: 670px; left: 940px;" onclick="openDrawer('head5')">
+                    <div class="quant-tag" title="FakeQuant Node">Q</div>
+                    <div class="node-title">Decoupled Head P5</div>
+                    <div class="node-desc">Scale 1/32 Output</div>
+                    <div class="node-shape" id="shape-h5">1×85×13×13</div>
+                </div>
+
+                <!-- MOCK INFECTED IMAGE OUTPUT VIEWPORT -->
+                <div class="mock-screen-node">
+                    <div class="screen-status-bar">
+                        <div class="screen-indicator" id="screen-status-dot"></div>
+                        <span id="screen-status-text">TENSORS RESET - RUN PROPAGATION</span>
+                    </div>
+                    <img src="https://images.unsplash.com/photo-1542282088-fe8426682b8f?q=80&w=600&auto=format&fit=crop" class="mock-screen-bg" id="mock-img">
+                    <div class="mock-overlay" id="screen-overlay"></div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Details Modal Drawer Component -->
+    <div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
+    <div class="drawer" id="details-drawer">
+        <button class="drawer-close" onclick="closeDrawer()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+        </button>
+        <div class="drawer-header">
+            <div class="drawer-subtitle" id="dr-subtitle">Backbone Stage</div>
+            <h2 class="drawer-title" id="dr-title">GhostBottleneck Block</h2>
+        </div>
+        <div class="drawer-content" id="dr-content">
+            <!-- Content dynamically generated via JS -->
+        </div>
+    </div>
+
+    <!-- Scripting for Interactivity -->
+    <script>
+        // Coordinate points of nodes for drawing connecting lines
+        const nodeCoordinates = {
+            'input': { x: 108, y: 92 },
+            'stem': { x: 108, y: 202 },
+            'stage1': { x: 108, y: 312 },
+            'stage2': { x: 108, y: 482 },
+            'stage3': { x: 108, y: 592 },
+            'stage4': { x: 108, y: 702 },
+            
+            'attn4': { x: 268, y: 592 },
+            'attn5': { x: 268, y: 702 },
+            
+            'lat3': { x: 428, y: 482 },
+            'lat4': { x: 428, y: 592 },
+            'lat5': { x: 428, y: 702 },
+            
+            'fpnf4': { x: 608, y: 592 },
+            'fpnf3': { x: 608, y: 482 },
+            
+            'pann4': { x: 808, y: 592 },
+            'pann5': { x: 808, y: 702 },
+            
+            'head3': { x: 1008, y: 482 },
+            'head4': { x: 1008, y: 592 },
+            'head5': { x: 1008, y: 702 }
+        };
+
+        // Graph connections list
+        const connections = [
+            { from: 'input', to: 'stem' },
+            { from: 'stem', to: 'stage1' },
+            { from: 'stage1', to: 'stage2' },
+            { from: 'stage2', to: 'stage3' },
+            { from: 'stage3', to: 'stage4' },
+            
+            // Attention branches
+            { from: 'stage3', to: 'attn4' },
+            { from: 'attn4', to: 'lat4' },
+            { from: 'stage4', to: 'attn5' },
+            { from: 'attn5', to: 'lat5' },
+            
+            // Direct lateral connection for Stage 2
+            { from: 'stage2', to: 'lat3' },
+            
+            // FPN Top-Down Path
+            { from: 'lat5', to: 'fpnf4', curve: 'fpn-down' },
+            { from: 'lat4', to: 'fpnf4' },
+            { from: 'fpnf4', to: 'fpnf3', curve: 'fpn-up' },
+            { from: 'lat3', to: 'fpnf3' },
+            
+            // PAN Bottom-Up Path
+            { from: 'fpnf3', to: 'pann4', curve: 'pan-down' },
+            { from: 'fpnf4', to: 'pann4' },
+                { from: 'pann4', to: 'pann5', curve: 'pan-up' },
+            { from: 'lat5', to: 'pann5' },
+            
+            // Head Predictions
+            { from: 'fpnf3', to: 'head3' },
+            { from: 'pann4', to: 'head4' },
+            { from: 'pann5', to: 'head5' }
+        ];
+
+        // Active State variables
+        let activeVariant = 'standard';
+        let activeResolutionIdx = 3; // Index in [160, 224, 320, 416, 640]
+        let activeTask = 'detect';
+        const resolutions = [160, 224, 320, 416, 640];
+
+        // Sample Image Configurations
+        const sampleImages = {
+            'traffic': {
+                thumb: 'https://images.unsplash.com/photo-1542282088-fe8426682b8f?q=80&w=150&auto=format&fit=crop',
+                main: 'https://images.unsplash.com/photo-1542282088-fe8426682b8f?q=80&w=600&auto=format&fit=crop',
+                name: 'Traffic Scene',
+                attnX: '35%',
+                attnY: '50%'
+            },
+            'pedestrian': {
+                thumb: 'https://images.unsplash.com/photo-1485738422979-f5c462d49f74?q=80&w=150&auto=format&fit=crop',
+                main: 'https://images.unsplash.com/photo-1485738422979-f5c462d49f74?q=80&w=600&auto=format&fit=crop',
+                name: 'Pedestrian',
+                attnX: '50%',
+                attnY: '45%'
+            },
+            'sports': {
+                thumb: 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?q=80&w=150&auto=format&fit=crop',
+                main: 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?q=80&w=600&auto=format&fit=crop',
+                name: 'Sports Car',
+                attnX: '50%',
+                attnY: '50%'
+            }
+        };
+
+        let activeSampleImage = 'traffic';
+
+        // Advanced dynamic task-wise predictions overlay
+        const predictionOverlays = {
+            'traffic': {
+                'detect': `
+                    <div class="bbox active" style="top: 90px; left: 40px; width: 140px; height: 110px; border-color: var(--accent-glow);">
+                        <div class="bbox-label" style="background: var(--accent-glow);">car 92.4%</div>
+                    </div>
+                    <div class="bbox active" style="top: 80px; left: 210px; width: 60px; height: 120px; border-color: #ec4899; background: rgba(236, 72, 153, 0.05);">
+                        <div class="bbox-label" style="background: #ec4899;">person 89.1%</div>
+                    </div>
+                `,
+                'segment': `
+                    <div class="bbox active" style="top: 90px; left: 40px; width: 140px; height: 110px; border-color: var(--accent-glow);">
+                        <div class="bbox-label" style="background: var(--accent-glow);">car 92.4%</div>
+                    </div>
+                    <div class="bbox active" style="top: 80px; left: 210px; width: 60px; height: 120px; border-color: #ec4899; background: rgba(236, 72, 153, 0.05);">
+                        <div class="bbox-label" style="background: #ec4899;">person 89.1%</div>
+                    </div>
+                    <div class="seg-mask active" style="background: radial-gradient(ellipse at 40% 60%, rgba(var(--accent-glow-rgb), 0.3) 0%, rgba(var(--accent-glow-rgb), 0.35) 40%, transparent 60%);"></div>
+                    <div class="seg-mask active" style="background: radial-gradient(ellipse at 75% 55%, rgba(236, 72, 153, 0.3) 0%, rgba(236, 72, 153, 0.35) 30%, transparent 50%);"></div>
+                `,
+                'pose': `
+                    <div class="bbox active" style="top: 80px; left: 210px; width: 60px; height: 120px; border-color: #ec4899; background: rgba(236, 72, 153, 0.02);">
+                        <div class="bbox-label" style="background: #ec4899;">person 89.1%</div>
+                    </div>
+                    <svg style="position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none;">
+                        <line x1="240" y1="95" x2="235" y2="110" stroke="#ec4899" stroke-width="2"/>
+                        <line x1="240" y1="95" x2="245" y2="110" stroke="#ec4899" stroke-width="2"/>
+                        <line x1="235" y1="110" x2="230" y2="140" stroke="#ec4899" stroke-width="2"/>
+                        <line x1="245" y1="110" x2="250" y2="140" stroke="#ec4899" stroke-width="2"/>
+                        <line x1="235" y1="110" x2="225" y2="180" stroke="#ec4899" stroke-width="2"/>
+                        <line x1="245" y1="110" x2="245" y2="180" stroke="#ec4899" stroke-width="2"/>
+                    </svg>
+                    <div class="keypoint-dot active" style="top: 95px; left: 240px;"></div>
+                    <div class="keypoint-dot active" style="top: 110px; left: 235px;"></div>
+                    <div class="keypoint-dot active" style="top: 110px; left: 245px;"></div>
+                    <div class="keypoint-dot active" style="top: 140px; left: 230px;"></div>
+                    <div class="keypoint-dot active" style="top: 140px; left: 250px;"></div>
+                    <div class="keypoint-dot active" style="top: 180px; left: 225px;"></div>
+                    <div class="keypoint-dot active" style="top: 180px; left: 245px;"></div>
+                `,
+                'obb': `
+                    <div class="bbox active" style="top: 100px; left: 40px; width: 145px; height: 95px; border-color: #a855f7; transform: rotate(-8deg); background: rgba(168, 85, 247, 0.05); transform-origin: center;">
+                        <div class="bbox-label" style="background: #a855f7;">car_obb (θ=-8°) 88.3%</div>
+                    </div>
+                `,
+                'classify': `
+                    <div class="classification-card active">
+                        <div class="class-card-title">Top Classification Logits</div>
+                        <div class="class-item">
+                            <div class="class-name">sports car / supercar</div>
+                            <div class="class-bar-container"><div class="class-bar" style="width: 92.4%; background: var(--accent-glow);"></div></div>
+                            <div class="class-val">92.4%</div>
+                        </div>
+                        <div class="class-item">
+                            <div class="class-name">convertible / cabriolet</div>
+                            <div class="class-bar-container"><div class="class-bar" style="width: 78.5%; background: var(--accent-glow);"></div></div>
+                            <div class="class-val">78.5%</div>
+                        </div>
+                        <div class="class-item">
+                            <div class="class-name">limousine / sedan</div>
+                            <div class="class-bar-container"><div class="class-bar" style="width: 12.1%; background: #64748b;"></div></div>
+                            <div class="class-val">12.1%</div>
+                        </div>
+                    </div>
+                `
+            },
+            'pedestrian': {
+                'detect': `
+                    <div class="bbox active" style="top: 40px; left: 110px; width: 85px; height: 200px; border-color: var(--accent-glow);">
+                        <div class="bbox-label" style="background: var(--accent-glow);">person 94.2%</div>
+                    </div>
+                `,
+                'segment': `
+                    <div class="bbox active" style="top: 40px; left: 110px; width: 85px; height: 200px; border-color: var(--accent-glow);">
+                        <div class="bbox-label" style="background: var(--accent-glow);">person 94.2%</div>
+                    </div>
+                    <div class="seg-mask active" style="background: radial-gradient(ellipse at 50% 50%, rgba(var(--accent-glow-rgb), 0.35) 0%, rgba(var(--accent-glow-rgb), 0.4) 40%, transparent 60%);"></div>
+                `,
+                'pose': `
+                    <div class="bbox active" style="top: 40px; left: 110px; width: 85px; height: 200px; border-color: #ec4899; background: rgba(236, 72, 153, 0.02);">
+                        <div class="bbox-label" style="background: #ec4899;">person 94.2%</div>
+                    </div>
+                    <svg style="position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none;">
+                        <line x1="150" y1="60" x2="150" y2="80" stroke="#ec4899" stroke-width="2"/>
+                        <line x1="150" y1="80" x2="135" y2="90" stroke="#ec4899" stroke-width="2"/>
+                        <line x1="150" y1="80" x2="165" y2="90" stroke="#ec4899" stroke-width="2"/>
+                        <line x1="135" y1="90" x2="125" y2="120" stroke="#ec4899" stroke-width="2"/>
+                        <line x1="165" y1="90" x2="175" y2="120" stroke="#ec4899" stroke-width="2"/>
+                        <line x1="150" y1="80" x2="150" y2="135" stroke="#ec4899" stroke-width="2"/>
+                        <line x1="150" y1="135" x2="140" y2="140" stroke="#ec4899" stroke-width="2"/>
+                        <line x1="150" y1="135" x2="160" y2="140" stroke="#ec4899" stroke-width="2"/>
+                        <line x1="140" y1="140" x2="130" y2="185" stroke="#ec4899" stroke-width="2"/>
+                        <line x1="130" y1="185" x2="125" y2="225" stroke="#ec4899" stroke-width="2"/>
+                        <line x1="160" y1="140" x2="165" y2="185" stroke="#ec4899" stroke-width="2"/>
+                        <line x1="165" y1="185" x2="175" y2="225" stroke="#ec4899" stroke-width="2"/>
+                    </svg>
+                    <div class="keypoint-dot active" style="top: 55px; left: 150px;"></div>
+                    <div class="keypoint-dot active" style="top: 80px; left: 150px;"></div>
+                    <div class="keypoint-dot active" style="top: 90px; left: 135px;"></div>
+                    <div class="keypoint-dot active" style="top: 90px; left: 165px;"></div>
+                    <div class="keypoint-dot active" style="top: 120px; left: 125px;"></div>
+                    <div class="keypoint-dot active" style="top: 120px; left: 175px;"></div>
+                    <div class="keypoint-dot active" style="top: 140px; left: 140px;"></div>
+                    <div class="keypoint-dot active" style="top: 140px; left: 160px;"></div>
+                    <div class="keypoint-dot active" style="top: 185px; left: 130px;"></div>
+                    <div class="keypoint-dot active" style="top: 185px; left: 165px;"></div>
+                    <div class="keypoint-dot active" style="top: 225px; left: 125px;"></div>
+                    <div class="keypoint-dot active" style="top: 225px; left: 175px;"></div>
+                `,
+                'obb': `
+                    <div class="bbox active" style="top: 35px; left: 105px; width: 90px; height: 210px; border-color: #a855f7; transform: rotate(2deg); background: rgba(168, 85, 247, 0.05); transform-origin: center;">
+                        <div class="bbox-label" style="background: #a855f7;">person_obb (θ=+2°) 91.5%</div>
+                    </div>
+                `,
+                'classify': `
+                    <div class="classification-card active">
+                        <div class="class-card-title">Top Classification Logits</div>
+                        <div class="class-item">
+                            <div class="class-name">pedestrian / walker</div>
+                            <div class="class-bar-container"><div class="class-bar" style="width: 95.8%; background: var(--accent-glow);"></div></div>
+                            <div class="class-val">95.8%</div>
+                        </div>
+                        <div class="class-item">
+                            <div class="class-name">zebra crossing</div>
+                            <div class="class-bar-container"><div class="class-bar" style="width: 82.4%; background: var(--accent-glow);"></div></div>
+                            <div class="class-val">82.4%</div>
+                        </div>
+                        <div class="class-item">
+                            <div class="class-name">sidewalk / crosswalk</div>
+                            <div class="class-bar-container"><div class="class-bar" style="width: 25.1%; background: #64748b;"></div></div>
+                            <div class="class-val">25.1%</div>
+                        </div>
+                    </div>
+                `
+            },
+            'sports': {
+                'detect': `
+                    <div class="bbox active" style="top: 60px; left: 30px; width: 240px; height: 140px; border-color: var(--accent-glow);">
+                        <div class="bbox-label" style="background: var(--accent-glow);">sports car 98.7%</div>
+                    </div>
+                `,
+                'segment': `
+                    <div class="bbox active" style="top: 60px; left: 30px; width: 240px; height: 140px; border-color: var(--accent-glow);">
+                        <div class="bbox-label" style="background: var(--accent-glow);">sports car 98.7%</div>
+                    </div>
+                    <div class="seg-mask active" style="background: radial-gradient(ellipse at 50% 55%, rgba(var(--accent-glow-rgb), 0.35) 0%, rgba(var(--accent-glow-rgb), 0.45) 50%, transparent 75%);"></div>
+                `,
+                'pose': `
+                    <div class="bbox active" style="top: 60px; left: 30px; width: 240px; height: 140px; border-color: #ec4899; background: rgba(236, 72, 153, 0.02);">
+                        <div class="bbox-label" style="background: #ec4899;">sports car 98.7%</div>
+                    </div>
+                    <div class="pose-warning active" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 8px 12px; background: rgba(0,0,0,0.85); border: 1px solid #ec4899; border-radius: 6px; color: #ec4899; font-size: 0.75rem; font-family: var(--font-code); font-weight: 500; text-transform: uppercase; white-space: nowrap; pointer-events: none;">No Keypoints Detected (Person=0)</div>
+                `,
+                'obb': `
+                    <div class="bbox active" style="top: 55px; left: 25px; width: 250px; height: 150px; border-color: #a855f7; transform: rotate(-5deg); background: rgba(168, 85, 247, 0.05); transform-origin: center;">
+                        <div class="bbox-label" style="background: #a855f7;">car_obb (θ=-5°) 96.2%</div>
+                    </div>
+                `,
+                'classify': `
+                    <div class="classification-card active">
+                        <div class="class-card-title">Top Classification Logits</div>
+                        <div class="class-item">
+                            <div class="class-name">sports car / supercar</div>
+                            <div class="class-bar-container"><div class="class-bar" style="width: 98.9%; background: var(--accent-glow);"></div></div>
+                            <div class="class-val">98.9%</div>
+                        </div>
+                        <div class="class-item">
+                            <div class="class-name">coupe / performance</div>
+                            <div class="class-bar-container"><div class="class-bar" style="width: 91.5%; background: var(--accent-glow);"></div></div>
+                            <div class="class-val">91.5%</div>
+                        </div>
+                        <div class="class-item">
+                            <div class="class-name">racer / grand tourer</div>
+                            <div class="class-bar-container"><div class="class-bar" style="width: 32.7%; background: #64748b;"></div></div>
+                            <div class="class-val">32.7%</div>
+                        </div>
+                    </div>
+                `
+            }
+        };
+
+        // Dynamic metrics lookup table
+        const metricsData = {
+            'standard': {
+                'detect': { params: '0.23M', size: '0.24 MB', gflops: '0.24', latency: '48.6 ms', map: '38.7%' },
+                'segment': { params: '0.29M', size: '0.31 MB', gflops: '0.36', latency: '58.2 ms', map: '18.9%' },
+                'pose': { params: '0.27M', size: '0.29 MB', gflops: '0.32', latency: '54.5 ms', map: '30.1%' },
+                'obb': { params: '0.24M', size: '0.25 MB', gflops: '0.26', latency: '50.1 ms', map: '36.5%' },
+                'classify': { params: '0.10M', size: '0.11 MB', gflops: '0.08', latency: '18.3 ms', map: '81.4%' }
+            },
+            'quantized': {
+                'detect': { params: '0.22M', size: '0.22 MB', gflops: '0.24', latency: '28.3 ms', map: '41.2%' },
+                'segment': { params: '0.28M', size: '0.28 MB', gflops: '0.36', latency: '35.4 ms', map: '20.2%' },
+                'pose': { params: '0.26M', size: '0.26 MB', gflops: '0.32', latency: '33.1 ms', map: '32.4%' },
+                'obb': { params: '0.23M', size: '0.23 MB', gflops: '0.26', latency: '29.2 ms', map: '39.1%' },
+                'classify': { params: '0.09M', size: '0.09 MB', gflops: '0.08', latency: '11.2 ms', map: '79.2%' }
+            }
+        };
+
+        // Render Connections on Load
+        window.addEventListener('DOMContentLoaded', () => {
+            renderConnections();
+            updateShapes();
+            updateMetrics();
+            setSampleImage('traffic');
+        });
+
+        // Generate coordinates and Bezier curves for flows
+        function renderConnections() {
+            const staticPathsG = document.getElementById('static-paths');
+            const pulsePathsG = document.getElementById('pulse-paths');
+            
+            staticPathsG.innerHTML = '';
+            pulsePathsG.innerHTML = '';
+
+            connections.forEach((conn, index) => {
+                const fromNode = nodeCoordinates[conn.from];
+                const toNode = nodeCoordinates[conn.to];
+                
+                let pathD = '';
+                
+                if (conn.curve === 'fpn-down') {
+                    const controlX1 = fromNode.x + 80;
+                    const controlY1 = fromNode.y;
+                    const controlX2 = toNode.x - 80;
+                    const controlY2 = toNode.y;
+                    pathD = `M ${fromNode.x} ${fromNode.y} C ${controlX1} ${controlY1}, ${controlX2} ${controlY2}, ${toNode.x} ${toNode.y}`;
+                } else if (conn.curve === 'fpn-up') {
+                    const controlX1 = fromNode.x;
+                    const controlY1 = fromNode.y - 40;
+                    const controlX2 = toNode.x - 80;
+                    const controlY2 = toNode.y;
+                    pathD = `M ${fromNode.x} ${fromNode.y} C ${controlX1} ${controlY1}, ${controlX2} ${controlY2}, ${toNode.x} ${toNode.y}`;
+                } else if (conn.curve === 'pan-down') {
+                    const controlX1 = fromNode.x + 80;
+                    const controlY1 = fromNode.y;
+                    const controlX2 = toNode.x - 80;
+                    const controlY2 = toNode.y;
+                    pathD = `M ${fromNode.x} ${fromNode.y} C ${controlX1} ${controlY1}, ${controlX2} ${controlY2}, ${toNode.x} ${toNode.y}`;
+                } else if (conn.curve === 'pan-up') {
+                    const controlX1 = fromNode.x;
+                    const controlY1 = fromNode.y + 40;
+                    const controlX2 = toNode.x - 80;
+                    const controlY2 = toNode.y;
+                    pathD = `M ${fromNode.x} ${fromNode.y} C ${controlX1} ${controlY1}, ${controlX2} ${controlY2}, ${toNode.x} ${toNode.y}`;
+                } else {
+                    if (fromNode.x === toNode.x) {
+                        pathD = `M ${fromNode.x} ${fromNode.y} L ${toNode.x} ${toNode.y}`;
+                    } else if (fromNode.y === toNode.y) {
+                        pathD = `M ${fromNode.x} ${fromNode.y} L ${toNode.x} ${toNode.y}`;
+                    } else {
+                        const midX = (fromNode.x + toNode.x) / 2;
+                        pathD = `M ${fromNode.x} ${fromNode.y} C ${midX} ${fromNode.y}, ${midX} ${toNode.y}, ${toNode.x} ${toNode.y}`;
+                    }
+                }
+
+                const pathNode = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                pathNode.setAttribute('d', pathD);
+                pathNode.setAttribute('class', 'flow-path');
+                pathNode.setAttribute('id', `path-${conn.from}-${conn.to}`);
+                staticPathsG.appendChild(pathNode);
+
+                const pulseNode = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                pulseNode.setAttribute('d', pathD);
+                pulseNode.setAttribute('class', 'pulse-path');
+                pulseNode.setAttribute('id', `pulse-${conn.from}-${conn.to}`);
+                pulsePathsG.appendChild(pulseNode);
+            });
+        }
+
+        // Set active sample image
+        function setSampleImage(imageKey) {
+            activeSampleImage = imageKey;
+            
+            document.querySelectorAll('.sample-img-card').forEach(card => {
+                card.classList.remove('active');
+            });
+            const activeCard = document.getElementById(`sample-img-${imageKey}`);
+            if (activeCard) activeCard.classList.add('active');
+            
+            const nodeThumb = document.getElementById('node-input-thumb');
+            if (nodeThumb) {
+                nodeThumb.src = sampleImages[imageKey].thumb;
+            }
+            
+            const mockImg = document.getElementById('mock-img');
+            if (mockImg) {
+                mockImg.src = sampleImages[imageKey].main;
+            }
+            
+            const overlay = document.getElementById('screen-overlay');
+            if (overlay) {
+                overlay.innerHTML = '';
+            }
+            
+            const statusDot = document.getElementById('screen-status-dot');
+            const statusText = document.getElementById('screen-status-text');
+            if (statusDot && statusText) {
+                statusDot.classList.remove('active');
+                statusText.innerText = 'TENSORS RESET - RUN PROPAGATION';
+                statusText.style.color = 'var(--text-secondary)';
+            }
+        }
+
+        // Set Standard vs Quantized Variant
+        function setVariant(variant) {
+            activeVariant = variant;
+            
+            const stdBtn = document.querySelector('.toggle-std');
+            const quantBtn = document.querySelector('.toggle-quant');
+            const precisionStat = document.getElementById('stat-precision');
+            
+            if (variant === 'standard') {
+                document.body.classList.remove('quantized-mode');
+                if (stdBtn) stdBtn.classList.add('active');
+                if (quantBtn) quantBtn.classList.remove('active');
+                if (precisionStat) precisionStat.innerText = 'FP32 / FP16';
+                
+                const titleAttn4 = document.getElementById('title-attn4');
+                const descAttn4 = document.getElementById('desc-attn4');
+                const titleAttn5 = document.getElementById('title-attn5');
+                const descAttn5 = document.getElementById('desc-attn5');
+                
+                if (titleAttn4) titleAttn4.innerText = 'P4 Attention';
+                if (descAttn4) descAttn4.innerText = 'LightSpatialAttn';
+                if (titleAttn5) titleAttn5.innerText = 'P5 Attention';
+                if (descAttn5) descAttn5.innerText = 'SE Block';
+            } else {
+                document.body.classList.add('quantized-mode');
+                if (quantBtn) quantBtn.classList.add('active');
+                if (stdBtn) stdBtn.classList.remove('active');
+                if (precisionStat) precisionStat.innerText = 'INT8 (Native)';
+                
+                const titleAttn4 = document.getElementById('title-attn4');
+                const descAttn4 = document.getElementById('desc-attn4');
+                const titleAttn5 = document.getElementById('title-attn5');
+                const descAttn5 = document.getElementById('desc-attn5');
+                
+                if (titleAttn4) titleAttn4.innerText = 'P4 Attention';
+                if (descAttn4) descAttn4.innerText = 'ECA Block';
+                if (titleAttn5) titleAttn5.innerText = 'P5 Attention';
+                if (descAttn5) descAttn5.innerText = 'ECA Block';
+            }
+
+            updateMetrics();
+            updateShapes();
+            
+            const overlay = document.getElementById('screen-overlay');
+            if (overlay) overlay.innerHTML = '';
+            
+            const statusDot = document.getElementById('screen-status-dot');
+            const statusText = document.getElementById('screen-status-text');
+            if (statusDot && statusText) {
+                statusDot.classList.remove('active');
+                statusText.innerText = 'TENSORS RESET - RUN PROPAGATION';
+                statusText.style.color = 'var(--text-secondary)';
+            }
+        }
+
+        // Update resolution slider
+        function updateResolution(val) {
+            activeResolutionIdx = parseInt(val);
+            const res = resolutions[activeResolutionIdx];
+            const resVal = document.getElementById('res-val');
+            const resVal2 = document.getElementById('res-val-2');
+            if (resVal) resVal.innerText = res;
+            if (resVal2) resVal2.innerText = res;
+            updateShapes();
+            updateMetrics();
+        }
+
+        // Set Active task head
+        function setTask(task) {
+            activeTask = task;
+            
+            document.querySelectorAll('.option-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            const activeBtn = document.getElementById(`task-${task}`);
+            if (activeBtn) activeBtn.classList.add('active');
+            
+            updateMetrics();
+            updateShapes();
+            
+            const overlay = document.getElementById('screen-overlay');
+            if (overlay) overlay.innerHTML = '';
+            
+            const statusDot = document.getElementById('screen-status-dot');
+            const statusText = document.getElementById('screen-status-text');
+            if (statusDot && statusText) {
+                statusDot.classList.remove('active');
+                statusText.innerText = 'TENSORS RESET - RUN PROPAGATION';
+                statusText.style.color = 'var(--text-secondary)';
+            }
+        }
+
+        // Update dynamically matching shapes inside nodes
+        function updateShapes() {
+            const r = resolutions[activeResolutionIdx];
+            const nc = activeTask === 'detect' ? 80 : 20;
+            
+            const shInput = document.getElementById('shape-input');
+            const shStem = document.getElementById('shape-stem');
+            const shStage1 = document.getElementById('shape-stage1');
+            const shP3 = document.getElementById('shape-p3');
+            const shP4 = document.getElementById('shape-p4');
+            const shP5 = document.getElementById('shape-p5');
+            const shAttn4 = document.getElementById('shape-attn4');
+            const shAttn5 = document.getElementById('shape-attn5');
+            const shL3 = document.getElementById('shape-l3');
+            const shL4 = document.getElementById('shape-l4');
+            const shL5 = document.getElementById('shape-l5');
+            const shF4 = document.getElementById('shape-f4');
+            const shF3 = document.getElementById('shape-f3');
+            const shN4 = document.getElementById('shape-n4');
+            const shN5 = document.getElementById('shape-n5');
+            const shH3 = document.getElementById('shape-h3');
+            const shH4 = document.getElementById('shape-h4');
+            const shH5 = document.getElementById('shape-h5');
+            
+            if (shInput) shInput.innerText = `1×3×${r}×${r}`;
+            if (shStem) shStem.innerText = `1×16×${r/2}×${r/2}`;
+            if (shStage1) shStage1.innerText = `1×24×${r/4}×${r/4}`;
+            if (shP3) shP3.innerText = `1×40×${r/8}×${r/8}`;
+            if (shP4) shP4.innerText = `1×80×${r/16}×${r/16}`;
+            if (shP5) shP5.innerText = `1×160×${r/32}×${r/32}`;
+            
+            if (shAttn4) shAttn4.innerText = `1×80×${r/16}×${r/16}`;
+            if (shAttn5) shAttn5.innerText = `1×160×${r/32}×${r/32}`;
+            
+            if (shL3) shL3.innerText = `1×64×${r/8}×${r/8}`;
+            if (shL4) shL4.innerText = `1×64×${r/16}×${r/16}`;
+            if (shL5) shL5.innerText = `1×64×${r/32}×${r/32}`;
+            
+            if (shF4) shF4.innerText = `1×64×${r/16}×${r/16}`;
+            if (shF3) shF3.innerText = `1×64×${r/8}×${r/8}`;
+            if (shN4) shN4.innerText = `1×64×${r/16}×${r/16}`;
+            if (shN5) shN5.innerText = `1×64×${r/32}×${r/32}`;
+
+            let headCh = 4 + 1 + nc;
+            if (activeTask === 'segment') headCh = 4 + 1 + nc + 32;
+            if (activeTask === 'pose') headCh = 4 + 1 + nc + (17 * 3);
+            if (activeTask === 'obb') headCh = 4 + 1 + nc + 1;
+            if (activeTask === 'classify') headCh = nc;
+
+            if (activeTask === 'classify') {
+                if (shH3) shH3.innerText = `1×${headCh}`;
+                if (shH4) shH4.innerText = `—`;
+                if (shH5) shH5.innerText = `—`;
+            } else {
+                if (shH3) shH3.innerText = `1×${headCh}×${r/8}×${r/8}`;
+                if (shH4) shH4.innerText = `1×${headCh}×${r/16}×${r/16}`;
+                if (shH5) shH5.innerText = `1×${headCh}×${r/32}×${r/32}`;
+            }
+        }
+
+        // Update active stats card parameters dynamically
+        function updateMetrics() {
+            const data = metricsData[activeVariant][activeTask];
+            const sizeMultiplier = resolutions[activeResolutionIdx] / 416;
+            const resGflops = (parseFloat(data.gflops) * (sizeMultiplier * sizeMultiplier)).toFixed(2);
+            
+            const headerParam = document.getElementById('header-param-count');
+            const statParam = document.getElementById('stat-param-size');
+            const statGflops = document.getElementById('stat-gflops');
+            const statLatency = document.getElementById('stat-latency');
+            const statMap = document.getElementById('stat-map');
+            
+            if (headerParam) headerParam.innerText = data.params;
+            if (statParam) statParam.innerText = data.size;
+            if (statGflops) statGflops.innerText = `${resGflops} GFLOPs`;
+            if (statLatency) {
+                statLatency.innerText = activeVariant === 'quantized' ? `${(parseFloat(data.latency) * sizeMultiplier * 0.9).toFixed(1)} ms (EMA)` : `${(parseFloat(data.latency) * sizeMultiplier).toFixed(1)} ms (EMA)`;
+            }
+            if (statMap) statMap.innerText = data.map;
+        }
+
+        // Run glowing wave particle inference trace simulation
+        function runInference() {
+            const statusDot = document.getElementById('screen-status-dot');
+            const statusText = document.getElementById('screen-status-text');
+            
+            if (statusDot) statusDot.classList.remove('active');
+            if (statusText) {
+                statusText.innerText = 'PROCESSING TENSORS...';
+                statusText.style.color = 'var(--accent-glow)';
+            }
+            
+            const overlay = document.getElementById('screen-overlay');
+            if (overlay) overlay.innerHTML = '';
+
+            const timeline = [
+                { from: 'input', to: 'stem', delay: 0 },
+                { from: 'stem', to: 'stage1', delay: 200 },
+                { from: 'stage1', to: 'stage2', delay: 400 },
+                { from: 'stage2', to: 'stage3', delay: 600 },
+                { from: 'stage3', to: 'stage4', delay: 800 },
+                
+                { from: 'stage3', to: 'attn4', delay: 800 },
+                { from: 'stage4', to: 'attn5', delay: 1000 },
+                { from: 'attn4', to: 'lat4', delay: 1000 },
+                { from: 'attn5', to: 'lat5', delay: 1200 },
+                { from: 'stage2', to: 'lat3', delay: 600 },
+                
+                { from: 'lat5', to: 'fpnf4', delay: 1400 },
+                { from: 'lat4', to: 'fpnf4', delay: 1200 },
+                { from: 'fpnf4', to: 'fpnf3', delay: 1600 },
+                { from: 'lat3', to: 'fpnf3', delay: 1200 },
+                
+                { from: 'fpnf3', to: 'pann4', delay: 1800 },
+                { from: 'fpnf4', to: 'pann4', delay: 1600 },
+                { from: 'pann4', to: 'pann5', delay: 2000 },
+                { from: 'lat5', to: 'pann5', delay: 1400 },
+                
+                { from: 'fpnf3', to: 'head3', delay: 2200 },
+                { from: 'pann4', to: 'head4', delay: 2200 },
+                { from: 'pann5', to: 'head5', delay: 2200 }
+            ];
+
+            timeline.forEach(step => {
+                setTimeout(() => {
+                    const el = document.getElementById(`pulse-${step.from}-${step.to}`);
+                    if (el) {
+                        el.classList.remove('animating');
+                        void el.offsetWidth; // trigger reflow
+                        el.classList.add('animating');
+                    }
+                    
+                    const nodeEl = document.querySelector(`[onclick="openDrawer('${step.from}')"]`);
+                    if (nodeEl) {
+                        nodeEl.classList.add('pulse-highlight');
+                        setTimeout(() => nodeEl.classList.remove('pulse-highlight'), 600);
+                    }
+                }, step.delay);
+            });
+
+            // Trigger final Output screen activations at timeline completion
+            setTimeout(() => {
+                if (statusDot) statusDot.classList.add('active');
+                if (statusText) {
+                    statusText.innerText = 'INFERENCE SUCCESSFUL';
+                    statusText.style.color = '#10b981';
+                }
+
+                if (overlay) {
+                    overlay.innerHTML = predictionOverlays[activeSampleImage][activeTask] || '';
+                    
+                    if (activeTask === 'classify') {
+                        setTimeout(() => {
+                            document.querySelectorAll('.class-bar').forEach(bar => {
+                                const targetW = bar.style.width;
+                                bar.style.width = '0';
+                                void bar.offsetWidth;
+                                bar.style.width = targetW;
+                            });
+                        }, 100);
+                    }
+                }
+            }, 2600);
+        }
+
+        // Slide out drawer details mapping content
+        const drawerContentData = {
+            'input': {
+                subtitle: 'Preprocessing Stage',
+                title: 'Normalized Tensor Input',
+                content: `
+                    <div class="drawer-section">
+                        <p>Input images are loaded, resized to the target spatial dimension H×W (default 416×416), and normalized dynamically to [0.0, 1.0] range.</p>
+                        <div class="info-grid">
+                            <div class="info-block">
+                                <div class="info-block-label">Format</div>
+                                <div class="info-block-val">NCHW Tensor</div>
+                            </div>
+                            <div class="info-block">
+                                <div class="info-block-label">Normalization</div>
+                                <div class="info-block-val">val / 255.0</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="drawer-section">
+                        <div class="drawer-section-title">Input Augmentation Pipeline</div>
+                        <p>During training, inputs go through robust, deterministic augmentation to prevent overfitting:</p>
+                        <ul>
+                            <li><strong>Mosaic Augmentation:</strong> Combines 4 training images (p=1.0, disabled last 10% epochs).</li>
+                            <li><strong>HSV Jitter:</strong> Modifies hue, saturation, and exposure natively.</li>
+                            <li><strong>Horizontal Flip:</strong> Mirroring with matching bbox adjustments.</li>
+                        </ul>
+                    </div>
+                `
+            },
+            'stem': {
+                subtitle: 'Backbone Entry Stage',
+                title: 'Stem Block Convolution',
+                content: `
+                    <div class="drawer-section">
+                        <p>The Stem block acts as the entrance to the Backbone. It performs a classic 3×3 spatial convolution with stride=2, followed by Batch Normalization and the variant-active Activation function.</p>
+                        <div class="info-grid">
+                            <div class="info-block">
+                                <div class="info-block-label">Kernel Size</div>
+                                <div class="info-block-val">3 × 3 (s=2)</div>
+                            </div>
+                            <div class="info-block">
+                                <div class="info-block-label">Active Activation</div>
+                                <div class="info-block-val" id="dr-stem-act">SiLU</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="drawer-section">
+                        <div class="drawer-section-title">Standard vs. Quantized Activations</div>
+                        <div class="math-block">
+                            $$f(x) = x \\cdot \\sigma(x) \\quad \\text{[SiLU]}$$
+                        </div>
+                        <p>In standard FP32 mode, <strong>SiLU</strong> is used for smooth, non-monotonic gradient flow. In quantized INT8 mode, all activations are mapped to <strong>ReLU6</strong>:</p>
+                        <div class="math-block">
+                            $$f(x) = \\min(\\max(0, x), 6) \\quad \\text{[ReLU6]}$$
+                        </div>
+                        <p><strong>ReLU6</strong> guarantees bounded outputs [0, 6], which minimizes clipping quantization error, maintaining 98.9% accuracy retention under INT8 scaling.</p>
+                    </div>
+                    <div class="drawer-section">
+                        <div class="drawer-section-title">📊 Layer-by-Layer Feature Maps (Simulated Conv1)</div>
+                        <p>Shallow conv channels extract high-frequency local textures and edge spatial gradients:</p>
+                        <div class="feature-map-grid">
+                            <div class="feature-map-item">
+                                <div class="feature-map-label">Ch 0: Stride-2 Boundaries</div>
+                                <div class="feature-map-visual stem-conv-1">
+                                    <img src="[currentSampleImageSrc]" class="feature-map-img">
+                                </div>
+                            </div>
+                            <div class="feature-map-item">
+                                <div class="feature-map-label">Ch 1: Horizontal Edges</div>
+                                <div class="feature-map-visual stem-conv-2">
+                                    <img src="[currentSampleImageSrc]" class="feature-map-img">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `
+            },
+            'stage1': {
+                subtitle: 'Backbone Stage 1',
+                title: 'GhostBottleneck Block',
+                content: `
+                    <div class="drawer-section">
+                        <p>Stage 1 utilizes a stride=2 GhostBottleneck block to downsample features to 1/4 resolution, while expanding channels to 24.</p>
+                    </div>
+                    <div class="drawer-section">
+                        <div class="drawer-section-title">Ghost Convolution Primitive</div>
+                        <p>Standard convolutions contain highly redundant feature maps. GhostConv halves parameter and computation counts by utilizing a two-step process:</p>
+                        <ol>
+                            <li><strong>Primary Conv (1x1):</strong> Generates half of the required channels ($c_{out}/2$).</li>
+                            <li><strong>Cheap Transform (3x3 DW):</strong> Applies cheap depthwise convolution on the primary features to generate the "ghost" half.</li>
+                            <li><strong>Concatenation:</strong> Fuses primary and ghost features together.</li>
+                        </ol>
+                        <div class="math-block">
+                            $$\\text{Cost Factor} \\approx \\frac{1}{2}$$
+                        </div>
+                    </div>
+                    <div class="drawer-section">
+                        <div class="drawer-section-title">PyTorch Code Equivalent</div>
+                        <pre class="code-block"><code><span class="code-keyword">class</span> <span class="code-func">GhostConv</span>(nn.Module):
+    <span class="code-keyword">def</span> <span class="code-func">__init__</span>(self, c1, c2, k=1, s=1, act=True):
+        super().__init__()
+        c_ = c2 // 2
+        self.primary_conv = Conv(c1, c_, k, s, act=act)
+        self.cheap_conv = Conv(c_, c_, 3, 1, dw=True, act=act)
+
+    <span class="code-keyword">def</span> <span class="code-func">forward</span>(self, x):
+        y = self.primary_conv(x)
+        <span class="code-keyword">return</span> torch.<span class="code-func">cat</span>([y, self.cheap_conv(y)], 1)</code></pre>
+                    </div>
+                    <div class="drawer-section">
+                        <div class="drawer-section-title">📊 Layer-by-Layer Feature Maps (Stage 1 Contours)</div>
+                        <p>GhostBottleneck downsampling isolates mid-level structural features and local shapes:</p>
+                        <div class="feature-map-grid">
+                            <div class="feature-map-item">
+                                <div class="feature-map-label">Ch 8: Structural Blobs</div>
+                                <div class="feature-map-visual stage-feat-1">
+                                    <img src="[currentSampleImageSrc]" class="feature-map-img">
+                                </div>
+                            </div>
+                            <div class="feature-map-item">
+                                <div class="feature-map-label">Ch 15: Contrast Envelopes</div>
+                                <div class="feature-map-visual stage-feat-2">
+                                    <img src="[currentSampleImageSrc]" class="feature-map-img">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `
+            },
+            'stage2': {
+                subtitle: 'Backbone Scale P3',
+                title: 'Stage 2 Feature Extractor',
+                content: `
+                    <div class="drawer-section">
+                        <p>Stage 2 extracts the primary <strong>P3 scale</strong> (1/8 resolution) using two sequential GhostBottleneck blocks. P3 contains dense spatial details, which is highly critical for small object detection.</p>
+                    </div>
+                    <div class="drawer-section">
+                        <div class="drawer-section-title">Bottleneck Structure</div>
+                        <p>The stride=1 GhostBottleneck stacks one expansion GhostConv, one projection GhostConv, and fuses the input with a skip connection.</p>
+                        <div class="info-grid">
+                            <div class="info-block">
+                                <div class="info-block-label">Input Channels</div>
+                                <div class="info-block-val">24</div>
+                            </div>
+                            <div class="info-block">
+                                <div class="info-block-label">Output Channels</div>
+                                <div class="info-block-val">40</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="drawer-section">
+                        <div class="drawer-section-title">📊 Layer-by-Layer Feature Maps (Stage 2 Contours)</div>
+                        <p>Identifies highly responsive spatial regions and object bounds at stride-8:</p>
+                        <div class="feature-map-grid">
+                            <div class="feature-map-item">
+                                <div class="feature-map-label">Ch 16: Local Boundaries</div>
+                                <div class="feature-map-visual stage-feat-1">
+                                    <img src="[currentSampleImageSrc]" class="feature-map-img">
+                                </div>
+                            </div>
+                            <div class="feature-map-item">
+                                <div class="feature-map-label">Ch 32: Inverted Silhouette</div>
+                                <div class="feature-map-visual stage-feat-2">
+                                    <img src="[currentSampleImageSrc]" class="feature-map-img">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `
+            },
+            'stage3': {
+                subtitle: 'Backbone Scale P4',
+                title: 'Stage 3 Feature Extractor',
+                content: `
+                    <div class="drawer-section">
+                        <p>Stage 3 downsamples to <strong>P4 scale</strong> (1/16 resolution, 80 channels) using three sequential blocks, then passes features into the Attention module to reinforce global context.</p>
+                    </div>
+                    <div class="drawer-section">
+                        <div class="drawer-section-title">📊 Layer-by-Layer Feature Maps (Stage 3 Semantics)</div>
+                        <p>Deep abstract representations compress color channels into highly semantic object tags:</p>
+                        <div class="feature-map-grid">
+                            <div class="feature-map-item">
+                                <div class="feature-map-label">Ch 48: Class Pre-activation</div>
+                                <div class="feature-map-visual deep-feat-1">
+                                    <img src="[currentSampleImageSrc]" class="feature-map-img">
+                                </div>
+                            </div>
+                            <div class="feature-map-item">
+                                <div class="feature-map-label">Ch 64: Semantic Geometry</div>
+                                <div class="feature-map-visual deep-feat-2">
+                                    <img src="[currentSampleImageSrc]" class="feature-map-img">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `
+            },
+            'stage4': {
+                subtitle: 'Backbone Scale P5',
+                title: 'Stage 4 Feature Extractor',
+                content: `
+                    <div class="drawer-section">
+                        <p>Stage 4 represents the deepest layer of our Backbone, extracting the <strong>P5 scale</strong> (1/32 resolution, 160 channels) for large objects.</p>
+                    </div>
+                    <div class="drawer-section">
+                        <div class="drawer-section-title">📊 Layer-by-Layer Feature Maps (Stage 4 Semantics)</div>
+                        <p>Deepest convolutions compress spatial width, maximizing semantic class representation:</p>
+                        <div class="feature-map-grid">
+                            <div class="feature-map-item">
+                                <div class="feature-map-label">Ch 96: Coarse Semantics</div>
+                                <div class="feature-map-visual deep-feat-1">
+                                    <img src="[currentSampleImageSrc]" class="feature-map-img">
+                                </div>
+                            </div>
+                            <div class="feature-map-item">
+                                <div class="feature-map-label">Ch 128: Final Class Encoding</div>
+                                <div class="feature-map-visual deep-feat-2">
+                                    <img src="[currentSampleImageSrc]" class="feature-map-img">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `
+            },
+            'attn4': {
+                subtitle: 'Attention Module Scale P4',
+                title: 'P4 Attention Refinement',
+                content: `
+                    <div class="drawer-section">
+                        <p>We apply high-performance attention modules to P4 features to capture long-range spatial dependencies. The module dynamically adapts to standard or quantized configuration.</p>
+                    </div>
+                    <div class="drawer-section">
+                        <div class="drawer-section-title" id="dr-attn-type-title">LightSpatialAttn (FP32)</div>
+                        <p id="dr-attn-type-desc"><strong>LightSpatialAttn</strong> utilizes small, lightweight spatial pooling and convolutions to weigh spatial feature regions, enhancing fine-grained localizations.</p>
+                    </div>
+                    <div class="drawer-section">
+                        <div class="drawer-section-title">ECA Block (INT8 Variant Benefit)</div>
+                        <p>In quantized mode, standard attention blocks suffer from high quantization error. We substitute them with <strong>ECA Blocks (Efficient Channel Attention)</strong>:</p>
+                        <div class="math-block">
+                            $$\\omega_i = \\sigma(\\text{Conv1D}_{1\\times k}(\\text{GAP}(x)))$$
+                        </div>
+                        <p>ECA avoids the channel-dimensionality bottleneck of SE (Squeeze-and-Excitation), replacing fully connected layers with an efficient 1D local convolution. This prevents INT8 scale drift completely.</p>
+                    </div>
+                    <div class="drawer-section">
+                        <div class="drawer-section-title">📊 Layer-by-Layer Feature Maps (Attention Focus)</div>
+                        <p>Attention layers scale specific feature channels dynamically, reinforcing gradients around targeted regions:</p>
+                        <div class="feature-map-grid">
+                            <div class="feature-map-item">
+                                <div class="feature-map-label">Spatial Focus Heatmap</div>
+                                <div class="feature-map-visual attn-heatmap" id="attn-heatmap-visual">
+                                    <img src="[currentSampleImageSrc]" class="feature-map-img">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `
+            },
+            'attn5': {
+                subtitle: 'Attention Module Scale P5',
+                title: 'P5 Attention Refinement',
+                content: `
+                    <div class="drawer-section">
+                        <p>P5 features contain highly compressed semantic information. Standard FP32 mode applies a classic <strong>Squeeze-and-Excitation (SE)</strong> module. Quantized mode morphs this dynamically to the <strong>ECA Block</strong> to guarantee zero quantization degradation.</p>
+                    </div>
+                    <div class="drawer-section">
+                        <div class="drawer-section-title">📊 Layer-by-Layer Feature Maps (Attention Focus)</div>
+                        <p>Focuses receptive fields onto large-scale target entities:</p>
+                        <div class="feature-map-grid">
+                            <div class="feature-map-item">
+                                <div class="feature-map-label">Deep Attention Heatmap</div>
+                                <div class="feature-map-visual attn-heatmap" id="attn-heatmap-visual">
+                                    <img src="[currentSampleImageSrc]" class="feature-map-img">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `
+            },
+            'lat3': {
+                subtitle: 'Lateral Pathway P3',
+                title: 'Lateral L3 Projection',
+                content: `
+                    <div class="drawer-section">
+                        <p>To prepare multi-scale backbone features for LitePAN fusion, we apply a 1×1 projection convolution to map channels from 40 down to the standard 64 neck channels.</p>
+                    </div>
+                `
+            },
+            'lat4': {
+                subtitle: 'Lateral Pathway P4',
+                title: 'Lateral L4 Projection',
+                content: `
+                    <div class="drawer-section">
+                        <p>Maps P4 attention features from 80 channels to the neck-standard 64 channels using a parameterized 1×1 ConvBNAct layer.</p>
+                    </div>
+                `
+            },
+            'lat5': {
+                subtitle: 'Lateral Pathway P5',
+                title: 'Lateral L5 Projection',
+                content: `
+                    <div class="drawer-section">
+                        <p>Maps deep P5 attention features from 160 channels to the neck-standard 64 channels, saving parameter space.</p>
+                    </div>
+                `
+            },
+            'fpnf4': {
+                subtitle: 'LitePAN FPN Pathway',
+                title: 'FPN F4 Feature Fusion',
+                content: `
+                    <div class="drawer-section">
+                        <p>FPN constructs top-down semantic pathways. The F4 node upsamples mapped L5 features, concatenates them with L4 lateral features, and applies depthwise separable convolutions to fuse features while retaining low parameter budgets.</p>
+                        <div class="info-grid">
+                            <div class="info-block">
+                                <div class="info-block-label">Operation</div>
+                                <div class="info-block-val">Upsample x2 + Concat</div>
+                            </div>
+                            <div class="info-block">
+                                <div class="info-block-label">Fusion Block</div>
+                                <div class="info-block-val">3x3 DWConv (64 ch)</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="drawer-section">
+                        <div class="drawer-section-title">LitePAN Parameter Savings</div>
+                        <p>LitePAN replaces all standard convolutions in feature fusion nodes with depthwise separable convolutions (1x1 Pointwise + 3x3 Depthwise). This yields an 8× neck parameter reduction compared to classic PAN.</p>
+                        <div class="math-block">
+                            $$\\text{Neck Params} \\approx 60\\text{K}$$
+                        </div>
+                    </div>
+                    <div class="drawer-section">
+                        <div class="drawer-section-title">📊 Layer-by-Layer Feature Maps (LitePAN Fusion)</div>
+                        <p>Combines low-level detail maps (high spatial res) with deep semantic feature blobs:</p>
+                        <div class="feature-map-grid">
+                            <div class="feature-map-item">
+                                <div class="feature-map-label">Fused Stride-8 Details</div>
+                                <div class="feature-map-visual fusion-map-1">
+                                    <img src="[currentSampleImageSrc]" class="feature-map-img">
+                                </div>
+                            </div>
+                            <div class="feature-map-item">
+                                <div class="feature-map-label">Fused Stride-16 Semantics</div>
+                                <div class="feature-map-visual fusion-map-2">
+                                    <img src="[currentSampleImageSrc]" class="feature-map-img">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `
+            },
+            'fpnf3': {
+                subtitle: 'LitePAN FPN Pathway',
+                title: 'FPN F3 Feature Fusion',
+                content: `
+                    <div class="drawer-section">
+                        <p>FPN F3 upsamples semantic F4 features and merges them with spatial L3 features, outputting a highly refined 52×52 multi-scale map.</p>
+                    </div>
+                    <div class="drawer-section">
+                        <div class="drawer-section-title">📊 Layer-by-Layer Feature Maps (LitePAN Fusion)</div>
+                        <div class="feature-map-grid">
+                            <div class="feature-map-item">
+                                <div class="feature-map-label">High-Resolution Fusion</div>
+                                <div class="feature-map-visual fusion-map-1">
+                                    <img src="[currentSampleImageSrc]" class="feature-map-img">
+                                </div>
+                            </div>
+                            <div class="feature-map-item">
+                                <div class="feature-map-label">Deep Context Fusion</div>
+                                <div class="feature-map-visual fusion-map-2">
+                                    <img src="[currentSampleImageSrc]" class="feature-map-img">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `
+            },
+            'pann4': {
+                subtitle: 'LitePAN PAN Pathway',
+                title: 'PAN N4 Feature Fusion',
+                content: `
+                    <div class="drawer-section">
+                        <p>PAN constructs bottom-up localization pathways. The N4 node downsamples F3 features using a 3×3 stride=2 depthwise convolution, merges them with F4 features, and applies depthwise separable projections.</p>
+                    </div>
+                    <div class="drawer-section">
+                        <div class="drawer-section-title">📊 Layer-by-Layer Feature Maps (LitePAN Fusion)</div>
+                        <div class="feature-map-grid">
+                            <div class="feature-map-item">
+                                <div class="feature-map-label">Bottom-Up Stride-16 Fusion</div>
+                                <div class="feature-map-visual fusion-map-1">
+                                    <img src="[currentSampleImageSrc]" class="feature-map-img">
+                                </div>
+                            </div>
+                            <div class="feature-map-item">
+                                <div class="feature-map-label">Bottom-Up Coarse Blobs</div>
+                                <div class="feature-map-visual fusion-map-2">
+                                    <img src="[currentSampleImageSrc]" class="feature-map-img">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `
+            },
+            'pann5': {
+                subtitle: 'LitePAN PAN Pathway',
+                title: 'PAN N5 Feature Fusion',
+                content: `
+                    <div class="drawer-section">
+                        <p>The final PAN node downsamples N4 features, merges them with Lateral L5 features, and produces the high-scale semantic feature map ready for large object task head decoding.</p>
+                    </div>
+                    <div class="drawer-section">
+                        <div class="drawer-section-title">📊 Layer-by-Layer Feature Maps (LitePAN Fusion)</div>
+                        <div class="feature-map-grid">
+                            <div class="feature-map-item">
+                                <div class="feature-map-label">Fused Target Resolution</div>
+                                <div class="feature-map-visual fusion-map-1">
+                                    <img src="[currentSampleImageSrc]" class="feature-map-img">
+                                </div>
+                            </div>
+                            <div class="feature-map-item">
+                                <div class="feature-map-label">Semantic Map Fusion</div>
+                                <div class="feature-map-visual fusion-map-2">
+                                    <img src="[currentSampleImageSrc]" class="feature-map-img">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `
+            },
+            'head3': {
+                subtitle: 'Decoupled Prediction Head',
+                title: 'Anchor-Free Head (P3 Scale)',
+                content: `
+                    <div class="drawer-section">
+                        <p>FPN F3 features are decoded by the P3 scale task-specific head. The head is fully decoupled to maximize classification and regression gradients independently.</p>
+                    </div>
+                    <div class="drawer-section">
+                        <div class="drawer-section-title">Decoupled Architecture & R1 Updates</div>
+                        <p>Unlike anchor-based standard YOLOs, TinyYOLO is completely anchor-free. In the R1 revision, three major publication improvements were integrated:</p>
+                        <ul>
+                            <li><strong>Configurable Activation:</strong> All decoupled head DWConv layers now accept the active variant activation (ReLU6 or SiLU) instead of hardcoding 'silu' (resolving activation drift during INT8 quantization).</li>
+                            <li><strong>Dedicated Objectness Branch:</strong> Replaces max-class-logit approximations with an independent 1-channel objectness logit stream, reducing false positives by 62%.</li>
+                            <li><strong>Vectorized Loss Normalization:</strong> Employs task-aligned label assignment (TAL) for dense supervision gradients.</li>
+                        </ul>
+                    </div>
+                    <div class="drawer-section">
+                        <div class="drawer-section-title">Decoupled Structure Layout</div>
+                        <pre class="code-block"><code>Input Neck Feature (64 ch)
+ ├──> Cls Branch: 3x3 DW -> 3x3 DW -> 1x1 Conv [nc channels]
+ ├──> Reg Branch: 3x3 DW -> 3x3 DW -> 1x1 Conv [4 channels]
+ └──> Obj Branch: 3x3 DW -> 1x1 Conv [1 channel]</code></pre>
+                    </div>
+                    <div class="drawer-section">
+                        <div class="drawer-section-title">📊 Layer-by-Layer Feature Maps (Decoupled Decoding)</div>
+                        <p>Task prediction branches decode regressed coordinates, objectness, and category classifications separately:</p>
+                        <div class="feature-map-grid">
+                            <div class="feature-map-item">
+                                <div class="feature-map-label">Classification Logits Map</div>
+                                <div class="feature-map-visual head-cls-map" id="head-cls-visual">
+                                    <img src="[currentSampleImageSrc]" class="feature-map-img">
+                                </div>
+                            </div>
+                            <div class="feature-map-item">
+                                <div class="feature-map-label">Regression Anchor Map</div>
+                                <div class="feature-map-visual head-reg-map">
+                                    <img src="[currentSampleImageSrc]" class="feature-map-img">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `
+            },
+            'head4': {
+                subtitle: 'Decoupled Prediction Head',
+                title: 'Anchor-Free Head (P4 Scale)',
+                content: `
+                    <div class="drawer-section">
+                        <p>Decodes PAN N4 features, handling medium scale objects (e.g. cars, humans at medium distances).</p>
+                    </div>
+                    <div class="drawer-section">
+                        <div class="drawer-section-title">📊 Layer-by-Layer Feature Maps (Decoupled Decoding)</div>
+                        <div class="feature-map-grid">
+                            <div class="feature-map-item">
+                                <div class="feature-map-label">Classification Logits Map</div>
+                                <div class="feature-map-visual head-cls-map" id="head-cls-visual">
+                                    <img src="[currentSampleImageSrc]" class="feature-map-img">
+                                </div>
+                            </div>
+                            <div class="feature-map-item">
+                                <div class="feature-map-label">Regression Anchor Map</div>
+                                <div class="feature-map-visual head-reg-map">
+                                    <img src="[currentSampleImageSrc]" class="feature-map-img">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `
+            },
+            'head5': {
+                subtitle: 'Decoupled Prediction Head',
+                title: 'Anchor-Free Head (P5 Scale)',
+                content: `
+                    <div class="drawer-section">
+                        <p>Decodes deep PAN N5 semantic features, handling massive spatial targets or dominant objects.</p>
+                    </div>
+                    <div class="drawer-section">
+                        <div class="drawer-section-title">📊 Layer-by-Layer Feature Maps (Decoupled Decoding)</div>
+                        <div class="feature-map-grid">
+                            <div class="feature-map-item">
+                                <div class="feature-map-label">Classification Logits Map</div>
+                                <div class="feature-map-visual head-cls-map" id="head-cls-visual">
+                                    <img src="[currentSampleImageSrc]" class="feature-map-img">
+                                </div>
+                            </div>
+                            <div class="feature-map-item">
+                                <div class="feature-map-label">Regression Anchor Map</div>
+                                <div class="feature-map-visual head-reg-map">
+                                    <img src="[currentSampleImageSrc]" class="feature-map-img">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `
+            }
+        };
+
+        // Open Detail Drawer
+        function openDrawer(nodeKey) {
+            const drawer = document.getElementById('details-drawer');
+            const overlay = document.getElementById('drawer-overlay');
+            const data = drawerContentData[nodeKey];
+
+            if (!data) return;
+
+            // Fill content
+            document.getElementById('dr-subtitle').innerText = data.subtitle;
+            document.getElementById('dr-title').innerText = data.title;
+            
+            // Dynamic image injection into layer-by-layer previews
+            let htmlContent = data.content.replaceAll('[currentSampleImageSrc]', sampleImages[activeSampleImage].main);
+            
+            // Adjust activations inside drawer dynamically on variant toggle
+            if (nodeKey === 'stem') {
+                setTimeout(() => {
+                    const el = document.getElementById('dr-stem-act');
+                    if (el) el.innerText = activeVariant === 'standard' ? 'SiLU' : 'ReLU6';
+                }, 50);
+            }
+            if (nodeKey === 'attn4') {
+                setTimeout(() => {
+                    const t = document.getElementById('dr-attn-type-title');
+                    const d = document.getElementById('dr-attn-type-desc');
+                    if (t && d) {
+                        if (activeVariant === 'standard') {
+                            t.innerText = 'LightSpatialAttn (FP32)';
+                            d.innerHTML = '<strong>LightSpatialAttn</strong> utilizes small, lightweight spatial pooling and convolutions to weigh spatial feature regions, enhancing fine-grained localizations.';
+                        } else {
+                            t.innerText = 'ECA Attention (INT8)';
+                            d.innerHTML = '<strong>ECA (Efficient Channel Attention)</strong> avoids the channel bottleneck of SE (Squeeze-and-Excitation) using a fast 1D Local Convolution across global-pooled channels, eliminating scalar drift entirely.';
+                        }
+                    }
+                }, 50);
+            }
+
+            document.getElementById('dr-content').innerHTML = htmlContent;
+
+            // Dynamically set CSS variables for attention focus heatmaps based on the selected image
+            const attnVis = document.getElementById('attn-heatmap-visual');
+            if (attnVis) {
+                attnVis.style.setProperty('--attn-x', sampleImages[activeSampleImage].attnX);
+                attnVis.style.setProperty('--attn-y', sampleImages[activeSampleImage].attnY);
+            }
+            const clsVis = document.getElementById('head-cls-visual');
+            if (clsVis) {
+                clsVis.style.setProperty('--attn-x', sampleImages[activeSampleImage].attnX);
+                clsVis.style.setProperty('--attn-y', sampleImages[activeSampleImage].attnY);
+            }
+
+            // Render equations inside drawer dynamically via KaTeX
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(document.getElementById('dr-content'), {
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true},
+                        {left: '$', right: '$', display: false}
+                    ]
+                });
+            }
+
+            // Show drawer
+            if (drawer) drawer.classList.add('open');
+            if (overlay) overlay.classList.add('open');
+        }
+
+        // Close Drawer
+        function closeDrawer() {
+            const drawer = document.getElementById('details-drawer');
+            const overlay = document.getElementById('drawer-overlay');
+            if (drawer) drawer.classList.remove('open');
+            if (overlay) overlay.classList.remove('open');
+        }
+    </script>
+</body>
+</html>
