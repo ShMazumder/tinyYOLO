@@ -368,6 +368,8 @@ def export_quantized(model, imgsz, output_path, fmt='onnx'):
             size_mb = output_path.stat().st_size / 1e6
             print(f"  Exported ONNX: {output_path} ({size_mb:.2f} MB)")
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             print(f"  [WARN] ONNX export failed: {e}")
             print(f"  [INFO] INT8 quantized ONNX export may require onnxruntime-tools")
             print(f"         pip install onnxruntime onnxruntime-tools")
