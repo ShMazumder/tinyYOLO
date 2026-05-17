@@ -162,28 +162,41 @@
 
         /* Layout Main Section */
         .dashboard-container {
-            display: grid;
-            grid-template-columns: 280px 1fr;
+            display: flex;
+            flex-direction: column;
             gap: 24px;
             padding: 24px 4%;
             flex-grow: 1;
             z-index: 5;
             position: relative;
+            max-width: 1400px;
+            margin: 0 auto;
+            width: 100%;
         }
 
-        /* Left Control Panel */
+        /* Top Horizontal Control Panel Dashboard */
         .control-panel {
             background: var(--bg-surface);
             border: 1px solid var(--border-glow);
             border-radius: 16px;
             padding: 24px;
             backdrop-filter: blur(12px);
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+            width: 100%;
+            height: auto;
+            position: relative;
+            top: 0;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .control-col {
             display: flex;
             flex-direction: column;
-            gap: 28px;
-            height: fit-content;
-            position: sticky;
-            top: 100px;
+            gap: 16px;
+            height: 100%;
+            justify-content: flex-start;
         }
 
         .panel-section {
@@ -250,8 +263,8 @@
         }
 
         .sample-title {
-            font-size: 0.65rem;
-            font-weight: 500;
+            font-size: 0.75rem;
+            font-weight: 600;
             padding: 6px 2px;
             color: var(--text-secondary);
             font-family: var(--font-body);
@@ -550,7 +563,7 @@
             display: flex;
             justify-content: space-between;
             margin-top: 6px;
-            font-size: 0.65rem;
+            font-size: 0.75rem;
             color: var(--text-muted);
             padding: 0 2px;
         }
@@ -592,10 +605,10 @@
         }
 
         .option-badge {
-            font-size: 0.65rem;
+            font-size: 0.75rem;
             background: rgba(255, 255, 255, 0.05);
             padding: 2px 6px;
-            border-radius: 4px;
+            border-radius: 6px;
             color: var(--text-muted);
         }
 
@@ -1235,102 +1248,111 @@
     <!-- Layout Grid -->
     <div class="dashboard-container">
         
-        <!-- Left Side Controls Panel -->
+        <!-- Top Horizontal Control Panel Dashboard -->
         <div class="control-panel">
             
-            <!-- Variant Selector -->
-            <div class="panel-section">
-                <div class="section-title">Architecture Variant</div>
-                <div class="toggle-container">
-                    <button class="toggle-btn toggle-std active" onclick="setVariant('standard')">FP32 Standard</button>
-                    <button class="toggle-btn toggle-quant" onclick="setVariant('quantized')">INT8 Quant</button>
-                </div>
-            </div>
-
-            <!-- Resolution Slider -->
-            <div class="panel-section">
-                <div class="section-title">Input Resolution</div>
-                <div class="slider-wrapper">
-                    <div class="slider-label">
-                        <span>Image Size:</span>
-                        <strong><span id="res-val">416</span>×<span id="res-val-2">416</span></strong>
-                    </div>
-                    <input type="range" id="res-slider" min="0" max="4" value="3" oninput="updateResolution(this.value)">
-                    <div class="slider-ticks">
-                        <span>160</span>
-                        <span>224</span>
-                        <span>320</span>
-                        <span>416</span>
-                        <span>640</span>
+            <!-- Column 1: Architecture & Resolution -->
+            <div class="control-col">
+                <!-- Variant Selector -->
+                <div class="panel-section">
+                    <div class="section-title">Architecture Variant</div>
+                    <div class="toggle-container">
+                        <button class="toggle-btn toggle-std active" onclick="setVariant('standard')">FP32 Standard</button>
+                        <button class="toggle-btn toggle-quant" onclick="setVariant('quantized')">INT8 Quant</button>
                     </div>
                 </div>
-            </div>
 
-            <!-- Sample Image Input Selector -->
-            <div class="panel-section">
-                <div class="section-title">Sample Input Image</div>
-                <div class="sample-image-grid">
-                    <div class="sample-img-card active" id="sample-img-traffic" onclick="setSampleImage('traffic')">
-                        <img src="https://images.unsplash.com/photo-1542282088-fe8426682b8f?q=80&w=150&auto=format&fit=crop" class="sample-thumb">
-                        <div class="sample-title">Traffic Scene</div>
-                    </div>
-                    <div class="sample-img-card" id="sample-img-pedestrian" onclick="setSampleImage('pedestrian')">
-                        <img src="https://images.unsplash.com/photo-1485738422979-f5c462d49f74?q=80&w=150&auto=format&fit=crop" class="sample-thumb">
-                        <div class="sample-title">Pedestrian</div>
-                    </div>
-                    <div class="sample-img-card" id="sample-img-sports" onclick="setSampleImage('sports')">
-                        <img src="https://images.unsplash.com/photo-1503376780353-7e6692767b70?q=80&w=150&auto=format&fit=crop" class="sample-thumb">
-                        <div class="sample-title">Sports Car</div>
+                <!-- Resolution Slider -->
+                <div class="panel-section">
+                    <div class="section-title">Input Resolution</div>
+                    <div class="slider-wrapper">
+                        <div class="slider-label">
+                            <span>Image Size:</span>
+                            <strong><span id="res-val">416</span>×<span id="res-val-2">416</span></strong>
+                        </div>
+                        <input type="range" id="res-slider" min="0" max="4" value="3" oninput="updateResolution(this.value)">
+                        <div class="slider-ticks">
+                            <span>160</span>
+                            <span>224</span>
+                            <span>320</span>
+                            <span>416</span>
+                            <span>640</span>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Task Selector -->
-            <div class="panel-section">
-                <div class="section-title">Task Head Configuration</div>
-                <div class="option-grid">
-                    <button class="option-btn active" id="task-detect" onclick="setTask('detect')">
-                        <span>Object Detection</span>
-                        <span class="option-badge">0.23M</span>
-                    </button>
-                    <button class="option-btn" id="task-segment" onclick="setTask('segment')">
-                        <span>Instance Segmentation</span>
-                        <span class="option-badge">0.29M</span>
-                    </button>
-                    <button class="option-btn" id="task-pose" onclick="setTask('pose')">
-                        <span>Pose Estimation</span>
-                        <span class="option-badge">0.27M</span>
-                    </button>
-                    <button class="option-btn" id="task-obb" onclick="setTask('obb')">
-                        <span>Oriented BBox</span>
-                        <span class="option-badge">0.24M</span>
-                    </button>
-                    <button class="option-btn" id="task-classify" onclick="setTask('classify')">
-                        <span>Image Classification</span>
-                        <span class="option-badge">0.10M</span>
-                    </button>
+            <!-- Column 2: Sample Input Image -->
+            <div class="control-col">
+                <div class="panel-section" style="height: 100%; display: flex; flex-direction: column;">
+                    <div class="section-title">Sample Input Image</div>
+                    <div class="sample-image-grid" style="flex-grow: 1; align-content: start;">
+                        <div class="sample-img-card active" id="sample-img-traffic" onclick="setSampleImage('traffic')">
+                            <img src="https://images.unsplash.com/photo-1542282088-fe8426682b8f?q=80&w=150&auto=format&fit=crop" class="sample-thumb">
+                            <div class="sample-title">Traffic Scene</div>
+                        </div>
+                        <div class="sample-img-card" id="sample-img-pedestrian" onclick="setSampleImage('pedestrian')">
+                            <img src="https://images.unsplash.com/photo-1485738422979-f5c462d49f74?q=80&w=150&auto=format&fit=crop" class="sample-thumb">
+                            <div class="sample-title">Pedestrian</div>
+                        </div>
+                        <div class="sample-img-card" id="sample-img-sports" onclick="setSampleImage('sports')">
+                            <img src="https://images.unsplash.com/photo-1503376780353-7e6692767b70?q=80&w=150&auto=format&fit=crop" class="sample-thumb">
+                            <div class="sample-title">Sports Car</div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <!-- Run Simulation Button -->
-            <button class="run-btn" onclick="runInference()">
-                <span>Run Forward Prop</span>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="5" y1="12" x2="19" y2="12"></line>
-                    <polyline points="12 5 19 12 12 19"></polyline>
-                </svg>
-            </button>
-
-            <!-- Stats Module Card -->
-            <div class="panel-section">
-                <div class="section-title">Active Metrics</div>
-                <div class="stats-card">
-                    <div class="stat-item">Precision Mode: <span id="stat-precision">FP32 / FP16</span></div>
-                    <div class="stat-item">Model Parameter Size: <span id="stat-param-size">0.24 MB</span></div>
-                    <div class="stat-item">GFLOPs (416x416): <span id="stat-gflops">0.24 GFLOPs</span></div>
-                    <div class="stat-item">Jetson Nano Latency: <span id="stat-latency">48.6 ms (EMA)</span></div>
-                    <div class="stat-item">COCO mAP@50: <span id="stat-map">18.2%</span></div>
+            <!-- Column 3: Task Head Configuration -->
+            <div class="control-col">
+                <div class="panel-section">
+                    <div class="section-title">Task Head Configuration</div>
+                    <div class="option-grid">
+                        <button class="option-btn active" id="task-detect" onclick="setTask('detect')">
+                            <span>Object Detection</span>
+                            <span class="option-badge">0.23M</span>
+                        </button>
+                        <button class="option-btn" id="task-segment" onclick="setTask('segment')">
+                            <span>Instance Segmentation</span>
+                            <span class="option-badge">0.29M</span>
+                        </button>
+                        <button class="option-btn" id="task-pose" onclick="setTask('pose')">
+                            <span>Pose Estimation</span>
+                            <span class="option-badge">0.27M</span>
+                        </button>
+                        <button class="option-btn" id="task-obb" onclick="setTask('obb')">
+                            <span>Oriented BBox</span>
+                            <span class="option-badge">0.24M</span>
+                        </button>
+                        <button class="option-btn" id="task-classify" onclick="setTask('classify')">
+                            <span>Image Classification</span>
+                            <span class="option-badge">0.10M</span>
+                        </button>
+                    </div>
                 </div>
+            </div>
+
+            <!-- Column 4: Run Simulation & Stats Card -->
+            <div class="control-col" style="justify-content: space-between;">
+                <div class="panel-section" style="flex-grow: 1;">
+                    <div class="section-title">Active Metrics</div>
+                    <div class="stats-card">
+                        <div class="stat-item">Precision Mode: <span id="stat-precision">FP32 / FP16</span></div>
+                        <div class="stat-item">Model Parameter Size: <span id="stat-param-size">0.24 MB</span></div>
+                        <div class="stat-item">GFLOPs (416x416): <span id="stat-gflops">0.24 GFLOPs</span></div>
+                        <div class="stat-item">Jetson Nano Latency: <span id="stat-latency">48.6 ms (EMA)</span></div>
+                        <div class="stat-item">COCO mAP@50: <span id="stat-map">18.2%</span></div>
+                    </div>
+                </div>
+                
+                <!-- Run Simulation Button -->
+                <button class="run-btn" onclick="runInference()" style="width: 100%; margin-top: 12px;">
+                    <span>Run Forward Prop</span>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                        <polyline points="12 5 19 12 12 19"></polyline>
+                    </svg>
+                </button>
             </div>
 
         </div>
