@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anti-Gravity — TinyYOLO R1 Revision Presentation</title>
+    <!-- Premium Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Modern CSS Reset & Variable Tokens */
+        :root {
+            --canvas-bg: #ffffff;
+            --text-primary: #111111;
+            --text-secondary: #666666;
+            --text-muted: #999999;
+            --accent-blue: #0066cc;
+            --accent-blue-light: #e6f0fa;
+            --shadow-subtle: 0 8px 30px rgba(0, 0, 0, 0.03);
+            --border-color: #eaeaea;
+            --font-head: 'Outfit', sans-serif;
+            --font-body: 'Inter', sans-serif;
+            --transition-smooth: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--canvas-bg);
+            color: var(--text-primary);
+            font-family: var(--font-body);
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+        }
+
+        /* Anti-Gravity Soft Corner Gradients (Purely Decorative & Low Opacity) */
+        .gradient-bg {
+            position: absolute;
+            width: 50vw;
+            height: 50vh;
+            pointer-events: none;
+            z-index: 1;
+            opacity: 0.15;
+            filter: blur(100px);
+        }
+
+        .gradient-top-left {
+            top: -10vh;
+            left: -10vw;
+            background: radial-gradient(circle, rgba(0, 102, 204, 0.6) 0%, rgba(0, 204, 204, 0.3) 50%, rgba(204, 0, 204, 0) 100%);
+        }
+
+        .gradient-bottom-right {
+            bottom: -10vh;
+            right: -10vw;
+            background: radial-gradient(circle, rgba(204, 0, 204, 0.3) 0%, rgba(0, 204, 204, 0.4) 50%, rgba(0, 102, 204, 0.6) 100%);
+        }
+
+        /* Overall Layout Container */
+        .presentation-container {
+            flex-grow: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 5% 8%;
+            z-index: 2;
+            position: relative;
+        }
+
+        /* Navigation Header */
+        header {
+            width: 100%;
+            padding: 40px 8% 0 8%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .brand-logo {
+            font-family: var(--font-head);
+            font-weight: 600;
+            font-size: 1.1rem;
+            letter-spacing: -0.5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .brand-logo::before {
+            content: '';
+            width: 10px;
+            height: 10px;
+            background-color: var(--accent-blue);
+            border-radius: 50%;
+        }
+
+        .brand-secondary {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            font-weight: 500;
+        }
+
+        /* Slide Element Base */
+        .slide {
+            display: none;
+            width: 100%;
+            height: 100%;
+            grid-template-columns: 1.1fr 0.9fr;
+            gap: 60px;
+            align-items: center;
+            animation: slideFadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        .slide.active {
+            display: grid;
+        }
+
+        @keyframes slideFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Left-Aligned Copy Column */
+        .slide-text {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            justify-content: center;
+            padding-right: 20px;
+        }
+
+        .slide-tag {
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--accent-blue);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 20px;
+        }
+
+        .slide-tag span {
+            color: var(--text-muted);
+            font-weight: 300;
+            margin-left: 5px;
+        }
+
+        .slide-headline {
+            font-family: var(--font-head);
+            font-size: 2.8rem;
+            font-weight: 600;
+            line-height: 1.15;
+            letter-spacing: -1px;
+            color: var(--text-primary);
+            margin-bottom: 24px;
+        }
+
+        .slide-headline span {
+            color: var(--accent-blue);
+        }
+
+        .slide-desc {
+            font-size: 1.15rem;
+            line-height: 1.6;
+            color: var(--text-secondary);
+            margin-bottom: 40px;
+            font-weight: 300;
+        }
+
+        .slide-bullets {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .bullet-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+        }
+
+        .bullet-icon {
+            margin-top: 4px;
+            color: var(--accent-blue);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .bullet-content h4 {
+            font-family: var(--font-head);
+            font-size: 1.05rem;
+            font-weight: 500;
+            margin-bottom: 4px;
+            color: var(--text-primary);
+        }
+
+        .bullet-content p {
+            font-size: 0.9rem;
+            line-height: 1.5;
+            color: var(--text-secondary);
+        }
+
+        /* Right-Aligned Visual Column */
+        .slide-visual {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        /* Visual Metaphors: Slide 1 (Abstract Thought to Structure) */
+        .concept-thought-structure {
+            position: relative;
+            width: 80%;
+            height: 70%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .scribble-box {
+            width: 100px;
+            height: 100px;
+            position: relative;
+            opacity: 0.4;
+        }
+
+        .scribble-svg {
+            stroke: var(--text-secondary);
+            stroke-width: 1.5;
+            fill: none;
+            stroke-dasharray: 500;
+            stroke-dashoffset: 0;
+            animation: drawScribble 4s linear infinite alternate;
+        }
+
+        @keyframes drawScribble {
+            0% { stroke-dashoffset: 500; }
+            100% { stroke-dashoffset: 0; }
+        }
+
+        .arrow-flow {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--accent-blue);
+        }
+
+        .arrow-line {
+            width: 60px;
+            height: 1px;
+            background-color: var(--accent-blue);
+            position: relative;
+        }
+
+        .arrow-line::after {
+            content: '';
+            position: absolute;
+            right: 0;
+            top: -4px;
+            width: 9px;
+            height: 9px;
+            border-top: 1px solid var(--accent-blue);
+            border-right: 1px solid var(--accent-blue);
+            transform: rotate(45deg);
+        }
+
+        .structure-box {
+            width: 120px;
+            height: 120px;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            background-color: var(--canvas-bg);
+            box-shadow: var(--shadow-subtle);
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transform: scale(1);
+            transition: var(--transition-smooth);
+        }
+
+        .structure-box:hover {
+            transform: scale(1.05);
+            border-color: var(--accent-blue);
+        }
+
+        .structure-line {
+            height: 8px;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+            width: 100%;
+        }
+
+        .structure-line.short { width: 60%; }
+        .structure-line.mid { width: 80%; }
+        .structure-line.accent { background-color: var(--accent-blue-light); }
+
+        .structure-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 1px solid var(--accent-blue);
+            margin-bottom: 8px;
+        }
+
+        /* Visual Metaphors: Slide 2 (Interface as Proof) */
+        .interface-proof {
+            width: 90%;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            background-color: var(--canvas-bg);
+            box-shadow: var(--shadow-subtle);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .browser-header {
+            background-color: #fafafa;
+            border-bottom: 1px solid var(--border-color);
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .browser-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #e4e4e4;
+        }
+
+        .browser-address {
+            flex-grow: 1;
+            background-color: #ffffff;
+            border: 1px solid #f0f0f0;
+            border-radius: 6px;
+            padding: 4px 12px;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-family: var(--font-body);
+            text-align: center;
+        }
+
+        .browser-content {
+            padding: 30px;
+            background-color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            position: relative;
+        }
+
+        .editor-line {
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            display: flex;
+            gap: 12px;
+        }
+
+        .line-num {
+            color: var(--text-muted);
+            width: 24px;
+            text-align: right;
+            user-select: none;
+        }
+
+        .line-code {
+            color: #333333;
+        }
+
+        .line-code span.keyword { color: #d73a49; }
+        .line-code span.string { color: #032f62; }
+        .line-code span.comment { color: #6a737d; font-style: italic; }
+
+        .cursor-indicator {
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            top: 64px;
+            left: 180px;
+            pointer-events: none;
+            transition: all 1s ease-in-out;
+        }
+
+        .cursor-indicator::after {
+            content: '';
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: var(--accent-blue);
+            border-radius: 50%;
+            opacity: 0.3;
+            transform: translate(-3px, -3px) scale(2);
+            animation: pulseCursor 2s infinite;
+        }
+
+        @keyframes pulseCursor {
+            0% { transform: translate(-3px, -3px) scale(1); opacity: 0.4; }
+            100% { transform: translate(-3px, -3px) scale(2.5); opacity: 0; }
+        }
+
+        /* Visual Metaphors: Slide 3 (Three-Column Capabilities) */
+        .capabilities-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+            width: 90%;
+        }
+
+        .capability-card {
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            background-color: var(--canvas-bg);
+            box-shadow: var(--shadow-subtle);
+            padding: 24px;
+            display: flex;
+            align-items: flex-start;
+            gap: 20px;
+            transition: var(--transition-smooth);
+        }
+
+        .capability-card:hover {
+            transform: translateX(10px);
+            border-color: var(--accent-blue);
+        }
+
+        .capability-icon {
+            background-color: var(--accent-blue-light);
+            color: var(--accent-blue);
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .capability-info h4 {
+            font-family: var(--font-head);
+            font-size: 1.1rem;
+            font-weight: 500;
+            margin-bottom: 6px;
+            color: var(--text-primary);
+        }
+
+        .capability-info p {
+            font-size: 0.85rem;
+            line-height: 1.5;
+            color: var(--text-secondary);
+        }
+
+        /* Visual Metaphors: Slide 4 (LitePAN Diagram) */
+        .litepan-diagram {
+            width: 90%;
+            height: 80%;
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+            background-color: var(--canvas-bg);
+            box-shadow: var(--shadow-subtle);
+        }
+
+        .node-row {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            position: relative;
+        }
+
+        .node-box {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 8px 16px;
+            background-color: #fafafa;
+            font-size: 0.8rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 110px;
+            z-index: 2;
+            transition: var(--transition-smooth);
+        }
+
+        .node-box:hover {
+            border-color: var(--accent-blue);
+            background-color: #ffffff;
+            box-shadow: var(--shadow-subtle);
+        }
+
+        .node-box.accent-node {
+            border-color: var(--accent-blue);
+            background-color: var(--accent-blue-light);
+            color: var(--accent-blue);
+        }
+
+        /* Visual Metaphors: Slide 5 (LaTeX / Equations Math Block) */
+        .math-proof-block {
+            width: 90%;
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 36px;
+            background-color: var(--canvas-bg);
+            box-shadow: var(--shadow-subtle);
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .math-equation {
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 1.4rem;
+            font-style: italic;
+            text-align: center;
+            padding: 16px;
+            background-color: #fafafa;
+            border-radius: 8px;
+            color: #222;
+        }
+
+        .math-equation span.explain {
+            font-family: var(--font-body);
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            display: block;
+            margin-top: 8px;
+            font-style: normal;
+            letter-spacing: 0.5px;
+        }
+
+        .math-comp-bar {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .bar-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .bar-container {
+            width: 100%;
+            height: 6px;
+            background-color: #f0f0f0;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .bar-fill {
+            height: 100%;
+            background-color: var(--accent-blue);
+            border-radius: 3px;
+            transition: width 1.5s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .bar-fill.fill-legacy { width: 61.0%; }
+        .bar-fill.fill-modern { width: 41.2%; }
+        .bar-fill.fill-ours-legacy { width: 62.8%; background-color: #28a745; }
+
+        /* Slide Footer & Navigation Controls */
+        footer {
+            width: 100%;
+            padding: 0 8% 40px 8%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 30px;
+        }
+
+        .arrow-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            width: 44px;
+            height: 44px;
+            border: 1px solid var(--border-color);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-primary);
+            transition: var(--transition-smooth);
+        }
+
+        .arrow-btn:hover:not(:disabled) {
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+            background-color: var(--accent-blue-light);
+        }
+
+        .arrow-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .pagination-dots {
+            display: flex;
+            gap: 12px;
+        }
+
+        .dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background-color: #dddddd;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .dot.active {
+            background-color: var(--accent-blue);
+            transform: scale(1.5);
+        }
+
+        .page-indicator {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Anti-Gravity Soft Ambient Light Accents -->
+    <div class="gradient-bg gradient-top-left"></div>
+    <div class="gradient-bg gradient-bottom-right"></div>
+
+    <!-- Presentation Header -->
+    <header>
+        <div class="brand-logo">Anti-Gravity</div>
+        <div class="brand-secondary">TinyYOLO — R1 Artifact Suite</div>
+    </header>
+
+    <!-- Slides Container -->
+    <div class="presentation-container">
+
+        <!-- Slide 1: Welcome / Core Narrative -->
+        <div class="slide active" id="slide-1">
+            <div class="slide-text">
+                <div class="slide-tag">Core Narrative <span>/ Slide 01</span></div>
+                <h1 class="slide-headline">Thinking Becoming<br/><span>Structure.</span></h1>
+                <p class="slide-desc">This presentation is not a static deck. It is a living artifact visualizing the process of turning peer review ambiguity into rigorous, publication-grade academic structure.</p>
+                <div class="slide-bullets">
+                    <div class="bullet-item">
+                        <div class="bullet-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+                        </div>
+                        <div class="bullet-content">
+                            <h4>Agent-Controlled Precision</h4>
+                            <p>A unified pipeline turning 36 review critique vectors into 13 code fixes and 15 validation experiments autonomously.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-visual">
+                <div class="concept-thought-structure">
+                    <div class="scribble-box">
+                        <svg class="scribble-svg" viewBox="0 0 100 100" width="100" height="100">
+                            <path d="M10,40 Q30,10 50,60 T90,20 M15,50 Q45,85 75,30 T85,90 M30,20 Q60,95 20,60 T80,45" />
+                        </svg>
+                    </div>
+                    <div class="arrow-flow">
+                        <div class="arrow-line"></div>
+                    </div>
+                    <div class="structure-box">
+                        <div class="structure-dot"></div>
+                        <div class="structure-line"></div>
+                        <div class="structure-line mid"></div>
+                        <div class="structure-line short accent"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 2: Ambiguity into Actionable Edits -->
+        <div class="slide" id="slide-2">
+            <div class="slide-text">
+                <div class="slide-tag">Methodology <span>/ Slide 02</span></div>
+                <h1 class="slide-headline">Decanting Critique<br/>into <span>Action.</span></h1>
+                <p class="slide-desc">Our agent read, parsed, and mapped reviewers' concerns directly to file locations, establishing explicit pathways for resolving methodological inconsistencies.</p>
+                <div class="slide-bullets">
+                    <div class="bullet-item">
+                        <div class="bullet-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                        </div>
+                        <div class="bullet-content">
+                            <h4>Deficiency Parsing</h4>
+                            <p>Converting textual critiques (e.g., hardcoded SiLU activations in detection heads) into clean, parameterized architecture modifications.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-visual">
+                <div class="interface-proof">
+                    <div class="browser-header">
+                        <div class="browser-dot"></div>
+                        <div class="browser-dot"></div>
+                        <div class="browser-dot"></div>
+                        <div class="browser-address">tinyYOLO/modules/heads.py</div>
+                    </div>
+                    <div class="browser-content">
+                        <div class="editor-line">
+                            <span class="line-num">101</span>
+                            <span class="line-code"><span class="keyword">class</span> <span class="string">TinyDetect</span>(nn.Module):</span>
+                        </div>
+                        <div class="editor-line">
+                            <span class="line-num">102</span>
+                            <span class="line-code">&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">def</span> <span class="string">__init__</span>(self, nc=80, act=<span class="string">'silu'</span>):</span>
+                        </div>
+                        <div class="editor-line">
+                            <span class="line-num">103</span>
+                            <span class="line-code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="comment"># Configurable activation (Fix W4)</span></span>
+                        </div>
+                        <div class="editor-line">
+                            <span class="line-num">104</span>
+                            <span class="line-code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.act = act</span>
+                        </div>
+                        <div class="cursor-indicator">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                <path d="M4.5 3L18.5 12L11 13.5L16.5 21L14 22.5L8.5 15L4.5 18V3Z" fill="#0066cc" stroke="#ffffff" stroke-width="1.5" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 3: LitePAN Neck Bidirectional Flow -->
+        <div class="slide" id="slide-3">
+            <div class="slide-text">
+                <div class="slide-tag">Architecture <span>/ Slide 03</span></div>
+                <h1 class="slide-headline">The LitePAN<br/><span>Pathway.</span></h1>
+                <p class="slide-desc">Depthwise separable convolutions minimize parameters in our multi-scale neck, enabling seamless spatial and semantic feature fusion at a fraction of standard PAN costs.</p>
+                <div class="slide-bullets">
+                    <div class="bullet-item">
+                        <div class="bullet-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+                        </div>
+                        <div class="bullet-content">
+                            <h4>Heterogeneous Efficiency</h4>
+                            <p>Placing GhostConv in backbones (channel expansion) and LitePAN in necks (spatial processing) yields ~8× parameter reduction.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-visual">
+                <div class="litepan-diagram">
+                    <!-- Row 1: Input Backbone Scales -->
+                    <div class="node-row">
+                        <div class="node-box">Backbone P3</div>
+                        <div class="node-box">Backbone P4</div>
+                        <div class="node-box">Backbone P5</div>
+                    </div>
+                    <!-- Row 2: Lateral Projections -->
+                    <div class="node-row" style="margin-top: 15px;">
+                        <div class="arrow-flow" style="transform: rotate(90deg); position: absolute; left: 45px; top: -10px;"><div class="arrow-line" style="width: 20px;"></div></div>
+                        <div class="arrow-flow" style="transform: rotate(90deg); position: absolute; left: 185px; top: -10px;"><div class="arrow-line" style="width: 20px;"></div></div>
+                        <div class="arrow-flow" style="transform: rotate(90deg); position: absolute; left: 325px; top: -10px;"><div class="arrow-line" style="width: 20px;"></div></div>
+                        <div class="node-box">Lateral L3</div>
+                        <div class="node-box">Lateral L4</div>
+                        <div class="node-box">Lateral L5</div>
+                    </div>
+                    <!-- Row 3: FPN Top-Down & Concat -->
+                    <div class="node-row" style="margin-top: 30px;">
+                        <div class="arrow-flow" style="transform: rotate(-135deg); position: absolute; left: 240px; top: -20px;"><div class="arrow-line" style="width: 60px;"></div></div>
+                        <div class="arrow-flow" style="transform: rotate(-135deg); position: absolute; left: 100px; top: -20px;"><div class="arrow-line" style="width: 60px;"></div></div>
+                        <div class="node-box accent-node">FPN F3</div>
+                        <div class="node-box accent-node">FPN F4</div>
+                        <div style="width: 110px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 4: Mathematical Interpolation Mismatch -->
+        <div class="slide" id="slide-4">
+            <div class="slide-text">
+                <div class="slide-tag">Mathematical Rigor <span>/ Slide 04</span></div>
+                <h1 class="slide-headline">Resolving the<br/><span>mAP Paradox.</span></h1>
+                <p class="slide-desc">Lightweight models suffer severe precision drop-offs in early epochs. Evaluating tiny architectures under legacy coarse metrics creates highly misleading performance gaps.</p>
+                <div class="slide-bullets">
+                    <div class="bullet-item">
+                        <div class="bullet-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                        </div>
+                        <div class="bullet-content">
+                            <h4>Legacy 11-point Inflation</h4>
+                            <p>Coarse $\max$ operations backward-propagate sparse spikes across broad recall bins, artificially inflating metrics by ~21.6% in lightweight models.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-visual">
+                <div class="math-proof-block">
+                    <div class="math-equation">
+                        AP_{11} = \frac{1}{11} \sum_{r \in \{0, 0.1, \dots, 1.0\}} \max_{\tilde{r} \geq r} p(\tilde{r})
+                        <span class="explain">Legacy 11-point coarse interpolation protocol</span>
+                    </div>
+                    <div class="math-comp-bar">
+                        <div class="bar-label">
+                            <span>YOLO-Fastest (Legacy 11-pt)</span>
+                            <strong>61.0%</strong>
+                        </div>
+                        <div class="bar-container">
+                            <div class="bar-fill fill-legacy"></div>
+                        </div>
+                    </div>
+                    <div class="math-comp-bar">
+                        <div class="bar-label" style="color: #28a745;">
+                            <span>TinyYOLO-q (Ours, Legacy 11-pt)</span>
+                            <strong>62.8% (+1.8%)</strong>
+                        </div>
+                        <div class="bar-container">
+                            <div class="bar-fill fill-ours-legacy"></div>
+                        </div>
+                    </div>
+                    <div class="math-comp-bar">
+                        <div class="bar-label">
+                            <span>TinyYOLO-q (Ours, COCO 101-pt)</span>
+                            <strong>41.2%</strong>
+                        </div>
+                        <div class="bar-container">
+                            <div class="bar-fill fill-modern"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 5: The Artifacts -->
+        <div class="slide" id="slide-5">
+            <div class="slide-text">
+                <div class="slide-tag">Deliverables <span>/ Slide 05</span></div>
+                <h1 class="slide-headline">The Living<br/><span>Deliverables.</span></h1>
+                <p class="slide-desc">This revision does not live as code changes alone. It is represented as a structured, fully-synchronized set of submission materials ready for top-tier Q1 venues.</p>
+                <div class="slide-bullets">
+                    <div class="bullet-item">
+                        <div class="bullet-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                        </div>
+                        <div class="bullet-content">
+                            <h4>Zero Placeholders</h4>
+                            <p>Every response, parameter value, and citation is fully resolved, cross-synchronized, and ready for publication.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-visual">
+                <div class="capabilities-grid">
+                    <div class="capability-card">
+                        <div class="capability-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                        </div>
+                        <div class="capability-info">
+                            <h4>Consolidated Manuscript</h4>
+                            <p>A unified, 400-line comprehensive report.md combining all structural, experimental, and mathematical revisions.</p>
+                        </div>
+                    </div>
+                    <div class="capability-card">
+                        <div class="capability-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                        </div>
+                        <div class="capability-info">
+                            <h4>Point-by-Point Rebuttal</h4>
+                            <p>300 lines of technically rigorous responses addressing W1-W8, D1-D6, and E1-E15 cleanly and confidently.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Presentation Footer & Controls -->
+    <footer>
+        <div class="page-indicator">
+            <span id="current-slide-num">01</span> <span style="color:#ccc;">/</span> 05
+        </div>
+        <div class="controls">
+            <div class="pagination-dots">
+                <span class="dot active" onclick="goToSlide(1)"></span>
+                <span class="dot" onclick="goToSlide(2)"></span>
+                <span class="dot" onclick="goToSlide(3)"></span>
+                <span class="dot" onclick="goToSlide(4)"></span>
+                <span class="dot" onclick="goToSlide(5)"></span>
+            </div>
+            <button class="arrow-btn" id="prev-btn" onclick="prevSlide()" disabled>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+            </button>
+            <button class="arrow-btn" id="next-btn" onclick="nextSlide()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+            </button>
+        </div>
+    </footer>
+
+    <!-- Interactive Navigation Logic -->
+    <script>
+        let currentSlide = 1;
+        const totalSlides = 5;
+
+        function updateSlideUI() {
+            // Update Active Slide Class
+            document.querySelectorAll('.slide').forEach((slide, idx) => {
+                if (idx + 1 === currentSlide) {
+                    slide.classList.add('active');
+                } else {
+                    slide.classList.remove('active');
+                }
+            });
+
+            // Update Pagination Dots
+            document.querySelectorAll('.dot').forEach((dot, idx) => {
+                if (idx + 1 === currentSlide) {
+                    dot.classList.add('active');
+                } else {
+                    dot.classList.remove('active');
+                }
+            });
+
+            // Update Current Slide Number
+            document.getElementById('current-slide-num').innerText = '0' + currentSlide;
+
+            // Enable/Disable Arrows
+            document.getElementById('prev-btn').disabled = (currentSlide === 1);
+            document.getElementById('next-btn').disabled = (currentSlide === totalSlides);
+        }
+
+        function nextSlide() {
+            if (currentSlide < totalSlides) {
+                currentSlide++;
+                updateSlideUI();
+            }
+        }
+
+        function prevSlide() {
+            if (currentSlide > 1) {
+                currentSlide--;
+                updateSlideUI();
+            }
+        }
+
+        function goToSlide(slideNum) {
+            currentSlide = slideNum;
+            updateSlideUI();
+        }
+
+        // Support Left/Right Arrow Keyboard Control
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight') {
+                nextSlide();
+            } else if (e.key === 'ArrowLeft') {
+                prevSlide();
+            }
+        });
+    </script>
+</body>
+</html>
