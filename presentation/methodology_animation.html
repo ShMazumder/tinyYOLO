@@ -1524,6 +1524,58 @@
 
         <!-- Right Side Blueprint Grid -->
         <div class="diagram-outer-container">
+            
+            <!-- Sleek Glass Header: Guided Workflow Steps & Color Legend -->
+            <div class="diagram-header">
+                <!-- Interactive Guided Steps -->
+                <div class="workflow-steps">
+                    <div class="step-item active" onclick="goToStep(1)">
+                        <span>1</span>
+                        <span>Configure Parameters</span>
+                    </div>
+                    <span class="step-arrow">➔</span>
+                    <div class="step-item" onclick="goToStep(2)">
+                        <span>2</span>
+                        <span>Inspect Neural Nodes</span>
+                    </div>
+                    <span class="step-arrow">➔</span>
+                    <div class="step-item" onclick="goToStep(3)">
+                        <span>3</span>
+                        <span>Execute Predictions</span>
+                    </div>
+                </div>
+
+                <!-- Dynamic Color Legend -->
+                <div class="diagram-legend">
+                    <div class="legend-item" title="Feature extraction blocks">
+                        <span class="legend-dot backbone"></span>
+                        <span>Backbone</span>
+                    </div>
+                    <div class="legend-item" title="Multi-scale feature fusion layers">
+                        <span class="legend-dot neck"></span>
+                        <span>LitePAN Neck</span>
+                    </div>
+                    <div class="legend-item" title="Task classification and regression heads">
+                        <span class="legend-dot head"></span>
+                        <span>Prediction Head</span>
+                    </div>
+                    <div class="legend-item" title="SE/ECA Attention block or special nodes">
+                        <span class="legend-dot special"></span>
+                        <span>Attention Modules</span>
+                    </div>
+                    <div class="legend-item quant-only" title="Fake Quantization nodes (Visible in INT8 mode)">
+                        <span class="legend-dot quant"></span>
+                        <span>FakeQuant (Q)</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Helpful Floating Onboarding Tour Tip -->
+            <div class="interactive-tip">
+                <span class="tip-icon">💡</span>
+                <span id="step-tip-text"><strong>Step 1: Configuration</strong> — Select standard/quantized mode, adjust input resolution, and click sample cards in the top dashboard to configure parameters.</span>
+            </div>
+
             <div class="diagram-canvas">
                 
                 <!-- Background SVG Connections Grid -->
@@ -1737,6 +1789,9 @@
 
     <!-- Scripting for Interactivity -->
     <script>
+        // Onboarding walkthrough load flags
+        let isInitialLoad = true;
+
         // Coordinate points of nodes for drawing connecting lines
         const nodeCoordinates = {
             'input': { x: 108, y: 92 },
@@ -2032,12 +2087,67 @@
             }
         };
 
+        // Interactive guided workflow steps engine
+        function goToStep(step) {
+            // Update active states in header
+            document.querySelectorAll('.step-item').forEach((el, idx) => {
+                if (idx + 1 === step) {
+                    el.classList.add('active');
+                } else {
+                    el.classList.remove('active');
+                }
+            });
+
+            // Update interactive tip text
+            const tipEl = document.getElementById('step-tip-text');
+            if (!tipEl) return;
+            
+            if (step === 1) {
+                tipEl.innerHTML = "<strong>Step 1: Configuration</strong> — Select standard/quantized mode, adjust input resolution, and click sample cards in the top dashboard to configure parameters.";
+                // Flash control panel
+                const cp = document.querySelector('.control-panel');
+                if (cp) {
+                    cp.style.outline = "2px solid var(--accent-glow)";
+                    cp.style.boxShadow = "0 0 30px rgba(var(--accent-glow-rgb), 0.25)";
+                    setTimeout(() => {
+                        cp.style.outline = "none";
+                        cp.style.boxShadow = "0 8px 32px 0 rgba(0, 0, 0, 0.3)";
+                    }, 1200);
+                }
+            } else if (step === 2) {
+                tipEl.innerHTML = "<strong>Step 2: Inspect Architecture</strong> — Click any neural card in the blueprint canvas (e.g. Stem, LitePAN, Attention) to view real-time feature maps and LaTeX math drawers.";
+                // Flash nodes
+                document.querySelectorAll('.diagram-node').forEach(node => {
+                    node.style.boxShadow = "0 0 15px var(--accent-glow)";
+                });
+                setTimeout(() => {
+                    document.querySelectorAll('.diagram-node').forEach(node => {
+                        node.style.boxShadow = "0 8px 32px 0 rgba(0, 0, 0, 0.3)";
+                    });
+                }, 1200);
+            } else if (step === 3) {
+                tipEl.innerHTML = "<strong>Step 3: Run Inference</strong> — Click the glowing <strong>'Run Forward Prop'</strong> CTA in Column 4 to launch the neural wave propagation and overlay task predictions.";
+                // Flash run button
+                const btn = document.querySelector('.run-btn');
+                if (btn) {
+                    btn.style.transform = "scale(1.03)";
+                    btn.style.boxShadow = "0 0 25px var(--accent-glow)";
+                    setTimeout(() => {
+                        btn.style.transform = "none";
+                        btn.style.boxShadow = "none";
+                    }, 1200);
+                }
+            }
+        }
+
         // Render Connections on Load
         window.addEventListener('DOMContentLoaded', () => {
             renderConnections();
             updateShapes();
             updateMetrics();
             setSampleImage('traffic');
+            goToStep(1); // Set up step 1 as active on startup
+            isInitialLoad = false; // Initial load finalized, enable dynamic step switching
         });
 
         // Generate coordinates and Bezier curves for flows
@@ -2135,6 +2245,11 @@
                 statusText.innerText = 'TENSORS RESET - RUN PROPAGATION';
                 statusText.style.color = 'var(--text-secondary)';
             }
+
+            // Move tour step to Step 2 if manual action
+            if (!isInitialLoad) {
+                goToStep(2);
+            }
         }
 
         // Set Standard vs Quantized Variant
@@ -2190,6 +2305,11 @@
                 statusText.innerText = 'TENSORS RESET - RUN PROPAGATION';
                 statusText.style.color = 'var(--text-secondary)';
             }
+
+            // Move tour step to Step 2 if manual action
+            if (!isInitialLoad) {
+                goToStep(2);
+            }
         }
 
         // Update resolution slider
@@ -2202,6 +2322,11 @@
             if (resVal2) resVal2.innerText = res;
             updateShapes();
             updateMetrics();
+
+            // Move tour step to Step 2 if manual action
+            if (!isInitialLoad) {
+                goToStep(2);
+            }
         }
 
         // Set Active task head
@@ -2324,6 +2449,9 @@
             const overlay = document.getElementById('screen-overlay');
             if (overlay) overlay.innerHTML = '';
 
+            // Automatically advance to Step 3: Run Inference
+            goToStep(3);
+
             const timeline = [
                 { from: 'input', to: 'stem', delay: 0 },
                 { from: 'stem', to: 'stage1', delay: 200 },
@@ -2390,6 +2518,12 @@
                             });
                         }, 100);
                     }
+                }
+
+                // Update final copilot state
+                const tipEl = document.getElementById('step-tip-text');
+                if (tipEl) {
+                    tipEl.innerHTML = "<strong>✨ Inference Successful!</strong> Active predictions have rendered on the screen viewport. Swap task decoders in Column 3 to view high-fidelity task overlays.";
                 }
             }, 2600);
         }
@@ -2926,6 +3060,9 @@
             const data = drawerContentData[nodeKey];
 
             if (!data) return;
+
+            // Automatically advance walkthrough to Step 3: Execute Predictions!
+            goToStep(3);
 
             // Fill content
             document.getElementById('dr-subtitle').innerText = data.subtitle;
