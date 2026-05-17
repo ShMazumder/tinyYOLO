@@ -84,9 +84,16 @@ QAT_SOURCE = [
 
 INFER_SOURCE = [
     "# %% Bounding box inference helper function\n",
+    "# Note: Function is also defined inline below in the execution cell for absolute safety!\n",
+    "pass"
+]
+
+INFERENCE_SOURCE = [
+    "# %% Execute inference on validation sample\n",
     "import cv2\n",
     "import torch\n",
     "import matplotlib.pyplot as plt\n",
+    "from pathlib import Path\n",
     "from tinyYOLO.models import build_model\n",
     "from tinyYOLO.utils.postprocess import postprocess_detections\n",
     "\n",
@@ -152,13 +159,7 @@ INFER_SOURCE = [
     "        print(\"No objects detected.\")\n",
     "    \n",
     "    plt.axis('off')\n",
-    "    plt.show()"
-]
-
-INFERENCE_SOURCE = [
-    "# %% Execute inference on validation sample\n",
-    "import os\n",
-    "from pathlib import Path\n",
+    "    plt.show()\n",
     "\n",
     "# 1. Dynamically resolve dataset folder if session restarted\n",
     "if 'dataset_dir' not in locals() or dataset_dir is None:\n",
