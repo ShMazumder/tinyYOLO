@@ -53,6 +53,23 @@ class LitePAN(nn.Module):
         # Store for head
         self.out_channels = [out_channel, out_channel, out_channel]
 
+        # Resilient quantized concatenation block
+        try:
+            import torch.ao.quantization as ao_quant
+            self.cat_op = ao_quant.QFunctional()
+        except (ImportError, AttributeError):
+            try:
+                import torch.nn.quantized as nn_quant
+                self.cat_op = nn_quant.FloatFunctional()
+            except (ImportError, AttributeError):
+                self.cat_op = None
+
+    def _cat(self, x, y):
+        feats = [x, y]
+        if self.cat_op is not None and (x.is_quantized or y.is_quantized):
+            return self.cat_op.cat(feats, dim=1)
+        return torch.cat(feats, dim=1)
+
     def forward(self, features):
         """
         Args:
@@ -69,17 +86,17 @@ class LitePAN(nn.Module):
 
         # Top-down (FPN)
         up5 = F.interpolate(l5, size=l4.shape[2:], mode='nearest')
-        f4 = self.td_conv4(self.td_merge4(torch.cat([up5, l4], dim=1)))
+        f4 = self.td_conv4(self.td_merge4(self._cat(up5, l4)))
 
         up4 = F.interpolate(f4, size=l3.shape[2:], mode='nearest')
-        f3 = self.td_conv3(self.td_merge3(torch.cat([up4, l3], dim=1)))
+        f3 = self.td_conv3(self.td_merge3(self._cat(up4, l3)))
 
         # Bottom-up (PAN)
         d3 = self.bu_down3(f3)
-        n4 = self.bu_conv4(self.bu_merge4(torch.cat([d3, f4], dim=1)))
+        n4 = self.bu_conv4(self.bu_merge4(self._cat(d3, f4)))
 
         d4 = self.bu_down4(n4)
-        n5 = self.bu_conv5(self.bu_merge5(torch.cat([d4, l5], dim=1)))
+        n5 = self.bu_conv5(self.bu_merge5(self._cat(d4, l5)))
 
         return [f3, n4, n5]
 
