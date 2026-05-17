@@ -294,13 +294,26 @@ def export_quantized(model, imgsz, output_path, fmt='onnx'):
         try:
             model.eval()
             dummy = torch.randn(1, 3, imgsz, imgsz)
-            torch.onnx.export(
-                model, dummy, str(output_path),
-                opset_version=18,
-                input_names=['images'],
-                output_names=['output'],
-                dynamic_axes={'images': {0: 'batch'}, 'output': {0: 'batch'}},
-            )
+            try:
+                # Force legacy tracing-based exporter explicitly (dynamo=False)
+                # to bypass packed C++ parameter trace exceptions in modern PyTorch versions
+                torch.onnx.export(
+                    model, dummy, str(output_path),
+                    opset_version=18,
+                    input_names=['images'],
+                    output_names=['output'],
+                    dynamic_axes={'images': {0: 'batch'}, 'output': {0: 'batch'}},
+                    dynamo=False
+                )
+            except TypeError:
+                # Backward compatibility fallback for older PyTorch versions
+                torch.onnx.export(
+                    model, dummy, str(output_path),
+                    opset_version=18,
+                    input_names=['images'],
+                    output_names=['output'],
+                    dynamic_axes={'images': {0: 'batch'}, 'output': {0: 'batch'}},
+                )
             size_mb = output_path.stat().st_size / 1e6
             print(f"  Exported ONNX: {output_path} ({size_mb:.2f} MB)")
         except Exception as e:
