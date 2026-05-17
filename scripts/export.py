@@ -24,6 +24,8 @@ def parse_args():
     parser.add_argument('--task', type=str, default='det', help='Task type')
     parser.add_argument('--variant', type=str, default='standard', help='Variant')
     parser.add_argument('--imgsz', type=int, default=320, help='Input image size')
+    parser.add_argument('--nc', type=int, default=80, help='Number of classes')
+    parser.add_argument('--data', type=str, default=None, help='Dataset YAML configuration path')
     parser.add_argument('--formats', type=str, default='onnx',
                         help='Export formats (comma-separated): onnx,tflite,coreml,torchscript')
     parser.add_argument('--fp16', action='store_true', help='Export with FP16')
@@ -109,8 +111,18 @@ def main():
     env = detect_environment()
     formats = [f.strip() for f in args.formats.split(',')]
 
+    nc = args.nc
+    if args.data and Path(args.data).exists():
+        try:
+            from train import load_dataset_config
+            data_dict = load_dataset_config(args.data)
+            nc = data_dict.get('nc', nc)
+            print(f"  [INFO] Custom dataset resolved: nc={nc}")
+        except Exception as e:
+            print(f"  [WARN] Failed to load nc from {args.data}: {e}")
+
     # Build model and load weights
-    model, info = build_model(task=args.task, variant=args.variant)
+    model, info = build_model(task=args.task, variant=args.variant, nc=nc)
     weights_path = Path(args.weights)
 
     if weights_path.exists():

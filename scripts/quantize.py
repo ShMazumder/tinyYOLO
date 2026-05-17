@@ -67,7 +67,17 @@ def parse_args():
 
 def _load_model_and_weights(args):
     """Build model and load pre-trained weights."""
-    model, info = build_model(task=args.task, variant=args.variant)
+    nc = 80
+    if args.data and Path(args.data).exists():
+        try:
+            from train import load_dataset_config
+            data_dict = load_dataset_config(args.data)
+            nc = data_dict.get('nc', 80)
+            print(f"  [INFO] Custom dataset resolved: nc={nc}")
+        except Exception as e:
+            print(f"  [WARN] Failed to load nc from {args.data}: {e}")
+
+    model, info = build_model(task=args.task, variant=args.variant, nc=nc)
 
     if args.weights and Path(args.weights).exists():
         checkpoint = torch.load(args.weights, map_location='cpu')
