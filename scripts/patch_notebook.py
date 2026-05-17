@@ -82,6 +82,79 @@ QAT_SOURCE = [
     "    --mode dynamic"
 ]
 
+INFER_SOURCE = [
+    "# %% Bounding box inference helper function\n",
+    "import cv2\n",
+    "import torch\n",
+    "import matplotlib.pyplot as plt\n",
+    "from tinyYOLO.models import build_model\n",
+    "from tinyYOLO.utils.postprocess import postprocess_detections\n",
+    "\n",
+    "def run_custom_inference(image_path, weights_path, nc, class_names, imgsz=416):\n",
+    "    device = 'cuda' if torch.cuda.is_available() else 'cpu'\n",
+    "    \n",
+    "    # Build model & load state dict\n",
+    "    model, _ = build_model(task='det', variant=VARIANT, nc=nc)\n",
+    "    checkpoint = torch.load(weights_path, map_location=device)\n",
+    "    state_dict = checkpoint['model'] if isinstance(checkpoint, dict) and 'model' in checkpoint else checkpoint\n",
+    "    \n",
+    "    # Strip compile/DDP prefixes recursively\n",
+    "    cleaned_state_dict = {}\n",
+    "    for k, v in state_dict.items():\n",
+    "        if k.endswith(('total_ops', 'total_params')):\n",
+    "            continue\n",
+    "        k_clean = k\n",
+    "        while k_clean.startswith('_orig_mod.') or k_clean.startswith('module.'):\n",
+    "            if k_clean.startswith('_orig_mod.'):\n",
+    "                k_clean = k_clean[len('_orig_mod.'):]\n",
+    "            if k_clean.startswith('module.'):\n",
+    "                k_clean = k_clean[len('module.'):]\n",
+    "        if k_clean.startswith('model.'):\n",
+    "            k_clean = k_clean[len('model.'):]\n",
+    "        cleaned_state_dict[k_clean] = v\n",
+    "        \n",
+    "    model.load_state_dict(cleaned_state_dict)\n",
+    "    model.to(device).eval()\n",
+    "    \n",
+    "    # Preprocess image\n",
+    "    img0 = cv2.imread(str(image_path))\n",
+    "    h0, w0 = img0.shape[:2]\n",
+    "    img_rgb = cv2.cvtColor(img0, cv2.COLOR_BGR2RGB)\n",
+    "    img_resized = cv2.resize(img_rgb, (imgsz, imgsz))\n",
+    "    \n",
+    "    img_tensor = torch.from_numpy(img_resized.transpose(2, 0, 1)).float() / 255.0\n",
+    "    img_tensor = img_tensor.unsqueeze(0).to(device)\n",
+    "    \n",
+    "    with torch.no_grad():\n",
+    "        preds = model(img_tensor)\n",
+    "        \n",
+    "    # Decode predictions & apply NMS\n",
+    "    detections = postprocess_detections(preds, conf_thres=0.25, iou_thres=0.45)[0]\n",
+    "    \n",
+    "    fig, ax = plt.subplots(figsize=(10, 8))\n",
+    "    ax.imshow(img_rgb)\n",
+    "    \n",
+    "    if len(detections) > 0:\n",
+    "        print(f\"\u2713 Detected {len(detections)} objects:\")\n",
+    "        for det in detections:\n",
+    "            x1, y1, x2, y2 = int(det[0]*w0), int(det[1]*h0), int(det[2]*w0), int(det[3]*h0)\n",
+    "            score = det[4]\n",
+    "            cls_id = int(det[5])\n",
+    "            \n",
+    "            name = class_names[cls_id] if class_names and cls_id in class_names else f\"cls_{cls_id}\"\n",
+    "            print(f\"  - {name}: {score*100:.1f}%\")\n",
+    "            \n",
+    "            rect = plt.Rectangle((x1, y1), x2-x1, y2-y1, fill=False, color='#ff0000', linewidth=3)\n",
+    "            ax.add_patch(rect)\n",
+    "            ax.text(x1, y1-10, f\"{name} {score:.2f}\", color='white', fontsize=12,\n",
+    "                    bbox=dict(facecolor='#ff0000', alpha=0.8, edgecolor='none', boxstyle='round,pad=0.2'))\n",
+    "    else:\n",
+    "        print(\"No objects detected.\")\n",
+    "    \n",
+    "    plt.axis('off')\n",
+    "    plt.show()"
+]
+
 INFERENCE_SOURCE = [
     "# %% Execute inference on validation sample\n",
     "import os\n",
@@ -154,6 +227,7 @@ def patch_notebook():
     ptq_patched = False
     qat_patched = False
     infer_patched = False
+    infer_code_patched = False
 
     for cell in nb_data.get('cells', []):
         if cell.get('cell_type') == 'code':
@@ -166,12 +240,16 @@ def patch_notebook():
                 cell['source'] = [line + '\n' if not line.endswith('\n') else line for line in QAT_SOURCE]
                 qat_patched = True
                 print("  [SUCCESS] Patched QAT Fine-Tuning Cell!")
+            elif cell_id == 'infer':
+                cell['source'] = [line + '\n' if not line.endswith('\n') else line for line in INFER_SOURCE]
+                infer_patched = True
+                print("  [SUCCESS] Patched Inference Helper Function Cell!")
             elif cell_id == 'run_inference_code':
                 cell['source'] = [line + '\n' if not line.endswith('\n') else line for line in INFERENCE_SOURCE]
-                infer_patched = True
+                infer_code_patched = True
                 print("  [SUCCESS] Patched Inference Execution Cell!")
 
-    if ptq_patched or qat_patched or infer_patched:
+    if ptq_patched or qat_patched or infer_patched or infer_code_patched:
         with open(NOTEBOOK_PATH, 'w') as f:
             json.dump(nb_data, f, indent=1)
         print("  [SUCCESS] Notebook saved successfully!")
