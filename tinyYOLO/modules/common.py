@@ -186,11 +186,24 @@ class SEBlock(nn.Module):
             nn.Linear(mid, c, bias=False),
             nn.Sigmoid(),
         )
+        
+        # Resilient quantized multiplication block
+        try:
+            import torch.ao.quantization as ao_quant
+            self.mul_op = ao_quant.QFunctional()
+        except (ImportError, AttributeError):
+            try:
+                import torch.nn.quantized as nn_quant
+                self.mul_op = nn_quant.FloatFunctional()
+            except (ImportError, AttributeError):
+                self.mul_op = None
 
     def forward(self, x):
         b, c, _, _ = x.shape
         y = self.pool(x).view(b, c)
         y = self.fc(y).view(b, c, 1, 1)
+        if self.mul_op is not None and (x.is_quantized or y.is_quantized):
+            return self.mul_op.mul(x, y)
         return x * y
 
 
@@ -210,11 +223,24 @@ class ECABlock(nn.Module):
         self.pool = nn.AdaptiveAvgPool2d(1)
         self.conv = nn.Conv1d(1, 1, kernel_size=k, padding=k // 2, bias=False)
         self.sigmoid = nn.Sigmoid()
+        
+        # Resilient quantized multiplication block
+        try:
+            import torch.ao.quantization as ao_quant
+            self.mul_op = ao_quant.QFunctional()
+        except (ImportError, AttributeError):
+            try:
+                import torch.nn.quantized as nn_quant
+                self.mul_op = nn_quant.FloatFunctional()
+            except (ImportError, AttributeError):
+                self.mul_op = None
 
     def forward(self, x):
         b, c, _, _ = x.shape
         y = self.pool(x).view(b, 1, c)
         y = self.sigmoid(self.conv(y)).view(b, c, 1, 1)
+        if self.mul_op is not None and (x.is_quantized or y.is_quantized):
+            return self.mul_op.mul(x, y)
         return x * y
 
 
@@ -233,11 +259,24 @@ class LightSpatialAttn(nn.Module):
             nn.BatchNorm2d(1),
             nn.Sigmoid(),
         )
+        
+        # Resilient quantized multiplication block
+        try:
+            import torch.ao.quantization as ao_quant
+            self.mul_op = ao_quant.QFunctional()
+        except (ImportError, AttributeError):
+            try:
+                import torch.nn.quantized as nn_quant
+                self.mul_op = nn_quant.FloatFunctional()
+            except (ImportError, AttributeError):
+                self.mul_op = None
 
     def forward(self, x):
         avg = torch.mean(x, dim=1, keepdim=True)
         mx, _ = torch.max(x, dim=1, keepdim=True)
         attn = self.conv(torch.cat([avg, mx], dim=1))
+        if self.mul_op is not None and (x.is_quantized or attn.is_quantized):
+            return self.mul_op.mul(x, attn)
         return x * attn
 
 
