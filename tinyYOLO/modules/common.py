@@ -89,10 +89,24 @@ class GhostConv(nn.Module):
         new_ch = init_ch * (ratio - 1)
         self.primary = ConvBNAct(c1, init_ch, k, s, act=act)
         self.cheap = ConvBNAct(init_ch, new_ch, dw_k, 1, g=init_ch, act=act)
+        
+        # Resilient quantized concatenation block
+        try:
+            import torch.ao.quantization as ao_quant
+            self.cat_op = ao_quant.QFunctional()
+        except (ImportError, AttributeError):
+            try:
+                import torch.nn.quantized as nn_quant
+                self.cat_op = nn_quant.FloatFunctional()
+            except (ImportError, AttributeError):
+                self.cat_op = None
 
     def forward(self, x):
         y = self.primary(x)
-        return torch.cat([y, self.cheap(y)], dim=1)
+        features = [y, self.cheap(y)]
+        if self.cat_op is not None and (y.is_quantized or features[1].is_quantized):
+            return self.cat_op.cat(features, dim=1)
+        return torch.cat(features, dim=1)
 
 
 class GhostBottleneck(nn.Module):
@@ -243,9 +257,23 @@ class C3Ghost(nn.Module):
         self.m = nn.Sequential(
             *[GhostBottleneck(c_, c_, act=act) for _ in range(n)]
         )
+        
+        # Resilient quantized concatenation block
+        try:
+            import torch.ao.quantization as ao_quant
+            self.cat_op = ao_quant.QFunctional()
+        except (ImportError, AttributeError):
+            try:
+                import torch.nn.quantized as nn_quant
+                self.cat_op = nn_quant.FloatFunctional()
+            except (ImportError, AttributeError):
+                self.cat_op = None
 
     def forward(self, x):
-        return self.cv3(torch.cat([self.m(self.cv1(x)), self.cv2(x)], dim=1))
+        feats = [self.m(self.cv1(x)), self.cv2(x)]
+        if self.cat_op is not None and any(t.is_quantized for t in feats):
+            return self.cv3(self.cat_op.cat(feats, dim=1))
+        return self.cv3(torch.cat(feats, dim=1))
 
 
 # ---------------------------------------------------------------------------
@@ -258,6 +286,19 @@ class Concat(nn.Module):
     def __init__(self, dim=1):
         super().__init__()
         self.dim = dim
+        
+        # Resilient quantized concatenation block
+        try:
+            import torch.ao.quantization as ao_quant
+            self.cat_op = ao_quant.QFunctional()
+        except (ImportError, AttributeError):
+            try:
+                import torch.nn.quantized as nn_quant
+                self.cat_op = nn_quant.FloatFunctional()
+            except (ImportError, AttributeError):
+                self.cat_op = None
 
     def forward(self, x):
+        if self.cat_op is not None and any(t.is_quantized for t in x if isinstance(t, torch.Tensor)):
+            return self.cat_op.cat(x, self.dim)
         return torch.cat(x, self.dim)
