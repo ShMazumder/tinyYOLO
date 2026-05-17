@@ -197,6 +197,14 @@
             gap: 16px;
             height: 100%;
             justify-content: flex-start;
+            transition: var(--transition-smooth);
+        }
+
+        @media (min-width: 1200px) {
+            .control-col:not(:last-child) {
+                border-right: 1px solid rgba(255, 255, 255, 0.06);
+                padding-right: 24px;
+            }
         }
 
         .panel-section {
@@ -1389,6 +1397,72 @@
             0%, 100% { transform: scale(1); opacity: 0.7; }
             50% { transform: scale(1.15); opacity: 1; }
         }
+
+        /* Floating Navigation & Execution Dock styling */
+        .floating-nav-dock {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 999;
+            background: rgba(10, 15, 30, 0.75);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 30px;
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            transition: var(--transition-smooth);
+        }
+
+        .floating-nav-dock:hover {
+            border-color: rgba(var(--accent-glow-rgb), 0.3);
+            box-shadow: 0 0 25px rgba(var(--accent-glow-rgb), 0.15);
+        }
+
+        .dock-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            transition: var(--transition-fast);
+        }
+
+        .dock-btn:hover {
+            color: var(--accent-glow);
+            background: rgba(var(--accent-glow-rgb), 0.06);
+        }
+
+        .dock-btn.run-pulse {
+            color: var(--accent-glow);
+            background: var(--accent-bg-glow);
+            border: 1px solid rgba(var(--accent-glow-rgb), 0.2);
+            animation: dockPulse 2.0s infinite ease-in-out;
+        }
+
+        @keyframes dockPulse {
+            0%, 100% { box-shadow: 0 0 10px rgba(var(--accent-glow-rgb), 0.2); }
+            50% { box-shadow: 0 0 20px rgba(var(--accent-glow-rgb), 0.45); }
+        }
+
+        .dock-divider {
+            width: 1px;
+            height: 18px;
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .dock-label {
+            white-space: nowrap;
+        }
     </style>
 </head>
 <body>
@@ -1767,6 +1841,41 @@
             </div>
         </div>
 
+    </div>
+
+    <!-- Floating Navigation & Execution Dock (Sleek Glassmorphic Widget) -->
+    <div class="floating-nav-dock">
+        <!-- Scroll to Top Controls -->
+        <button class="dock-btn" onclick="scrollToSection('control-panel')" title="Scroll to Top Controls">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="18 15 12 9 6 15"></polyline>
+            </svg>
+            <span class="dock-label">Controls</span>
+        </button>
+        
+        <!-- Divider -->
+        <span class="dock-divider"></span>
+        
+        <!-- Scroll to Diagram Canvas -->
+        <button class="dock-btn" onclick="scrollToSection('diagram-outer-container')" title="Scroll to Execution Canvas">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="9" y1="3" x2="9" y2="21"></line>
+                <line x1="15" y1="3" x2="15" y2="21"></line>
+            </svg>
+            <span class="dock-label">Blueprint</span>
+        </button>
+        
+        <!-- Divider -->
+        <span class="dock-divider"></span>
+        
+        <!-- Run Propagation CTA -->
+        <button class="dock-btn run-pulse" onclick="runInference()" title="Execute Inference Wave">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+            <span class="dock-label">Run Wave</span>
+        </button>
     </div>
 
     <!-- Details Modal Drawer Component -->
@@ -2435,6 +2544,14 @@
             if (statMap) statMap.innerText = data.map;
         }
 
+        // Smooth scroll to a target vertical section
+        function scrollToSection(className) {
+            const el = document.querySelector('.' + className);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+
         // Run glowing wave particle inference trace simulation
         function runInference() {
             const statusDot = document.getElementById('screen-status-dot');
@@ -2451,6 +2568,12 @@
 
             // Automatically advance to Step 3: Run Inference
             goToStep(3);
+
+            // Smoothly scroll to focus the SVG Canvas (the execution viewport)
+            const canvasContainer = document.querySelector('.diagram-outer-container');
+            if (canvasContainer) {
+                canvasContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
 
             const timeline = [
                 { from: 'input', to: 'stem', delay: 0 },
