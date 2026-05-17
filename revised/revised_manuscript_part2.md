@@ -6,6 +6,75 @@
 
 TinyYOLO follows the established three-stage detection pipeline — Backbone, Neck, Head — with each stage constructed from primitives optimized for parameter efficiency and, in the quantized variant, INT8 compatibility.
 
+**Figure 1: TinyYOLO Overall Architectural Pipeline (Standard vs. Quantized Variants)**
+
+```mermaid
+flowchart TD
+    subgraph Input ["Input & Preprocessing"]
+        I["Input Image<br/>(160 / 224 / 320 / 416 / 640)"]
+    end
+
+    subgraph Backbone ["Backbone: Ghost-based Feature Extractor (~80K Params)"]
+        Stem["Stem Block<br/>(3x3 Conv, s=2, BN, Act)"]
+        S1["Stage 1<br/>(1x GhostBottleneck, s=2, s_dw=2)"]
+        S2["Stage 2 (P3)<br/>(2x GhostBottleneck, s=2, s_dw=2)"]
+        S3["Stage 3 (P4)<br/>(3x GhostBottleneck, s=2, s_dw=2)"]
+        S4["Stage 4 (P5)<br/>(2x GhostBottleneck, s=2, s_dw=2)"]
+        
+        Attn4["P4 Attention<br/>(LightSpatialAttn / ECABlock)"]
+        Attn5["P5 Attention<br/>(SEBlock / ECABlock)"]
+    end
+
+    subgraph Neck ["Neck: LitePAN Multi-Scale Fusion (~60K Params)"]
+        L3["Lateral P3<br/>(1x1 ConvBNAct)"]
+        L4["Lateral P4<br/>(1x1 ConvBNAct)"]
+        L5["Lateral P5<br/>(1x1 ConvBNAct)"]
+        
+        F4["FPN F4<br/>(Upsample + Concat + DWConv)"]
+        F3["FPN F3<br/>(Upsample + Concat + DWConv)"]
+        
+        N4["PAN N4<br/>(Downsample + Concat + DWConv)"]
+        N5["PAN N5<br/>(Downsample + Concat + DWConv)"]
+    end
+
+    subgraph Head ["Heads: Modular Decoupled Task Branches (~90K-150K Params)"]
+        TinyDetect["TinyDetect (Object Detection)<br/>[4 bbox + 1 obj + nc cls]"]
+        TinySegment["TinySegment (Instance Segmentation)<br/>[bbox + obj + cls + 32 proto-coefficients]"]
+        TinyPose["TinyPose (Pose Estimation)<br/>[bbox + obj + cls + 17 keypoints x 3]"]
+        TinyClassify["TinyClassify (Classification)<br/>[GlobalPool + FC]"]
+        TinyOBB["TinyOBB (Oriented BBox)<br/>[bbox + obj + cls + 1 angle]"]
+    end
+
+    I --> Stem
+    Stem --> S1
+    S1 --> S2
+    S2 --> S3
+    S3 --> S4
+    
+    S2 --> L3
+    S3 --> Attn4 --> L4
+    S4 --> Attn5 --> L5
+
+    L5 --> F4
+    L4 --> F4
+    F4 --> F3
+    L3 --> F3
+    
+    F3 --> N4
+    F4 --> N4
+    N4 --> N5
+    L5 --> N5
+
+    F3 --> Head
+    N4 --> Head
+    N5 --> Head
+
+    style Input fill:#f9f,stroke:#333,stroke-width:2px
+    style Backbone fill:#bbf,stroke:#333,stroke-width:2px
+    style Neck fill:#dfd,stroke:#333,stroke-width:2px
+    style Head fill:#fdd,stroke:#333,stroke-width:2px
+```
+
 ### 3.1 Design Principles
 
 The architecture is governed by four design principles:
@@ -40,6 +109,37 @@ $$\text{Stem}(x) = \phi(BN(Conv_{3\times3, s=2}(x))) \quad \text{where } \phi = 
 $$\text{GhostBN}(x) = \text{GhostConv}_2(\text{DW}_{s}(\text{GhostConv}_1(x))) + \text{Shortcut}(x)$$
 
 where GhostConv generates $c/2$ features via primary 1×1 convolution followed by $c/2$ features via cheap 3×3 depthwise transforms, concatenating to produce $c$ output channels at approximately half the cost of a standard convolution.
+
+**Figure 2: Architectural Details of GhostConv and GhostBottleneck Blocks**
+
+```mermaid
+flowchart TD
+    subgraph GhostConv ["GhostConv Block (Generates c channels)"]
+        InGC["Input Feature Map (c_in)"] --> PrimConv["Primary Conv (1x1)<br/>c_out / 2 channels"]
+        InGC --> CheapTransform["Cheap Transform (3x3 DWConv)<br/>c_out / 2 channels"]
+        PrimConv --> ConcatGC["Concatenation (c_out)"]
+        CheapTransform --> ConcatGC
+    end
+
+    subgraph GhostBN_Stride1 ["GhostBottleneck Stride = 1 Block"]
+        InGB1["Input Feature Map (c_in)"] --> GC1_1["GhostConv (1x1, Expand)<br/>c_mid channels"]
+        GC1_1 --> GC1_2["GhostConv (1x1, Project)<br/>c_out channels"]
+        InGB1 --> Shortcut1["Shortcut (1x1 Conv if c_in != c_out else Identity)"]
+        GC1_2 --> Add1["Element-wise Addition"]
+        Shortcut1 --> Add1
+        Add1 --> OutGB1["Output Feature Map (c_out)"]
+    end
+
+    subgraph GhostBN_Stride2 ["GhostBottleneck Stride = 2 Block"]
+        InGB2["Input Feature Map (c_in)"] --> GC2_1["GhostConv (1x1, Expand)<br/>c_mid channels"]
+        GC2_1 --> DW2["DWConv (3x3, stride=2)<br/>Downsample"]
+        DW2 --> GC2_2["GhostConv (1x1, Project)<br/>c_out channels"]
+        InGB2 --> Shortcut2["Shortcut<br/>(DWConv s=2 + 1x1 Conv)"]
+        GC2_2 --> Add2["Element-wise Addition"]
+        Shortcut2 --> Add2
+        Add2 --> OutGB2["Output Feature Map (c_out)"]
+    end
+```
 
 **Attention Modules.** Attention is applied after Stage 3 (P4) and Stage 4 (P5):
 
@@ -90,6 +190,39 @@ Bottom-Up (PAN):
 Output: [F3, N4, N5] — all 64 channels
 ```
 
+**Figure 3: LitePAN Bidirectional Multi-Scale Feature Fusion Pathway**
+
+```mermaid
+flowchart TD
+    P3["P3 (Backbone /8)"] --> L3["L3 (Lateral 40→64)"]
+    P4["P4 (Backbone /16)"] --> L4["L4 (Lateral 80→64)"]
+    P5["P5 (Backbone /32)"] --> L5["L5 (Lateral 160→64)"]
+
+    L5 --> Up5["Upsample x2"]
+    Up5 --> Merge4["Concatenation (128)"]
+    L4 --> Merge4
+    Merge4 --> F4_Proj["1x1 Pointwise Conv"] --> F4_DW["3x3 DWConv"] --> F4["F4 (64 ch)"]
+
+    F4 --> Up4["Upsample x2"]
+    Up4 --> Merge3["Concatenation (128)"]
+    L3 --> Merge3
+    Merge3 --> F3_Proj["1x1 Pointwise Conv"] --> F3_DW["3x3 DWConv"] --> F3["F3 (64 ch, Output)"]
+
+    F3 --> Down3["3x3 DWConv, s=2"]
+    Down3 --> MergeN4["Concatenation (128)"]
+    F4 --> MergeN4
+    MergeN4 --> N4_Proj["1x1 Pointwise Conv"] --> N4_DW["3x3 DWConv"] --> N4["N4 (64 ch, Output)"]
+
+    N4 --> Down4["3x3 DWConv, s=2"]
+    Down4 --> MergeN5["Concatenation (128)"]
+    L5 --> MergeN5
+    MergeN5 --> N5_Proj["1x1 Pointwise Conv"] --> N5_DW["3x3 DWConv"] --> N5["N5 (64 ch, Output)"]
+
+    style F3 fill:#dfd,stroke:#333,stroke-width:1px
+    style N4 fill:#dfd,stroke:#333,stroke-width:1px
+    style N5 fill:#dfd,stroke:#333,stroke-width:1px
+```
+
 The merge operation uses a 1×1 pointwise convolution for channel reduction (128→64) followed by a 3×3 depthwise separable convolution for spatial processing. This differs from standard PAN implementations that use CSP or C2f blocks; we deliberately avoid these heavier fusion modules as the neck's 64-channel feature dimension provides insufficient width for the split-and-concatenate paradigm of CSP to be beneficial.
 
 **Activation Consistency.** The neck receives the variant-appropriate activation (`act` parameter) from the model builder and uses it consistently in all internal ConvBNAct and DWConv layers. The `build_model()` function passes `act='silu'` for standard and `act='relu6'` for quantized variants.
@@ -127,6 +260,33 @@ for ch in in_channels:
 ```
 
 The objectness output is concatenated with bbox and class predictions: output = [4 bbox, 1 obj, nc cls] per grid cell, yielding $4 + 1 + nc$ channels per anchor.
+
+**Figure 4: Decoupled Anchor-Free Detection Head Structure (Configurable Activation and Dedicated Objectness)**
+
+```mermaid
+flowchart TD
+    InFeat["Input Feature from LitePAN (64 ch)"] --> DecoupledCls["Classification Branch (64 ch)"]
+    InFeat --> DecoupledReg["Regression Branch (64 ch)"]
+
+    DecoupledCls --> ClsDW1["DWConv (3x3, act=variant)"] --> ClsDW2["DWConv (3x3, act=variant)"]
+    ClsDW2 --> ClsOut["1x1 Conv (Class Preds)<br/>[nc channels]"]
+
+    DecoupledReg --> RegDW1["DWConv (3x3, act=variant)"] --> RegDW2["DWConv (3x3, act=variant)"]
+    RegDW2 --> RegOut["1x1 Conv (Bounding Box)<br/>[4 channels]"]
+    
+    InFeat --> DedicatedObj["Dedicated Objectness Branch"] --> ObjOut["1x1 Conv (Objectness)<br/>[1 channel]"]
+
+    ClsOut --> ConcatHead["Concatenation<br/>[4 bbox + 1 obj + nc cls]"]
+    RegOut --> ConcatHead
+    ObjOut --> ConcatHead
+    ConcatHead --> FinalOutput["Final Scale Output<br/>(85 channels for COCO)"]
+
+    style ClsDW1 fill:#fff5e6,stroke:#ff9800,stroke-width:1px
+    style ClsDW2 fill:#fff5e6,stroke:#ff9800,stroke-width:1px
+    style RegDW1 fill:#fff5e6,stroke:#ff9800,stroke-width:1px
+    style RegDW2 fill:#fff5e6,stroke:#ff9800,stroke-width:1px
+    style DedicatedObj fill:#e6f7ff,stroke:#1890ff,stroke-width:1px
+```
 
 **Per-Scale Output:**
 
