@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex 2025.12.8)  18 MAY 2026 21:20
+This is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex 2025.12.8)  18 MAY 2026 21:21
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -1045,11 +1045,11 @@ Package rerunfilecheck Info: File `tinyyolo_ieee.out' has not changed.
 (rerunfilecheck)             Checksum: 545880482BDD18388C1D72036359CE0D;7633.
  ) 
 Here is how much of TeX's memory you used:
- 23968 strings out of 474662
- 471684 string characters out of 5751109
+ 23967 strings out of 474662
+ 471677 string characters out of 5751109
  880603 words of memory out of 5000000
  46494 multiletter control sequences out of 15000+600000
- 607714 words of font info for 127 fonts, out of 8000000 for 9000
+ 606578 words of font info for 126 fonts, out of 8000000 for 9000
  319 hyphenation exceptions out of 8191
  84i,10n,91p,2036b,882s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </usr/local/texlive/2025basic/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx1
