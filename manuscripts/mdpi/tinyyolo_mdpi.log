@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex 2025.12.8)  18 MAY 2026 21:20
+This is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex 2025.12.8)  18 MAY 2026 21:28
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -823,24 +823,17 @@ Overfull \hbox (32.66423pt too wide) in paragraph at lines 34--34
 
 [2]
 
-LaTeX Warning: `h' float specifier changed to `ht'.
-
-
-
 [3]
 
 [4]
-Overfull \hbox (33.33522pt too wide) in paragraph at lines 179--188
- [][] 
- []
-
-
-LaTeX Warning: `h' float specifier changed to `ht'.
-
-
 
 [5]
-Overfull \hbox (28.3352pt too wide) in paragraph at lines 197--206
+Overfull \hbox (33.33522pt too wide) in paragraph at lines 207--216
+ [][] 
+ []
+
+
+Overfull \hbox (28.3352pt too wide) in paragraph at lines 225--234
  [][] 
  []
 
@@ -854,16 +847,15 @@ LaTeX Warning: `h' float specifier changed to `ht'.
 LaTeX Warning: `h' float specifier changed to `ht'.
 
 
-Overfull \hbox (5.17447pt too wide) in paragraph at lines 296--297
- []\OT1/cmr/bx/n/10 Attention Mech-a-nism Im-pact:[] \OT1/cmr/m/n/10 ECA at-ten
--tion achieves the high-est ac-cu-racy im-prove-ment (+1.6%
- []
+LaTeX Warning: `h' float specifier changed to `ht'.
 
 
 
 [6]
-
-LaTeX Warning: `h' float specifier changed to `ht'.
+Overfull \hbox (5.17447pt too wide) in paragraph at lines 324--325
+ []\OT1/cmr/bx/n/10 Attention Mech-a-nism Im-pact:[] \OT1/cmr/m/n/10 ECA at-ten
+-tion achieves the high-est ac-cu-racy im-prove-ment (+1.6%
+ []
 
 
 
@@ -884,10 +876,10 @@ Package rerunfilecheck Info: File `tinyyolo_mdpi.out' has not changed.
 (rerunfilecheck)             Checksum: FB1D3A46D5D1C1F5C4CC6EEECB27E3FF;4833.
  ) 
 Here is how much of TeX's memory you used:
- 23533 strings out of 474662
- 460898 string characters out of 5751109
- 868215 words of memory out of 5000000
- 46071 multiletter control sequences out of 15000+600000
+ 23595 strings out of 474662
+ 461825 string characters out of 5751109
+ 868322 words of memory out of 5000000
+ 46132 multiletter control sequences out of 15000+600000
  570673 words of font info for 81 fonts, out of 8000000 for 9000
  319 hyphenation exceptions out of 8191
  84i,10n,93p,2006b,888s stack positions out of 10000i,1000n,20000p,200000b,200000s
@@ -895,27 +887,29 @@ Here is how much of TeX's memory you used:
 en/ec/tcrm1000.600pk></usr/local/texlive/2025basic/texmf-dist/fonts/type1/publi
 c/amsfonts/cm/cmbx10.pfb></usr/local/texlive/2025basic/texmf-dist/fonts/type1/p
 ublic/amsfonts/cm/cmbx12.pfb></usr/local/texlive/2025basic/texmf-dist/fonts/typ
-e1/public/amsfonts/cm/cmbx9.pfb></usr/local/texlive/2025basic/texmf-dist/fonts/
-type1/public/amsfonts/cm/cmex10.pfb></usr/local/texlive/2025basic/texmf-dist/fo
-nts/type1/public/amsfonts/cm/cmmi10.pfb></usr/local/texlive/2025basic/texmf-dis
-t/fonts/type1/public/amsfonts/cm/cmmi5.pfb></usr/local/texlive/2025basic/texmf-
-dist/fonts/type1/public/amsfonts/cm/cmmi7.pfb></usr/local/texlive/2025basic/tex
-mf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/local/texlive/2025basic/
-texmf-dist/fonts/type1/public/amsfonts/cm/cmr12.pfb></usr/local/texlive/2025bas
-ic/texmf-dist/fonts/type1/public/amsfonts/cm/cmr7.pfb></usr/local/texlive/2025b
-asic/texmf-dist/fonts/type1/public/amsfonts/cm/cmr9.pfb></usr/local/texlive/202
-5basic/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/local/texlive
-/2025basic/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy5.pfb></usr/local/texl
-ive/2025basic/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy7.pfb></usr/local/t
-exlive/2025basic/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy9.pfb></usr/loca
-l/texlive/2025basic/texmf-dist/fonts/type1/public/amsfonts/cm/cmti10.pfb></usr/
-local/texlive/2025basic/texmf-dist/fonts/type1/public/amsfonts/cm/cmti9.pfb></u
-sr/local/texlive/2025basic/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt10.pfb
->
-Output written on tinyyolo_mdpi.pdf (11 pages, 302331 bytes).
+e1/public/amsfonts/cm/cmbx5.pfb></usr/local/texlive/2025basic/texmf-dist/fonts/
+type1/public/amsfonts/cm/cmbx9.pfb></usr/local/texlive/2025basic/texmf-dist/fon
+ts/type1/public/amsfonts/cm/cmex10.pfb></usr/local/texlive/2025basic/texmf-dist
+/fonts/type1/public/amsfonts/cm/cmmi10.pfb></usr/local/texlive/2025basic/texmf-
+dist/fonts/type1/public/amsfonts/cm/cmmi5.pfb></usr/local/texlive/2025basic/tex
+mf-dist/fonts/type1/public/amsfonts/cm/cmmi7.pfb></usr/local/texlive/2025basic/
+texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/local/texlive/2025bas
+ic/texmf-dist/fonts/type1/public/amsfonts/cm/cmr12.pfb></usr/local/texlive/2025
+basic/texmf-dist/fonts/type1/public/amsfonts/cm/cmr5.pfb></usr/local/texlive/20
+25basic/texmf-dist/fonts/type1/public/amsfonts/cm/cmr7.pfb></usr/local/texlive/
+2025basic/texmf-dist/fonts/type1/public/amsfonts/cm/cmr9.pfb></usr/local/texliv
+e/2025basic/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/local/te
+xlive/2025basic/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy5.pfb></usr/local
+/texlive/2025basic/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy7.pfb></usr/lo
+cal/texlive/2025basic/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy9.pfb></usr
+/local/texlive/2025basic/texmf-dist/fonts/type1/public/amsfonts/cm/cmti10.pfb><
+/usr/local/texlive/2025basic/texmf-dist/fonts/type1/public/amsfonts/cm/cmti9.pf
+b></usr/local/texlive/2025basic/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt1
+0.pfb>
+Output written on tinyyolo_mdpi.pdf (11 pages, 332030 bytes).
 PDF statistics:
- 416 PDF objects out of 1000 (max. 8388607)
- 362 compressed objects within 4 object streams
- 107 named destinations out of 1000 (max. 500000)
+ 428 PDF objects out of 1000 (max. 8388607)
+ 370 compressed objects within 4 object streams
+ 108 named destinations out of 1000 (max. 500000)
  213 words of extra memory for PDF output out of 10000 (max. 10000000)
 

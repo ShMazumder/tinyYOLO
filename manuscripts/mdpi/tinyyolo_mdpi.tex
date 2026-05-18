@@ -75,6 +75,34 @@ GhostNet \cite{han2020ghostnet} demonstrated that redundancy in CNN feature maps
 The choice of activation function critically impacts quantization robustness. SiLU, defined as $f(x) = x \cdot \sigma(x)$, produces unbounded positive outputs and a smooth non-monotonic region near zero where small input perturbations cause disproportionate output changes, introducing systematic error under INT8's 256-level discretization \cite{nagel2021white, banner2019post}. ReLU6, defined as $f(x) = \min(\max(0, x), 6)$, bounds outputs to $[0, 6]$, enabling a clean linear mapping to INT8 range with uniform quantization step size $\Delta = 6/255 \approx 0.0235$ \cite{sandler2018mobilenetv2}. Similarly, squeeze-and-excitation (SE) attention \cite{hu2018squeeze} creates internal bottleneck dimensions where quantization error accumulates through two successive linear projections, whereas Efficient Channel Attention (ECA) \cite{wang2020eca} replaces FC layers with a single 1D convolution, eliminating the bottleneck and reducing quantization-sensitive operations.
 
 \section{Materials and Methods}
+TinyYOLO follows the established three-stage detection pipeline---Backbone, Neck, Head---with each stage constructed from primitives optimized for parameter efficiency and, in the quantized variant, INT8 compatibility. Figure~\ref{fig:pipeline} illustrates the overall pipeline.
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[node distance=2.2cm, auto, >=latex', thick]
+  % Nodes
+  \node [block, fill=magenta!10, draw=magenta!70] (in) {Input Image\\(160 $\times$ 160 -- 640 $\times$ 640)};
+  \node [block, fill=blue!10, draw=blue!70, right=0.8cm of in] (bb) {TinyBackbone\\(Ghost Convs, $\sim$80K)};
+  \node [block, fill=green!10, draw=green!70, right=0.8cm of bb] (nk) {LitePAN Neck\\(DWConvs, $\sim$60K)};
+  \node [block, fill=red!10, draw=red!70, right=0.8cm of nk] (hd) {Modular Heads\\(Decoupled, $\sim$90--150K)};
+  
+  % Path
+  \draw [->, thick] (in) -- (bb);
+  \draw [->, thick] (bb) -- (nk);
+  \draw [->, thick] (nk) -- (hd);
+  
+  % Annotations
+  \node [below=0.4cm of bb, text width=3.3cm, align=center, font=\tiny] (bban) {\textbf{Backbone Attention}:\\Std: LightSpatial + SE\\Quant: ECA Blocks};
+  \node [below=0.4cm of nk, text width=3.3cm, align=center, font=\tiny] (nkan) {\textbf{Neck Activations}:\\Std: SiLU\\Quant: ReLU6};
+  \node [below=0.4cm of hd, text width=3.3cm, align=center, font=\tiny] (hdan) {\textbf{Task Heads}:\\TinyDetect, TinySegment,\\TinyPose, TinyClassify, TinyOBB};
+  
+  \draw [draw=black!50, dotted, thin] (bb) -- (bban);
+  \draw [draw=black!50, dotted, thin] (nk) -- (nkan);
+  \draw [draw=black!50, dotted, thin] (hd) -- (hdan);
+\end{tikzpicture}
+\caption{TinyYOLO overall architectural pipeline showing standard vs. quantized configurations.}
+\label{fig:pipeline}
+\end{figure}
 
 \subsection{Backbone: Ghost-Based Feature Extraction}
 The backbone extracts multi-scale features at three pyramid levels: P3 (/8 stride), P4 (/16 stride), and P5 (/32 stride). A single ConvBNAct stem layer projects the 3-channel RGB input to 16 feature channels with stride-2 downsampling:
