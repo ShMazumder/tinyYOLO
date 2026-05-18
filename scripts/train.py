@@ -349,7 +349,8 @@ def load_dataset_config(data_name):
             # Backward compatibility: if path already has datasets/, resolve from root
             base = PROJECT_ROOT / path_val
         else:
-            base = PROJECT_ROOT / 'datasets' / path_val
+            # Resolve relative to the YAML file's directory
+            base = (local_yaml.parent / path_val).resolve()
         raw_train = cfg.get('train', 'images/train')
         raw_val = cfg.get('val', 'images/val')
 
@@ -529,9 +530,17 @@ class SimpleDetectionDataset(Dataset):
 
         # Universal label root discovery
         self.label_root = None
-        print(f"  [INFO] Searching for labels folder under 'datasets/'...")
+        
+        # Determine the best search root based on the first image directory
+        # Go up a few levels to find the dataset root
+        search_root = img_dirs[0]
+        for _ in range(3):
+            if search_root.name == 'datasets' or search_root.parent == search_root:
+                break
+            search_root = search_root.parent
+            
+        print(f"  [INFO] Searching for labels folder under '{search_root.name}/'...")
         import glob
-        search_root = PROJECT_ROOT / 'datasets'
         # Look for any folder named 'labels'
         matches = glob.glob(str(search_root / "**" / "labels"), recursive=True)
         if matches:
@@ -1066,7 +1075,7 @@ def load_pretrained_backbone(model, task='det'):
                 # Remove used shape to avoid duplicate mapping if possible
                 # (Optional: source_shapes.pop(param.shape))
         
-        model.load_state_dict(target_state)
+        model.load_state_dict(target_state, strict=False)
         print(f"  [PRETRAINED] Shape-aware mapping matched and loaded {count} backbone layers.")
     except Exception as e:
         print(f"  [WARNING] Pretrained loading failed: {e}")
