@@ -1,0 +1,145 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\citation{zhou2019edge,li2020edge}
+\citation{redmon2016you,redmon2017yolo9000,redmon2018yolov3,bochkovskiy2020yolov4,ge2021yolox,li2022yolov6,wang2023yolov7,jocher2023yolov8,wang2024yolov10,tian2025yolo12,shao2025yolo26}
+\citation{krishnamoorthi2018quantizing,nagel2021white}
+\citation{liu2019rethinking,he2019filter}
+\citation{han2020ghostnet}
+\citation{howard2017mobilenets}
+\@writefile{toc}{\contentsline {section}{\numberline {I}Introduction}{1}{section.1}\protected@file@percent }
+\citation{feng2021tood}
+\citation{wu2021yolofastest}
+\citation{lyu2020nanodet}
+\citation{lyu2021nanodetplus}
+\citation{yu2021picodet}
+\citation{wu2021yolofastest}
+\citation{lin2021mcunetv2}
+\citation{redmon2016you}
+\citation{redmon2017yolo9000,redmon2018yolov3}
+\citation{bochkovskiy2020yolov4}
+\citation{ge2021yolox}
+\citation{li2022yolov6}
+\citation{wang2023yolov7}
+\citation{jocher2023yolov8}
+\citation{wang2024yolov10}
+\citation{tian2025yolo12}
+\citation{shao2025yolo26}
+\citation{lyu2020nanodet,lyu2021nanodetplus}
+\citation{yu2021picodet}
+\citation{wu2021yolofastest}
+\citation{lin2021mcunetv2}
+\citation{han2020ghostnet}
+\citation{tang2022ghostnetv2}
+\citation{chen2023ghostdet,wang2022lightweight}
+\citation{nagel2021white,banner2019post}
+\citation{sandler2018mobilenetv2}
+\citation{hu2018squeeze}
+\citation{wang2020eca}
+\@writefile{toc}{\contentsline {section}{\numberline {II}Related Work}{2}{section.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-A}}Evolution of YOLO Architectures}{2}{subsection.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-B}}Lightweight Object Detectors}{2}{subsection.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-C}}Ghost-Based Architectures and Quantization-Aware Design}{2}{subsection.2.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {III}Architecture Design}{2}{section.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-A}}Backbone: Ghost-Based Feature Extraction}{2}{subsection.3.1}\protected@file@percent }
+\citation{ge2021yolox}
+\citation{feng2021tood}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces TinyYOLO overall architectural pipeline showing standard vs. quantized configurations.}}{3}{figure.1}\protected@file@percent }
+\newlabel{fig:pipeline}{{1}{3}{TinyYOLO overall architectural pipeline showing standard vs. quantized configurations}{figure.1}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Architectural details of the GhostConv block.}}{3}{figure.2}\protected@file@percent }
+\newlabel{fig:ghostconv}{{2}{3}{Architectural details of the GhostConv block}{figure.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-B}}Neck: LitePAN Multi-Scale Feature Fusion}{3}{subsection.3.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-C}}Detection Head: Decoupled Anchor-Free Design}{3}{subsection.3.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-D}}Multi-Task Head Extensions}{3}{subsection.3.4}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Modular Multi-Task Head Parameter Profiles}}{3}{table.1}\protected@file@percent }
+\newlabel{tab:multi_task_heads}{{I}{3}{Modular Multi-Task Head Parameter Profiles}{table.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {IV}Training Methodology}{3}{section.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-A}}Task-Aligned Label Assignment (TAL)}{3}{subsection.4.1}\protected@file@percent }
+\citation{zheng2020distance}
+\citation{wu2021yolofastest}
+\citation{lyu2020nanodet}
+\citation{yu2021picodet}
+\citation{jocher2020yolov5}
+\citation{jocher2023yolov8}
+\citation{wu2021yolofastest}
+\citation{lin2021mcunetv2}
+\citation{lyu2020nanodet}
+\citation{yu2021picodet}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-B}}Loss Formulation}{4}{subsection.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {V}Quantization Methodology}{4}{section.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-A}}Quantization-Aware Training (QAT)}{4}{subsection.5.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-B}}Robustness of ReLU6 and ECA Attention}{4}{subsection.5.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VI}Experimental Setup}{4}{section.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-A}}Datasets}{4}{subsection.6.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-B}}Hardware and Training Protocol}{4}{subsection.6.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VII}Results and Discussion}{4}{section.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-A}}Main Results on Pascal VOC}{4}{subsection.7.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Pascal VOC 2007 Test Results (Mean $\pm $ Std over 5 Runs)}}{4}{table.2}\protected@file@percent }
+\newlabel{tab:voc_results}{{II}{4}{Pascal VOC 2007 Test Results (Mean $\pm $ Std over 5 Runs)}{table.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-B}}Main Results on COCO val2017}{4}{subsection.7.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces COCO val2017 Results (Mean $\pm $ Std over 5 Runs)}}{4}{table.3}\protected@file@percent }
+\newlabel{tab:coco_results}{{III}{4}{COCO val2017 Results (Mean $\pm $ Std over 5 Runs)}{table.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-C}}State-of-the-Art Comparison}{4}{subsection.7.3}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces COCO val2017 SOTA Comparison (416$\times $416)}}{5}{table.4}\protected@file@percent }
+\newlabel{tab:sota_coco}{{IV}{5}{COCO val2017 SOTA Comparison (416$\times $416)}{table.4}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {V}{\ignorespaces Pascal VOC 2007 Test SOTA Comparison (416$\times $416)}}{5}{table.5}\protected@file@percent }
+\newlabel{tab:sota_voc}{{V}{5}{Pascal VOC 2007 Test SOTA Comparison (416$\times $416)}{table.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-D}}Resolution of the Legacy mAP Discrepancy}{5}{subsection.7.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VIII}Edge Deployment Validation}{5}{section.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-A}}Inference Latency}{5}{subsection.8.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-B}}Quantization Accuracy Preservation}{5}{subsection.8.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {VI}{\ignorespaces Inference Latency (ms) at 416$\times $416, Batch=1}}{5}{table.6}\protected@file@percent }
+\newlabel{tab:latency}{{VI}{5}{Inference Latency (ms) at 416$\times $416, Batch=1}{table.6}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {VII}{\ignorespaces Quantization Accuracy Preservation (VOC 2007 Test)}}{5}{table.7}\protected@file@percent }
+\newlabel{tab:quantization_preservation}{{VII}{5}{Quantization Accuracy Preservation (VOC 2007 Test)}{table.7}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VIII-C}}Memory and Resource Profiles}{5}{subsection.8.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {IX}Ablation Studies}{5}{section.9}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-A}}Ghost Convolutions vs. Standard Convolutions}{5}{subsection.9.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-B}}Attention Mechanism Impact}{5}{subsection.9.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-C}}Neck Design: LitePAN vs. FPN}{5}{subsection.9.3}\protected@file@percent }
+\bibstyle{IEEEtran}
+\bibdata{references}
+\bibcite{zhou2019edge}{1}
+\bibcite{li2020edge}{2}
+\bibcite{redmon2016you}{3}
+\bibcite{redmon2017yolo9000}{4}
+\bibcite{redmon2018yolov3}{5}
+\bibcite{bochkovskiy2020yolov4}{6}
+\bibcite{ge2021yolox}{7}
+\bibcite{li2022yolov6}{8}
+\bibcite{wang2023yolov7}{9}
+\bibcite{jocher2023yolov8}{10}
+\bibcite{wang2024yolov10}{11}
+\bibcite{tian2025yolo12}{12}
+\bibcite{shao2025yolo26}{13}
+\bibcite{krishnamoorthi2018quantizing}{14}
+\bibcite{nagel2021white}{15}
+\bibcite{liu2019rethinking}{16}
+\bibcite{he2019filter}{17}
+\bibcite{han2020ghostnet}{18}
+\bibcite{howard2017mobilenets}{19}
+\bibcite{feng2021tood}{20}
+\bibcite{wu2021yolofastest}{21}
+\bibcite{lyu2020nanodet}{22}
+\bibcite{lyu2021nanodetplus}{23}
+\bibcite{yu2021picodet}{24}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-D}}Activation Function: ReLU6 vs. SiLU}{6}{subsection.9.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-E}}Width and Input Resolution Scaling}{6}{subsection.9.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IX-F}}Target Assignment, Objectness, and Augmentation}{6}{subsection.9.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {X}Multi-Task Validation}{6}{section.10}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {VIII}{\ignorespaces Multi-Task Experimental Performance}}{6}{table.8}\protected@file@percent }
+\newlabel{tab:multi_task_results}{{VIII}{6}{Multi-Task Experimental Performance}{table.8}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {XI}Conclusion and Future Work}{6}{section.11}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{References}{6}{section*.1}\protected@file@percent }
+\bibcite{lin2021mcunetv2}{25}
+\bibcite{tang2022ghostnetv2}{26}
+\bibcite{chen2023ghostdet}{27}
+\bibcite{wang2022lightweight}{28}
+\bibcite{banner2019post}{29}
+\bibcite{sandler2018mobilenetv2}{30}
+\bibcite{hu2018squeeze}{31}
+\bibcite{wang2020eca}{32}
+\bibcite{zheng2020distance}{33}
+\bibcite{jocher2020yolov5}{34}
+\gdef \@abspage@last{7}

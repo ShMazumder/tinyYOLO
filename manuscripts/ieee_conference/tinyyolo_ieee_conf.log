@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex 2025.12.8)  18 MAY 2026 21:44
+This is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex 2025.12.8)  18 MAY 2026 21:46
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -781,28 +781,28 @@ ef
 File: l3backend-pdftex.def 2024-05-08 L3 backend support: PDF output (pdfTeX)
 \l__color_backend_stack_int=\count326
 \l__pdf_internal_box=\box87
-)
-No file tinyyolo_ieee_conf.aux.
+) (./tinyyolo_ieee_conf.aux)
 \openout1 = `tinyyolo_ieee_conf.aux'.
 
-LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 20.
-LaTeX Font Info:    ... okay on input line 20.
-LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 20.
-LaTeX Font Info:    ... okay on input line 20.
-LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 20.
-LaTeX Font Info:    ... okay on input line 20.
-LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 20.
-LaTeX Font Info:    ... okay on input line 20.
-LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 20.
-LaTeX Font Info:    ... okay on input line 20.
-LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 20.
-LaTeX Font Info:    ... okay on input line 20.
-LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 20.
-LaTeX Font Info:    ... okay on input line 20.
-LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 20.
-LaTeX Font Info:    ... okay on input line 20.
-LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 20.
-LaTeX Font Info:    ... okay on input line 20.
+LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 22.
+LaTeX Font Info:    ... okay on input line 22.
+LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 22.
+LaTeX Font Info:    ... okay on input line 22.
+LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 22.
+LaTeX Font Info:    ... okay on input line 22.
+LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 22.
+LaTeX Font Info:    ... okay on input line 22.
+LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 22.
+LaTeX Font Info:    ... okay on input line 22.
+LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 22.
+LaTeX Font Info:    ... okay on input line 22.
+LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 22.
+LaTeX Font Info:    ... okay on input line 22.
+LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 22.
+LaTeX Font Info:    ... okay on input line 22.
+LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 22.
+LaTeX Font Info:    ... okay on input line 22.
+
 -- Lines per column: 56 (exact).
 (/usr/local/texlive/2025basic/texmf-dist/tex/context/base/mkii/supp-pdf.mkii
 [Loading MPS to PDF converter (version 2006.09.02).]
@@ -828,89 +828,25 @@ Package epstopdf-base Info: Redefining graphics rule for `.eps' on input line 4
 File: epstopdf-sys.cfg 2010/07/13 v1.3 Configuration of (r)epstopdf for TeX Liv
 e
 ))
-Package hyperref Info: Link coloring OFF on input line 20.
+Package hyperref Info: Link coloring OFF on input line 22.
+ (./tinyyolo_ieee_conf.out) (./tinyyolo_ieee_conf.out)
 \@outlinefile=\write4
 \openout4 = `tinyyolo_ieee_conf.out'.
 
-LaTeX Font Info:    Trying to load font information for U+msa on input line 34.
+LaTeX Font Info:    Trying to load font information for U+msa on input line 36.
 
- (/usr/local/texlive/2025basic/texmf-dist/tex/latex/amsfonts/umsa.fd
+
+(/usr/local/texlive/2025basic/texmf-dist/tex/latex/amsfonts/umsa.fd
 File: umsa.fd 2013/01/14 v3.01 AMS symbols A
 )
-LaTeX Font Info:    Trying to load font information for U+msb on input line 34.
+LaTeX Font Info:    Trying to load font information for U+msb on input line 36.
 
 
 (/usr/local/texlive/2025basic/texmf-dist/tex/latex/amsfonts/umsb.fd
 File: umsb.fd 2013/01/14 v3.01 AMS symbols B
 )
-** WARNING: \IEEEPARstart is locked out when in conference mode (line 42).
+** WARNING: \IEEEPARstart is locked out when in conference mode (line 44).
 
-LaTeX Warning: Citation `zhou2019edge' on page 1 undefined on input line 42.
-
-
-LaTeX Warning: Citation `li2020edge' on page 1 undefined on input line 42.
-
-
-LaTeX Warning: Citation `redmon2016you' on page 1 undefined on input line 44.
-
-
-LaTeX Warning: Citation `redmon2017yolo9000' on page 1 undefined on input line 
-44.
-
-
-LaTeX Warning: Citation `redmon2018yolov3' on page 1 undefined on input line 44
-.
-
-
-LaTeX Warning: Citation `bochkovskiy2020yolov4' on page 1 undefined on input li
-ne 44.
-
-
-LaTeX Warning: Citation `ge2021yolox' on page 1 undefined on input line 44.
-
-
-LaTeX Warning: Citation `li2022yolov6' on page 1 undefined on input line 44.
-
-
-LaTeX Warning: Citation `wang2023yolov7' on page 1 undefined on input line 44.
-
-
-LaTeX Warning: Citation `jocher2023yolov8' on page 1 undefined on input line 44
-.
-
-
-LaTeX Warning: Citation `wang2024yolov10' on page 1 undefined on input line 44.
-
-
-
-LaTeX Warning: Citation `tian2025yolo12' on page 1 undefined on input line 44.
-
-
-LaTeX Warning: Citation `shao2025yolo26' on page 1 undefined on input line 44.
-
-
-
-
-LaTeX Warning: Citation `krishnamoorthi2018quantizing' on page 1 undefined on i
-nput line 46.
-
-
-LaTeX Warning: Citation `nagel2021white' on page 1 undefined on input line 46.
-
-
-LaTeX Warning: Citation `liu2019rethinking' on page 1 undefined on input line 4
-6.
-
-
-LaTeX Warning: Citation `he2019filter' on page 1 undefined on input line 46.
-
-
-LaTeX Warning: Citation `han2020ghostnet' on page 1 undefined on input line 50.
-
-
-
-LaTeX Warning: Citation `howard2017mobilenets' on page 1 undefined on input lin
-e 51.
 
 
 
@@ -919,88 +855,194 @@ usr/local/texlive/2025basic/texmf-dist/fonts/enc/dvips/base/8r.enc}
 
 
 ]
-
-LaTeX Warning: Citation `feng2021tood' on page 2 undefined on input line 53.
-
-
-LaTeX Warning: Citation `wu2021yolofastest' on page 2 undefined on input line 5
-8.
-
-
-LaTeX Warning: Citation `lyu2020nanodet' on page 2 undefined on input line 60.
-
-
-LaTeX Warning: Citation `lyu2021nanodetplus' on page 2 undefined on input line 
-60.
-
-
-LaTeX Warning: Citation `yu2021picodet' on page 2 undefined on input line 60.
-
-
-LaTeX Warning: Citation `wu2021yolofastest' on page 2 undefined on input line 6
-0.
-
-
-LaTeX Warning: Citation `lin2021mcunetv2' on page 2 undefined on input line 60.
-
-
-
-Underfull \hbox (badness 1924) in paragraph at lines 60--61
+Underfull \hbox (badness 1924) in paragraph at lines 62--63
 \OT1/ptm/m/n/10 2007+2012 and COCO val2017, with di-rect same-
  []
 
 
-LaTeX Warning: Citation `redmon2016you' on page 2 undefined on input line 67.
+Underfull \hbox (badness 2237) in paragraph at lines 62--63
+\OT1/ptm/m/n/10 [[]22[]], NanoDet-Plus [[]23[]], PicoDet-XS [[]24[]], YOLO-
+ []
 
 
-LaTeX Warning: Citation `redmon2017yolo9000' on page 2 undefined on input line 
-67.
-
-
-LaTeX Warning: Citation `redmon2018yolov3' on page 2 undefined on input line 67
-.
-
-
-LaTeX Warning: Citation `bochkovskiy2020yolov4' on page 2 undefined on input li
-ne 67.
-
-
-LaTeX Warning: Citation `ge2021yolox' on page 2 undefined on input line 67.
-
-
-LaTeX Warning: Citation `li2022yolov6' on page 2 undefined on input line 67.
-
-
-LaTeX Warning: Citation `wang2023yolov7' on page 2 undefined on input line 67.
-
-
-LaTeX Warning: Citation `jocher2023yolov8' on page 2 undefined on input line 67
-.
-
-
-LaTeX Warning: Citation `wang2024yolov10' on page 2 undefined on input line 67.
+Underfull \hbox (badness 1748) in paragraph at lines 72--73
+\OT1/ptm/m/n/10 fleNetV2 back-bones with FCOS-style anchor-free heads,
+ []
 
 
 
-LaTeX Warning: Citation `tian2025yolo12' on page 2 undefined on input line 67.
+
+Underfull \hbox (badness 2088) in paragraph at lines 80--81
+\OT1/ptm/m/n/10 pipeline---Backbone, Neck, Head---with each stage con-
+ []
 
 
-LaTeX Warning: Citation `shao2025yolo26' on page 2 undefined on input line 67.
+
+[2]
+Overfull \hbox (16.74118pt too wide) detected at line 117
+[][][][]\OT1/cmr/m/n/10 (\OML/cmm/m/it/10 x\OT1/cmr/m/n/10 ) = [][]([][]([][](\
+OML/cmm/m/it/10 x\OT1/cmr/m/n/10 ))) + [](\OML/cmm/m/it/10 x\OT1/cmr/m/n/10 )
+ []
 
 
-LaTeX Warning: Citation `lyu2020nanodet' on page 2 undefined on input line 70.
 
 
-LaTeX Warning: Citation `lyu2021nanodetplus' on page 2 undefined on input line 
-70.
+Underfull \hbox (badness 1442) in paragraph at lines 155--156
+[]\OT1/ptm/m/n/10 The de-tec-tion head fol-lows a de-cou-pled de-sign from
+ []
 
 
-LaTeX Warning: Citation `yu2021picodet' on page 2 undefined on input line 70.
+Underfull \hbox (badness 1990) in paragraph at lines 155--156
+\OT1/ptm/m/n/10 YOLOX [[]7[]], with sep-a-rate clas-si-fi-ca-tion and re-gres-s
+ion
+ []
 
 
-LaTeX Warning: Citation `wu2021yolofastest' on page 2 undefined on input line 7
-0.
+Overfull \hbox (30.35043pt too wide) in paragraph at lines 164--175
+ [][] 
+ []
 
 
-LaTeX Warning: Citation `lin2021mcunetv2' on page 2 undefined on input line 70.
+Underfull \hbox (badness 2012) in paragraph at lines 180--181
+[]\OT1/ptm/m/n/10 TinyYOLO adopts Task-Aligned Learn-ing (TAL) [[]20[]]
+ []
+
+
+
+[3]
+
+
+Overfull \hbox (128.9896pt too wide) in paragraph at lines 237--246
+ [][] 
+ []
+
+
+Overfull \hbox (124.9896pt too wide) in paragraph at lines 255--264
+ [][] 
+ []
+
+
+Overfull \hbox (9.56653pt too wide) in paragraph at lines 273--285
+ [][] 
+ []
+
+
+LaTeX Warning: `h' float specifier changed to `ht'.
+
+
+Overfull \hbox (14.83847pt too wide) in paragraph at lines 291--302
+ [][] 
+ []
+
+
+LaTeX Warning: `h' float specifier changed to `ht'.
+
+
+
+[4]
+
+LaTeX Warning: `h' float specifier changed to `ht'.
+
+
+Overfull \hbox (4.33807pt too wide) in paragraph at lines 342--354
+ [][] 
+ []
+
+
+
+
+Underfull \hbox (badness 2334) in paragraph at lines 372--373
+[]\OT1/ptm/m/n/10 Under FP32, SiLU achieves slightly higher ac-cu-racy
+ []
+
+
+
+[5]
+Overfull \hbox (24.76645pt too wide) in paragraph at lines 387--397
+ [][] 
+ []
+
+(./tinyyolo_ieee_conf.bbl
+
+
+Underfull \hbox (badness 3907) in paragraph at lines 46--48
+[]\OT1/ptm/m/n/8 ------, ``YOLOv3: An in-cre-men-tal im-prove-ment,'' \OT1/ptm/
+m/it/8 arXiv preprint
+ []
+
+
+Underfull \hbox (badness 3872) in paragraph at lines 50--52
+\OT1/ptm/m/n/8 ti-mal speed and ac-cu-racy of ob-ject de-tec-tion,'' \OT1/ptm/m
+/it/8 arXiv preprint
+ []
+
+
+Underfull \hbox (badness 2922) in paragraph at lines 114--117
+[]\OT1/ptm/m/n/8 A. G. Howard, M. Z. B. Chen, D. Kalenichenko, W. Wang,
+ []
+
+
+
+[6])
+
+** Conference Paper **
+Before submitting the final camera ready copy, remember to:
+
+ 1. Manually equalize the lengths of two columns on the last page
+ of your paper;
+
+ 2. Ensure that any PostScript and/or PDF output post-processing
+ uses only Type 1 fonts and that every step in the generation
+ process uses the appropriate paper size.
+
+
+
+
+
+[7
+
+] (./tinyyolo_ieee_conf.aux)
+ ***********
+LaTeX2e <2024-11-01> patch level 2
+L3 programming layer <2025-01-18>
+ ***********
+Package rerunfilecheck Info: File `tinyyolo_ieee_conf.out' has not changed.
+(rerunfilecheck)             Checksum: 545880482BDD18388C1D72036359CE0D;7633.
+ ) 
+Here is how much of TeX's memory you used:
+ 23937 strings out of 474662
+ 471395 string characters out of 5751109
+ 880249 words of memory out of 5000000
+ 46468 multiletter control sequences out of 15000+600000
+ 604601 words of font info for 124 fonts, out of 8000000 for 9000
+ 319 hyphenation exceptions out of 8191
+ 84i,10n,91p,2041b,882s stack positions out of 10000i,1000n,20000p,200000b,200000s
+</usr/local/texlive/2025basic/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx1
+0.pfb></usr/local/texlive/2025basic/texmf-dist/fonts/type1/public/amsfonts/cm/c
+mex10.pfb></usr/local/texlive/2025basic/texmf-dist/fonts/type1/public/amsfonts/
+cm/cmmi10.pfb></usr/local/texlive/2025basic/texmf-dist/fonts/type1/public/amsfo
+nts/cm/cmmi5.pfb></usr/local/texlive/2025basic/texmf-dist/fonts/type1/public/am
+sfonts/cm/cmmi6.pfb></usr/local/texlive/2025basic/texmf-dist/fonts/type1/public
+/amsfonts/cm/cmmi7.pfb></usr/local/texlive/2025basic/texmf-dist/fonts/type1/pub
+lic/amsfonts/cm/cmmi8.pfb></usr/local/texlive/2025basic/texmf-dist/fonts/type1/
+public/amsfonts/cm/cmr10.pfb></usr/local/texlive/2025basic/texmf-dist/fonts/typ
+e1/public/amsfonts/cm/cmr7.pfb></usr/local/texlive/2025basic/texmf-dist/fonts/t
+ype1/public/amsfonts/cm/cmr8.pfb></usr/local/texlive/2025basic/texmf-dist/fonts
+/type1/public/amsfonts/cm/cmsy10.pfb></usr/local/texlive/2025basic/texmf-dist/f
+onts/type1/public/amsfonts/cm/cmsy5.pfb></usr/local/texlive/2025basic/texmf-dis
+t/fonts/type1/public/amsfonts/cm/cmsy6.pfb></usr/local/texlive/2025basic/texmf-
+dist/fonts/type1/public/amsfonts/cm/cmsy7.pfb></usr/local/texlive/2025basic/tex
+mf-dist/fonts/type1/public/amsfonts/cm/cmsy8.pfb></usr/local/texlive/2025basic/
+texmf-dist/fonts/type1/public/amsfonts/cm/cmsy9.pfb></usr/local/texlive/2025bas
+ic/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt10.pfb></usr/local/texlive/202
+5basic/texmf-dist/fonts/type1/urw/times/utmb8a.pfb></usr/local/texlive/2025basi
+c/texmf-dist/fonts/type1/urw/times/utmbi8a.pfb></usr/local/texlive/2025basic/te
+xmf-dist/fonts/type1/urw/times/utmr8a.pfb></usr/local/texlive/2025basic/texmf-d
+ist/fonts/type1/urw/times/utmri8a.pfb>
+Output written on tinyyolo_ieee_conf.pdf (7 pages, 278208 bytes).
+PDF statistics:
+ 458 PDF objects out of 1000 (max. 8388607)
+ 402 compressed objects within 5 object streams
+ 107 named destinations out of 1000 (max. 500000)
+ 317 words of extra memory for PDF output out of 10000 (max. 10000000)
 

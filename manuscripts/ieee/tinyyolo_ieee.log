@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex 2025.12.8)  18 MAY 2026 21:21
+This is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex 2025.12.8)  18 MAY 2026 21:47
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -784,24 +784,24 @@ File: l3backend-pdftex.def 2024-05-08 L3 backend support: PDF output (pdfTeX)
 ) (./tinyyolo_ieee.aux)
 \openout1 = `tinyyolo_ieee.aux'.
 
-LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 20.
-LaTeX Font Info:    ... okay on input line 20.
-LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 20.
-LaTeX Font Info:    ... okay on input line 20.
-LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 20.
-LaTeX Font Info:    ... okay on input line 20.
-LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 20.
-LaTeX Font Info:    ... okay on input line 20.
-LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 20.
-LaTeX Font Info:    ... okay on input line 20.
-LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 20.
-LaTeX Font Info:    ... okay on input line 20.
-LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 20.
-LaTeX Font Info:    ... okay on input line 20.
-LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 20.
-LaTeX Font Info:    ... okay on input line 20.
-LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 20.
-LaTeX Font Info:    ... okay on input line 20.
+LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 22.
+LaTeX Font Info:    ... okay on input line 22.
+LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 22.
+LaTeX Font Info:    ... okay on input line 22.
+LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 22.
+LaTeX Font Info:    ... okay on input line 22.
+LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 22.
+LaTeX Font Info:    ... okay on input line 22.
+LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 22.
+LaTeX Font Info:    ... okay on input line 22.
+LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 22.
+LaTeX Font Info:    ... okay on input line 22.
+LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 22.
+LaTeX Font Info:    ... okay on input line 22.
+LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 22.
+LaTeX Font Info:    ... okay on input line 22.
+LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 22.
+LaTeX Font Info:    ... okay on input line 22.
 
 -- Lines per column: 58 (exact).
 (/usr/local/texlive/2025basic/texmf-dist/tex/context/base/mkii/supp-pdf.mkii
@@ -828,29 +828,29 @@ Package epstopdf-base Info: Redefining graphics rule for `.eps' on input line 4
 File: epstopdf-sys.cfg 2010/07/13 v1.3 Configuration of (r)epstopdf for TeX Liv
 e
 ))
-Package hyperref Info: Link coloring OFF on input line 20.
+Package hyperref Info: Link coloring OFF on input line 22.
  (./tinyyolo_ieee.out) (./tinyyolo_ieee.out)
 \@outlinefile=\write4
 \openout4 = `tinyyolo_ieee.out'.
 
 
-Underfull \hbox (badness 4805) in paragraph at lines 31--31
+Underfull \hbox (badness 4805) in paragraph at lines 33--33
 [][][]\OT1/ptm/m/n/8 S. H. Mazumder is with the De-part-ment of Com-puter Sci-e
 nce
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 31--31
+Underfull \hbox (badness 10000) in paragraph at lines 33--33
 \OT1/ptm/m/n/8 & En-gi-neer-ing, Feni Uni-ver-sity, Feni 3900, Bangladesh (e-ma
 il:
  []
 
-LaTeX Font Info:    Trying to load font information for U+msa on input line 33.
+LaTeX Font Info:    Trying to load font information for U+msa on input line 35.
 
 (/usr/local/texlive/2025basic/texmf-dist/tex/latex/amsfonts/umsa.fd
 File: umsa.fd 2013/01/14 v3.01 AMS symbols A
 )
-LaTeX Font Info:    Trying to load font information for U+msb on input line 33.
+LaTeX Font Info:    Trying to load font information for U+msb on input line 35.
 
 
 (/usr/local/texlive/2025basic/texmf-dist/tex/latex/amsfonts/umsb.fd
@@ -867,29 +867,29 @@ usr/local/texlive/2025basic/texmf-dist/fonts/enc/dvips/base/8r.enc}
 
 
 ]
-Underfull \hbox (badness 1924) in paragraph at lines 59--60
+Underfull \hbox (badness 1924) in paragraph at lines 61--62
 \OT1/ptm/m/n/10 2007+2012 and COCO val2017, with di-rect same-
  []
 
 
-Underfull \hbox (badness 2237) in paragraph at lines 59--60
+Underfull \hbox (badness 2237) in paragraph at lines 61--62
 \OT1/ptm/m/n/10 [[]22[]], NanoDet-Plus [[]23[]], PicoDet-XS [[]24[]], YOLO-
  []
 
 
-Underfull \hbox (badness 1748) in paragraph at lines 69--70
+Underfull \hbox (badness 1748) in paragraph at lines 71--72
 \OT1/ptm/m/n/10 fleNetV2 back-bones with FCOS-style anchor-free heads,
  []
 
 
 
 
-Underfull \hbox (badness 2088) in paragraph at lines 77--78
+Underfull \hbox (badness 2088) in paragraph at lines 79--80
 \OT1/ptm/m/n/10 pipeline---Backbone, Neck, Head---with each stage con-
  []
 
 
-Overfull \hbox (16.74118pt too wide) detected at line 114
+Overfull \hbox (16.74118pt too wide) detected at line 116
 [][][][]\OT1/cmr/m/n/10 (\OML/cmm/m/it/10 x\OT1/cmr/m/n/10 ) = [][]([][]([][](\
 OML/cmm/m/it/10 x\OT1/cmr/m/n/10 ))) + [](\OML/cmm/m/it/10 x\OT1/cmr/m/n/10 )
  []
@@ -897,12 +897,12 @@ OML/cmm/m/it/10 x\OT1/cmr/m/n/10 ))) + [](\OML/cmm/m/it/10 x\OT1/cmr/m/n/10 )
 
 
 [2]
-Underfull \hbox (badness 1442) in paragraph at lines 152--153
+Underfull \hbox (badness 1442) in paragraph at lines 154--155
 []\OT1/ptm/m/n/10 The de-tec-tion head fol-lows a de-cou-pled de-sign from
  []
 
 
-Underfull \hbox (badness 1990) in paragraph at lines 152--153
+Underfull \hbox (badness 1990) in paragraph at lines 154--155
 \OT1/ptm/m/n/10 YOLOX [[]7[]], with sep-a-rate clas-si-fi-ca-tion and re-gres-s
 ion
  []
@@ -910,70 +910,31 @@ ion
 
 
 
-Overfull \hbox (30.35043pt too wide) in paragraph at lines 161--172
+Overfull \hbox (30.35043pt too wide) in paragraph at lines 163--174
  [][] 
  []
 
 
-Underfull \hbox (badness 2012) in paragraph at lines 177--178
+Underfull \hbox (badness 2012) in paragraph at lines 179--180
 []\OT1/ptm/m/n/10 TinyYOLO adopts Task-Aligned Learn-ing (TAL) [[]20[]]
  []
 
 
 
 [3]
-LaTeX Font Info:    Trying to load font information for OT1+pcr on input line 2
-13.
- (/usr/local/texlive/2025basic/texmf-dist/tex/latex/psnfss/ot1pcr.fd
-File: ot1pcr.fd 2001/06/04 font definitions for OT1/pcr.
-)
-! Font OT1/pcr/m/n/10=pcrr7t at 10.0pt not loadable: Metric (TFM) file not foun
-d.
-<to be read again> 
-                   relax 
-l.213 ...om seeds (\texttt{torch.manual\_seed(42)}
-                                                  ).
-I wasn't able to read the size data for this font,
-so I will ignore the font specification.
-[Wizards can fix TFM files using TFtoPL/PLtoTF.]
-You might try inserting a different font spec;
-e.g., type `I\font<same font id>=<substitute font name>'.
-
-Missing character: There is no t in font nullfont!
-Missing character: There is no o in font nullfont!
-Missing character: There is no r in font nullfont!
-Missing character: There is no c in font nullfont!
-Missing character: There is no h in font nullfont!
-Missing character: There is no . in font nullfont!
-Missing character: There is no m in font nullfont!
-Missing character: There is no a in font nullfont!
-Missing character: There is no n in font nullfont!
-Missing character: There is no u in font nullfont!
-Missing character: There is no a in font nullfont!
-Missing character: There is no l in font nullfont!
-Missing character: There is no _ in font nullfont!
-Missing character: There is no s in font nullfont!
-Missing character: There is no e in font nullfont!
-Missing character: There is no e in font nullfont!
-Missing character: There is no d in font nullfont!
-Missing character: There is no ( in font nullfont!
-Missing character: There is no 4 in font nullfont!
-Missing character: There is no 2 in font nullfont!
-Missing character: There is no ) in font nullfont!
 
 
-
-Overfull \hbox (128.9896pt too wide) in paragraph at lines 234--243
+Overfull \hbox (128.9896pt too wide) in paragraph at lines 236--245
  [][] 
  []
 
 
-Overfull \hbox (124.9896pt too wide) in paragraph at lines 252--261
+Overfull \hbox (124.9896pt too wide) in paragraph at lines 254--263
  [][] 
  []
 
 
-Overfull \hbox (9.56653pt too wide) in paragraph at lines 270--282
+Overfull \hbox (9.56653pt too wide) in paragraph at lines 272--284
  [][] 
  []
 
@@ -981,7 +942,7 @@ Overfull \hbox (9.56653pt too wide) in paragraph at lines 270--282
 LaTeX Warning: `h' float specifier changed to `ht'.
 
 
-Overfull \hbox (14.83847pt too wide) in paragraph at lines 288--299
+Overfull \hbox (14.83847pt too wide) in paragraph at lines 290--301
  [][] 
  []
 
@@ -991,21 +952,21 @@ LaTeX Warning: `h' float specifier changed to `ht'.
 
 
 [4]
-Overfull \hbox (4.33807pt too wide) in paragraph at lines 339--351
+Overfull \hbox (4.33807pt too wide) in paragraph at lines 341--353
  [][] 
  []
 
 
 
 
-Underfull \hbox (badness 2334) in paragraph at lines 369--370
+Underfull \hbox (badness 2334) in paragraph at lines 371--372
 []\OT1/ptm/m/n/10 Under FP32, SiLU achieves slightly higher ac-cu-racy
  []
 
 
 
 [5]
-Overfull \hbox (24.76645pt too wide) in paragraph at lines 384--394
+Overfull \hbox (24.76645pt too wide) in paragraph at lines 386--396
  [][] 
  []
 
@@ -1045,11 +1006,11 @@ Package rerunfilecheck Info: File `tinyyolo_ieee.out' has not changed.
 (rerunfilecheck)             Checksum: 545880482BDD18388C1D72036359CE0D;7633.
  ) 
 Here is how much of TeX's memory you used:
- 23967 strings out of 474662
- 471677 string characters out of 5751109
- 880603 words of memory out of 5000000
- 46494 multiletter control sequences out of 15000+600000
- 606578 words of font info for 126 fonts, out of 8000000 for 9000
+ 23932 strings out of 474662
+ 471133 string characters out of 5751109
+ 880602 words of memory out of 5000000
+ 46462 multiletter control sequences out of 15000+600000
+ 606746 words of font info for 127 fonts, out of 8000000 for 9000
  319 hyphenation exceptions out of 8191
  84i,10n,91p,2036b,882s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </usr/local/texlive/2025basic/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx1
@@ -1069,14 +1030,15 @@ t/fonts/type1/public/amsfonts/cm/cmsy6.pfb></usr/local/texlive/2025basic/texmf-
 dist/fonts/type1/public/amsfonts/cm/cmsy7.pfb></usr/local/texlive/2025basic/tex
 mf-dist/fonts/type1/public/amsfonts/cm/cmsy8.pfb></usr/local/texlive/2025basic/
 texmf-dist/fonts/type1/public/amsfonts/cm/cmsy9.pfb></usr/local/texlive/2025bas
-ic/texmf-dist/fonts/type1/urw/times/utmb8a.pfb></usr/local/texlive/2025basic/te
-xmf-dist/fonts/type1/urw/times/utmbi8a.pfb></usr/local/texlive/2025basic/texmf-
-dist/fonts/type1/urw/times/utmr8a.pfb></usr/local/texlive/2025basic/texmf-dist/
-fonts/type1/urw/times/utmri8a.pfb>
-Output written on tinyyolo_ieee.pdf (7 pages, 266863 bytes).
+ic/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt10.pfb></usr/local/texlive/202
+5basic/texmf-dist/fonts/type1/urw/times/utmb8a.pfb></usr/local/texlive/2025basi
+c/texmf-dist/fonts/type1/urw/times/utmbi8a.pfb></usr/local/texlive/2025basic/te
+xmf-dist/fonts/type1/urw/times/utmr8a.pfb></usr/local/texlive/2025basic/texmf-d
+ist/fonts/type1/urw/times/utmri8a.pfb>
+Output written on tinyyolo_ieee.pdf (7 pages, 279007 bytes).
 PDF statistics:
- 452 PDF objects out of 1000 (max. 8388607)
- 399 compressed objects within 4 object streams
+ 458 PDF objects out of 1000 (max. 8388607)
+ 402 compressed objects within 5 object streams
  107 named destinations out of 1000 (max. 500000)
  317 words of extra memory for PDF output out of 10000 (max. 10000000)
 

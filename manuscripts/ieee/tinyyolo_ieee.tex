@@ -10,6 +10,8 @@
 \usepackage{hyperref}
 \usepackage{color}
 
+\renewcommand{\ttdefault}{cmtt}
+
 \usetikzlibrary{shapes,arrows,positioning,calc}
 
 % Define TikZ styles
@@ -158,6 +160,7 @@ The modular head design enables task-specific extensions sharing the common back
 \centering
 \caption{Modular Multi-Task Head Parameter Profiles}
 \label{tab:multi_task_heads}
+\setlength{\tabcolsep}{4pt}
 \begin{tabular}{lllc}
 \toprule
 Task & Head Module & Additional Outputs & Total Params \\
@@ -227,7 +230,7 @@ Training is performed on an NVIDIA Tesla T4 GPU (16GB) with FP16 Automatic Mixed
 \subsection{Main Results on Pascal VOC}
 Table~\ref{tab:voc_results} reports the primary object detection performance on Pascal VOC. The quantized variant (TinyYOLO-q) outperforms the standard variant by 2.5\% mAP@50. We attribute this to ReLU6's bounding property preventing activation growth in tiny models. Crucially, the INT8-quantized model loses only 0.7\% mAP@50 relative to its FP32 baseline, confirming the robust design.
 
-\begin{table}[h]
+\begin{table*}[t]
 \centering
 \caption{Pascal VOC 2007 Test Results (Mean $\pm$ Std over 5 Runs)}
 \label{tab:voc_results}
@@ -240,12 +243,12 @@ TinyYOLO-q & 0.22M & 0.24 & 41.2 $\pm$ 0.7 & 20.1 $\pm$ 0.5 & 44.8 $\pm$ 0.9 & 3
 TinyYOLO-q (INT8) & 0.22M & 0.24 & 40.5 $\pm$ 0.8 & 19.6 $\pm$ 0.6 & 44.1 $\pm$ 1.0 & 38.2 $\pm$ 0.9 \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{table*}
 
 \subsection{Main Results on COCO val2017}
 Table~\ref{tab:coco_results} reports COCO val2017 results. As expected, COCO mAP is lower than VOC due to the increased class count. Small object detection ($AP_S$) is a limitation (2.4--2.8\%) due to spatial resolution constraints at P5 and shared Backbone-Neck capacity.
 
-\begin{table}[h]
+\begin{table*}[t]
 \centering
 \caption{COCO val2017 Results (Mean $\pm$ Std over 5 Runs)}
 \label{tab:coco_results}
@@ -258,7 +261,7 @@ TinyYOLO-q & 0.22M & 0.24 & 19.7 $\pm$ 0.5 & 9.3 $\pm$ 0.4 & 2.6 $\pm$ 0.2 & 19.
 TinyYOLO-q (INT8) & 0.22M & 0.24 & 19.1 $\pm$ 0.6 & 8.9 $\pm$ 0.5 & 2.4 $\pm$ 0.3 & 18.4 $\pm$ 0.7 \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{table*}
 
 \subsection{State-of-the-Art Comparison}
 We contrast TinyYOLO against sub-1M SOTA models. Tables~\ref{tab:sota_coco} and \ref{tab:sota_voc} separate COCO and VOC evaluations to maintain complete comparability.
@@ -267,6 +270,7 @@ We contrast TinyYOLO against sub-1M SOTA models. Tables~\ref{tab:sota_coco} and 
 \centering
 \caption{COCO val2017 SOTA Comparison (416$\times$416)}
 \label{tab:sota_coco}
+\setlength{\tabcolsep}{4pt}
 \begin{tabular}{lcccl}
 \toprule
 Model & Params & GFLOPs & mAP@50 (\%) & Source \\
@@ -285,6 +289,7 @@ YOLOv8n \cite{jocher2023yolov8} & 3.20M & 8.70 & 44.7 & Official \\
 \centering
 \caption{Pascal VOC 2007 Test SOTA Comparison (416$\times$416)}
 \label{tab:sota_voc}
+\setlength{\tabcolsep}{4pt}
 \begin{tabular}{lcccl}
 \toprule
 Model & Params & GFLOPs & mAP@50 (\%) & Source \\
@@ -318,6 +323,7 @@ As shown in Table~\ref{tab:latency}, INT8 quantization provides significant spee
 \centering
 \caption{Inference Latency (ms) at 416$\times$416, Batch=1}
 \label{tab:latency}
+\setlength{\tabcolsep}{4pt}
 \begin{tabular}{llcccc}
 \toprule
 Platform & Runtime & FP32 & FP16 & INT8 & FPS (INT8) \\
@@ -336,6 +342,7 @@ Table~\ref{tab:quantization_preservation} compares accuracy retention. The stand
 \centering
 \caption{Quantization Accuracy Preservation (VOC 2007 Test)}
 \label{tab:quantization_preservation}
+\setlength{\tabcolsep}{4pt}
 \begin{tabular}{llccc}
 \toprule
 Variant & Precision & mAP@50 (\%) & $\Delta$ vs FP32 & Size (MB) \\
@@ -381,6 +388,7 @@ We evaluate instance segmentation (TinySegment) and pose estimation (TinyPose) o
 \centering
 \caption{Multi-Task Experimental Performance}
 \label{tab:multi_task_results}
+\setlength{\tabcolsep}{4pt}
 \begin{tabular}{llccc}
 \toprule
 Task & Variant & Box mAP@50 (\%) & Task Metric (\%) & Params \\
