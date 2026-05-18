@@ -25,12 +25,15 @@ class TinyBackbone(nn.Module):
         channels: Channel counts for [stem, stage1, stage2, stage3, stage4].
         depths:   Number of GhostBottleneck repeats per stage.
         variant:  'standard' (SiLU + spatial attn) or 'quantized' (ReLU6 + ECA).
+        attention: Override attention type independently of variant.
+                   Options: 'default' (use variant's default), 'se', 'eca', 'none'.
+                   When 'default', standard uses LightSpatial+SE, quantized uses ECA+ECA.
     """
 
     STANDARD_CHANNELS = [16, 24, 40, 80, 160]
     STANDARD_DEPTHS = [1, 1, 2, 3, 2]
 
-    def __init__(self, channels=None, depths=None, variant='standard'):
+    def __init__(self, channels=None, depths=None, variant='standard', attention='default'):
         super().__init__()
         channels = channels or self.STANDARD_CHANNELS
         depths = depths or self.STANDARD_DEPTHS
@@ -45,13 +48,26 @@ class TinyBackbone(nn.Module):
         self.stage3 = self._make_stage(channels[2], channels[3], depths[3], 2, act)
         self.stage4 = self._make_stage(channels[3], channels[4], depths[4], 2, act)
 
-        # Attention per variant
-        if variant == 'standard':
-            self.attn3 = LightSpatialAttn(channels[3])
-            self.attn4 = SEBlock(channels[4])
-        else:  # quantized
+        # Attention — decoupled from variant to support cross-ablation experiments.
+        # 'default' preserves original behavior; explicit values override it.
+        if attention == 'default':
+            if variant == 'standard':
+                self.attn3 = LightSpatialAttn(channels[3])
+                self.attn4 = SEBlock(channels[4])
+            else:  # quantized
+                self.attn3 = ECABlock(channels[3])
+                self.attn4 = ECABlock(channels[4])
+        elif attention == 'eca':
             self.attn3 = ECABlock(channels[3])
             self.attn4 = ECABlock(channels[4])
+        elif attention == 'se':
+            self.attn3 = LightSpatialAttn(channels[3])
+            self.attn4 = SEBlock(channels[4])
+        elif attention == 'none':
+            self.attn3 = nn.Identity()
+            self.attn4 = nn.Identity()
+        else:
+            raise ValueError(f"Unknown attention type: {attention}. Use 'default', 'eca', 'se', or 'none'.")
 
         # Store output channel info for neck
         self.out_channels = [channels[2], channels[3], channels[4]]
@@ -77,14 +93,15 @@ class TinyBackbone(nn.Module):
         return self.out_channels
 
 
-def build_backbone(variant='standard', width_mult=1.0):
+def build_backbone(variant='standard', width_mult=1.0, attention='default'):
     """
     Factory function for building backbone with width multiplier.
 
     Args:
         variant: 'standard' or 'quantized'
         width_mult: Channel width multiplier (0.25, 0.5, 0.75, 1.0)
+        attention: Override attention type ('default', 'eca', 'se', 'none')
     """
     base_channels = [16, 24, 40, 80, 160]
     channels = [max(8, int(c * width_mult) // 8 * 8) for c in base_channels]
-    return TinyBackbone(channels=channels, variant=variant)
+    return TinyBackbone(channels=channels, variant=variant, attention=attention)

@@ -80,6 +80,9 @@ def parse_args():
                         help='Load ImageNet-pretrained GhostNet backbone (reduces epochs needed)')
     parser.add_argument('--compile', action='store_true',
                         help='Use torch.compile() for 1.5-2x speedup (PyTorch 2.0+)')
+    parser.add_argument('--attention', type=str, default='default',
+                        choices=['default', 'eca', 'se', 'none'],
+                        help='Override attention type (default=use variant built-in)')
     return parser.parse_args()
 
 
@@ -1137,7 +1140,8 @@ def train_single(args, imgsz, env):
         print(f"  [INFO] Consider using --data with a YAML containing separate train/val paths.")
 
     # Build model with correct nc for this dataset
-    model, model_info = build_model(task=args.task, variant=args.variant, nc=nc)
+    model, model_info = build_model(task=args.task, variant=args.variant, nc=nc,
+                                     attention=getattr(args, 'attention', 'default'))
 
     params = count_parameters(model)
     print(f"  Parameters: {params['total_M']}M")

@@ -77,7 +77,7 @@ HEAD_KWARGS = {
 }
 
 
-def build_model(task='det', variant='standard', nc=80, width_mult=1.0):
+def build_model(task='det', variant='standard', nc=80, width_mult=1.0, attention='default'):
     """
     Build a complete TinyYOLO model.
 
@@ -86,6 +86,8 @@ def build_model(task='det', variant='standard', nc=80, width_mult=1.0):
         variant: 'standard' or 'quantized'.
         nc: Number of classes.
         width_mult: Width multiplier for backbone channels.
+        attention: Override attention type ('default', 'eca', 'se', 'none').
+                   When 'default', uses variant's built-in attention config.
 
     Returns:
         (model, info_dict)
@@ -93,7 +95,7 @@ def build_model(task='det', variant='standard', nc=80, width_mult=1.0):
     # Build backbone
     base_channels = [16, 24, 40, 80, 160]
     channels = [max(8, int(c * width_mult) // 8 * 8) for c in base_channels]
-    backbone = TinyBackbone(channels=channels, variant=variant)
+    backbone = TinyBackbone(channels=channels, variant=variant, attention=attention)
 
     # Variant-appropriate activation — used consistently across all components
     act = 'silu' if variant == 'standard' else 'relu6'
@@ -126,6 +128,7 @@ def build_model(task='det', variant='standard', nc=80, width_mult=1.0):
     info = {
         'task': task,
         'variant': variant,
+        'attention': attention,
         'nc': nc,
         'width_mult': width_mult,
         'backbone_channels': channels,

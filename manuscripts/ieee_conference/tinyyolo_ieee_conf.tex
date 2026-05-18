@@ -33,7 +33,7 @@ shmazumder@feniuniversity.ac.bd, shmazumder23@gmail.com}
 \maketitle
 
 \begin{abstract}
-Deploying object detection on resource-constrained edge devices operating under sub-1 MB memory and sub-0.5 GFLOP compute budgets remains an open challenge. Existing YOLO-family detectors, even at their smallest configurations (e.g., YOLOv8n at 3.2M parameters, 8.7 GFLOPs), exceed these constraints by an order of magnitude, while purpose-built lightweight detectors typically operate in the 0.9--1.5M parameter range without providing native INT8 quantization compatibility or multi-task extensibility. This paper presents TinyYOLO, a 0.23M-parameter object detection framework constructed from Ghost convolutions, depthwise separable feature fusion (LitePAN), and decoupled anchor-free detection heads. TinyYOLO introduces a dual-variant architecture: a \textit{standard} variant employing SiLU activations with squeeze-and-excitation (SE) and spatial attention for FP32/FP16 deployment, and a \textit{quantized} variant replacing all activations with ReLU6 and all attention modules with Efficient Channel Attention (ECA) blocks to guarantee end-to-end INT8 compatibility on edge accelerators. The framework provides modular, task-specific heads sharing a common 0.08M-parameter backbone to support five vision tasks: object detection, instance segmentation, pose estimation, image classification, and oriented bounding box detection. We evaluate TinyYOLO on Pascal VOC 2007+2012 and COCO val2017 under deterministic conditions. On VOC, TinyYOLO achieves mAP@50 of 38.7\% (standard) and 41.2\% (quantized) at 416$\times$416 resolution, with INT8 inference latencies of 28.3 ms on NVIDIA Jetson Nano (TensorRT) and 67.4 ms on Raspberry Pi 4 (TFLite). Comprehensive ablation studies validate each architectural decision, and direct comparisons against YOLO-Fastest (0.25M), NanoDet (0.95M), PicoDet-XS (0.93M), and MCUNetV2 (0.74M) establish TinyYOLO's competitive position within the accuracy--efficiency Pareto frontier for sub-1M detectors.
+Deploying object detection on resource-constrained edge devices operating under sub-1 MB memory and sub-0.5 GFLOP compute budgets remains an open challenge. Existing YOLO-family detectors, even at their smallest configurations (e.g., YOLOv8n at 3.2M parameters, 8.7 GFLOPs), exceed these constraints by an order of magnitude, while purpose-built lightweight detectors typically operate in the 0.9--1.5M parameter range without providing native INT8 quantization compatibility or multi-task extensibility. This paper presents TinyYOLO, a 0.23M-parameter object detection framework constructed from Ghost convolutions, depthwise separable feature fusion (LitePAN), and decoupled anchor-free detection heads. TinyYOLO introduces a dual-variant architecture: a \textit{standard} variant employing SiLU activations with squeeze-and-excitation (SE) and spatial attention for FP32/FP16 deployment, and a \textit{quantized} variant replacing all activations with ReLU6 and all attention modules with Efficient Channel Attention (ECA) blocks to guarantee end-to-end INT8 compatibility on edge accelerators. The framework provides modular, task-specific heads sharing a common 0.08M-parameter backbone to support five vision tasks: object detection, instance segmentation, pose estimation, image classification, and oriented bounding box detection. We evaluate TinyYOLO on Pascal VOC 2007+2012 and COCO val2017 under deterministic conditions. On VOC, TinyYOLO achieves mAP@50 of 38.7\% (standard) and 41.2\% (quantized) at 416$\times$416 resolution, with INT8 inference latencies of 28.3 ms on NVIDIA Jetson Nano (TensorRT) and 67.4 ms on Raspberry Pi 4 (TFLite). Comprehensive ablation studies validate each architectural decision, and direct comparisons against YOLO-Fastest (0.25M), NanoDet (0.95M), PicoDet-XS (0.93M), and MCUNetV2 (0.74M) position TinyYOLO within the sub-0.3M parameter region of the accuracy--efficiency landscape for sub-1M detectors.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -138,10 +138,34 @@ Attention is applied after Stage 3 (P4) and Stage 4 (P5). The standard variant u
 \begin{equation}
 \text{ECA}(x) = x \odot \sigma(\text{Conv1d}_{k}(\text{GAP}(x)))
 \end{equation}
-where $k$ is the kernel size, $\text{GAP}$ represents global average pooling, and $\sigma$ represents the sigmoid function. The total backbone parameters are 80.4K (standard) and 72.6K (quantized).
+where $k$ is the kernel size, $\text{GAP}$ represents global average pooling, and $\sigma$ represents the sigmoid function. The total backbone parameters are 80.4K (standard) and 72.6K (quantized). The near-identical GFLOPs between variants (0.25 vs. 0.24) reflects that SE and ECA contribute negligibly to total FLOPs at the small channel widths used (80, 160 channels), where convolution operations dominate compute.
+
+Table~\ref{tab:arch_spec} provides the complete backbone stage configuration required for reproduction.
+
+\begin{table}[h]
+\centering
+\caption{TinyYOLO Backbone Architecture Specification}
+\label{tab:arch_spec}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lccccc}
+\toprule
+Stage & Operator & Output & Ch & Blocks ($d_i$) & Stride \\
+\midrule
+Stem & Conv3$\times$3-BN-Act & 208$\times$208 & 16 & 1 & 2 \\
+S1 & GhostBN & 104$\times$104 & 24 & 1 & 2 \\
+S2 & GhostBN & 52$\times$52 & 40 & 2 & 2 \\
+S3 & GhostBN + Attn & 26$\times$26 & 80 & 3 & 2 \\
+S4 & GhostBN + Attn & 13$\times$13 & 160 & 2 & 2 \\
+\bottomrule
+\end{tabular}
+\vskip 2pt
+\begin{flushleft}
+\scriptsize Input: 416$\times$416. Stride-2 downsampling is performed by the first GhostBottleneck in each stage. Attention: Std=LightSpatial(S3)+SE(S4); Quant=ECA(S3)+ECA(S4).
+\end{flushleft}
+\end{table}
 
 \subsection{Neck: LitePAN Multi-Scale Feature Fusion}
-The neck fuses features across scales using a bidirectional pathway: top-down (FPN) for semantic enrichment of shallow features, and bottom-up (PAN) for spatial enrichment of deep features. All convolutions in LitePAN are depthwise separable:
+The neck fuses features across scales using a bidirectional pathway: top-down (FPN) for semantic enrichment of shallow features, and bottom-up (PAN) for spatial enrichment of deep features. LitePAN shares the bidirectional topology of CSP-PAN (PicoDet~\cite{yu2021picodet}) and Ghost-PAN (NanoDet~\cite{lyu2020nanodet}), but replaces all intermediate processing with pure depthwise separable convolutions for minimal parameter overhead:
 \begin{align}
   L_i &= \text{ConvBNAct}(P_i, C_i \to 64, 1\times1), \quad i \in \{3, 4, 5\} \\
   F_4 &= \text{DWConv}(\text{Concat}(\text{Upsample}(L_5), L_4)) \\
@@ -210,6 +234,8 @@ The quantized variant is trained with simulated quantization using PyTorch's qua
 \end{equation}
 where $s$ is the quantization scale, $z$ is the zero point, and $q_{\min}, q_{\max}$ define the INT8 range. We use per-channel symmetric quantization for weights and per-tensor asymmetric quantization for activations.
 
+\textbf{Observer and calibration protocol.} For PTQ, we use \texttt{MinMaxObserver} for both weights (\texttt{per\_tensor\_symmetric}, \texttt{qint8}) and activations (\texttt{per\_tensor\_affine}, \texttt{quint8}), calibrated on 500 batches ($\sim$8,000 images) from the training set with augmentation disabled. For QAT, we use PyTorch's default QAT configuration (\texttt{get\_default\_qat\_qconfig('qnnpack')}), which uses \texttt{FakeQuantize} with \texttt{MovingAverageMinMaxObserver}. QAT fine-tuning runs for 10 epochs at $\text{lr}=10^{-4}$ with AdamW and cosine annealing. Observer statistics are frozen in the last 25\% of QAT epochs, and batch normalization statistics are frozen concurrently to stabilize final quantization parameters.
+
 \subsection{Robustness of ReLU6 and ECA Attention}
 SiLU contains a non-monotonic region in $[-2, 0]$ and unbounded positive outputs. Under INT8 quantization, input values separated by less than the quantization step size may map to different sides of this region, causing systematic error. By contrast, the piecewise-linear ReLU6 bounds outputs to $[0, 6]$, enabling a clean linear mapping to the INT8 unsigned range with uniform step size $\Delta = 6/255 \approx 0.0235$. Similarly, the FC layers in SE attention accumulate quantization error through successive compress-expand projections. ECA avoids this by using a single 1D convolution on the global pooled feature map, introducing only one layer of quantization approximation and reducing parameters compared to SE.
 
@@ -276,10 +302,9 @@ We contrast TinyYOLO against sub-1M SOTA models. Tables~\ref{tab:sota_coco} and 
 \toprule
 Model & Params & GFLOPs & mAP@50 (\%) & Source \\
 \midrule
-YOLO-Fastest \cite{wu2021yolofastest} & 0.25M & 0.23 & $\sim$15.4 & Estimated \\
-\textbf{TinyYOLO-q (ours)} & \textbf{0.22M} & \textbf{0.24} & \textbf{19.7} & This work \\
 NanoDet-m \cite{lyu2020nanodet} & 0.95M & 0.72 & 27.3 & Official \\
 PicoDet-XS \cite{yu2021picodet} & 0.93M & 0.67 & 28.9 & Official \\
+\textbf{TinyYOLO-q (ours)} & \textbf{0.22M} & \textbf{0.24} & \textbf{19.7} & This work \\
 YOLOv5n \cite{jocher2020yolov5} & 1.90M & 4.50 & 38.4 & Official \\
 YOLOv8n \cite{jocher2023yolov8} & 3.20M & 8.70 & 44.7 & Official \\
 \bottomrule
@@ -312,7 +337,7 @@ $^\ddagger$ Retrained under identical protocols (416$\times$416, 300 epochs, bat
 \subsection{Resolution of the Legacy mAP Discrepancy}
 When evaluated under the legacy 11-point interpolation protocol, TinyYOLO-q achieves \textbf{62.8\% mAP@50}, outperforming YOLO-Fastest (61.02\%) by \textbf{1.78\% absolute mAP} with 12\% fewer parameters. Modern pipelines utilize the more conservative 101-point interpolation, which prevents sparse, isolated positive predictions from artificially inflating average precision. This highlights the absolute necessity of evaluating lightweight models under identical metric configurations.
 
-Additionally, TinyYOLO-q's anchor-free design yields superior domain generalization (19.7\% on COCO vs. YOLO-Fastest's estimated $\sim$15.4\%), despite the lack of spatial priors. Finally, unlike YOLO-Fastest which dedicates its entire budget to single-task detection, TinyYOLO's shared backbone successfully supports instance segmentation and pose estimation, showcasing its extreme capacity-efficiency.
+Additionally, unlike YOLO-Fastest which dedicates its entire budget to single-task detection, TinyYOLO's shared backbone successfully supports instance segmentation and pose estimation, showcasing its extreme capacity-efficiency.
 
 \section{Edge Deployment Validation}
 We validate physical INT8 deployment on NVIDIA Jetson Nano (TensorRT) and Raspberry Pi 4 (TFLite) using a batch size of 1.
@@ -359,13 +384,13 @@ Quantized & INT8 (PTQ) & 39.8 & -1.4 & 0.22 \\
 \end{table}
 
 \subsection{Memory and Resource Profiles}
-On Jetson Nano, peak RAM drops from 48 MB (FP32) to 18 MB (INT8), representing a 2.6$\times$ reduction. The model file size drops to 0.22 MB under INT8. Energy consumption is estimated at $\sim$120 mJ/frame on Jetson Nano and $\sim$405 mJ/frame on Raspberry Pi 4. During sustained inference, the thermal profile stabilizes at 58$^\circ$C (Jetson Nano) and 62$^\circ$C (Raspberry Pi 4) without thermal throttling.
+On Jetson Nano, peak RAM drops from 48 MB (FP32) to 18 MB (INT8), representing a 2.6$\times$ reduction. The model file size drops to 0.22 MB under INT8. Energy per frame is computed as $E = P_{\text{TDP}} \times t_{\text{inference}}$, yielding upper-bound estimates of $5\text{W} \times 28.3\text{ms} = 141.5$ mJ/frame on Jetson Nano and $5\text{W} \times 67.4\text{ms} = 337$ mJ/frame on Raspberry Pi 4. These represent TDP-based upper bounds; actual power draw during INT8 inference is expected to be lower due to reduced memory bandwidth and ALU utilization. During sustained inference, the thermal profile stabilizes at 58$^\circ$C (Jetson Nano) and 62$^\circ$C (Raspberry Pi 4) without thermal throttling.
 
 \section{Ablation Studies}
 Ablation studies are performed on VOC at 416$\times$416 for 100 epochs, using the quantized variant as the baseline.
 
 \subsection{Ghost Convolutions vs. Standard Convolutions}
-Replacing standard convolutions with Ghost convolutions reduces parameters by 46\% and FLOPs by 50\%, with a minor mAP reduction of 2.4\% (from 39.8\% to 37.4\%). GhostConvs achieve 170 mAP/M-params vs. standard convs' 97 mAP/M-params, representing a 75\% improvement in parameter efficiency.
+Replacing standard convolutions with Ghost convolutions reduces parameters by 46\% and FLOPs by 50\%, with a minor mAP reduction of 2.4\% (from 39.8\% to 37.4\%). As a convenience metric, GhostConvs achieve 170 mAP/M-params vs.\ standard convs' 97 mAP/M-params; we note that this ratio is not a standard benchmark metric but provides intuitive context for parameter utilization at this scale.
 
 \subsection{Attention Mechanism Impact}
 ECA attention achieves the highest accuracy improvement (+1.6\% over no attention) while requiring fewer than 100 parameters. Squeeze-and-excitation (SE) attention achieves +1.3\% but requires significantly higher parameter overhead.
@@ -380,7 +405,7 @@ Under FP32, SiLU achieves slightly higher accuracy (38.2\%) than ReLU6 (37.4\%).
 At 0.5$\times$ width scaling, mAP drops to 22.1\% (0.06M parameters). At 1.5$\times$, mAP reaches 43.1\% (0.50M parameters), demonstrating diminishing returns. Input resolution scaling from 320 to 416 gains 3.6\% mAP, while 416 to 640 gains only 1.8\% at 2.4$\times$ GFLOPs, validating 416 as the optimal operating point.
 
 \subsection{Target Assignment, Objectness, and Augmentation}
-TAL assignment improves mAP by 7.8\% over single-cell assignment and reduces training epochs to reach 30\% mAP by 41\% (from 82 to 48 epochs). The dedicated objectness head increases mAP by 2.6\% and reduces false positive detections by 62\% compared to max-class proxy. Finally, mosaic augmentation disabled in the last 10\% of epochs contributes +4.3\% mAP.
+TAL assignment improves mAP by 7.8\% over single-cell assignment and reduces training epochs to reach 30\% mAP by 41\% (from 82 to 48 epochs). We adopt TAL hyperparameters from TOOD~\cite{jocher2023yolov8}: $k{=}10$, $\alpha{=}0.5$, $\beta{=}6.0$. These values were not specifically tuned for our sub-0.3M regime; task-specific hyperparameter optimization remains future work. The dedicated objectness head, following YOLOX's~\cite{ge2021yolox} decoupled design, increases mAP by 2.6\% and reduces false positive detections by 62\% compared to the max-class-logit proxy --- the explicit objectness signal provides the model with a direct mechanism to distinguish foreground from background without relying on indirect class score magnitude. Finally, mosaic augmentation disabled in the last 10\% of epochs contributes +4.3\% mAP.
 
 \section{Multi-Task Validation}
 We evaluate instance segmentation (TinySegment) and pose estimation (TinyPose) on COCO val2017 sharing the same 0.08M parameter backbone (Table~\ref{tab:multi_task_results}). While mask quality is restricted by the low representation size, the model successfully segments instances, proving backbone versatility.
