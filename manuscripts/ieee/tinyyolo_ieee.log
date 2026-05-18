@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex 2025.12.8)  18 MAY 2026 21:18
+This is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex 2025.12.8)  18 MAY 2026 21:20
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -833,8 +833,19 @@ Package hyperref Info: Link coloring OFF on input line 20.
 \@outlinefile=\write4
 \openout4 = `tinyyolo_ieee.out'.
 
-LaTeX Font Info:    Trying to load font information for U+msa on input line 33.
 
+Underfull \hbox (badness 4805) in paragraph at lines 31--31
+[][][]\OT1/ptm/m/n/8 S. H. Mazumder is with the De-part-ment of Com-puter Sci-e
+nce
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 31--31
+\OT1/ptm/m/n/8 & En-gi-neer-ing, Feni Uni-ver-sity, Feni 3900, Bangladesh (e-ma
+il:
+ []
+
+LaTeX Font Info:    Trying to load font information for U+msa on input line 33.
 
 (/usr/local/texlive/2025basic/texmf-dist/tex/latex/amsfonts/umsa.fd
 File: umsa.fd 2013/01/14 v3.01 AMS symbols A
@@ -845,6 +856,9 @@ LaTeX Font Info:    Trying to load font information for U+msb on input line 33.
 (/usr/local/texlive/2025basic/texmf-dist/tex/latex/amsfonts/umsb.fd
 File: umsb.fd 2013/01/14 v3.01 AMS symbols B
 )
+
+
+Underfull \vbox (badness 1968) has occurred while \output is active []
 
 
 
@@ -1059,7 +1073,7 @@ ic/texmf-dist/fonts/type1/urw/times/utmb8a.pfb></usr/local/texlive/2025basic/te
 xmf-dist/fonts/type1/urw/times/utmbi8a.pfb></usr/local/texlive/2025basic/texmf-
 dist/fonts/type1/urw/times/utmr8a.pfb></usr/local/texlive/2025basic/texmf-dist/
 fonts/type1/urw/times/utmri8a.pfb>
-Output written on tinyyolo_ieee.pdf (7 pages, 266486 bytes).
+Output written on tinyyolo_ieee.pdf (7 pages, 266863 bytes).
 PDF statistics:
  452 PDF objects out of 1000 (max. 8388607)
  399 compressed objects within 4 object streams
