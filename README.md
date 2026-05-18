@@ -457,7 +457,7 @@ python scripts/train.py --task seg --variant standard --imgsz 224,320,416 --swee
 
 ---
 
-#### Resolution Ablation (Quantized variant, 50 epochs on COCO128)
+#### Resolution Ablation (Standard variant, 50 epochs on COCO128)
 
 | Resolution | GFLOPs | Best mAP@50 | Predictions | Finding |
 |-----------|--------|-------------|-------------|--------|

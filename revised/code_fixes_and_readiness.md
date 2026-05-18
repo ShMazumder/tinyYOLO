@@ -470,7 +470,7 @@ def apply_qat(model, calibration_loader, n_batches=500):
 | GPU Tier | Old Batch | New Batch | Rationale |
 |----------|-----------|-----------|----------|
 | T4 (15 GB) | 32 | **64** | TinyYOLO uses only ~2.9 GB VRAM |
-| A100 (40 GB) | 128 | **256** | Model is 0.21M params — batch is never the bottleneck |
+| A100 (40 GB) | 128 | **256** | Model is 0.22M–0.23M params — batch is never the bottleneck |
 
 Resolution-based scaling relaxed: only scales down for imgsz ≥ 640.
 
