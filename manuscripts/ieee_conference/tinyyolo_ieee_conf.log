@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex 2025.12.8)  18 MAY 2026 21:46
+This is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex 2025.12.8)  18 MAY 2026 21:50
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -898,12 +898,12 @@ ion
  []
 
 
-Overfull \hbox (30.35043pt too wide) in paragraph at lines 164--175
+Overfull \hbox (14.35043pt too wide) in paragraph at lines 165--176
  [][] 
  []
 
 
-Underfull \hbox (badness 2012) in paragraph at lines 180--181
+Underfull \hbox (badness 2012) in paragraph at lines 181--182
 []\OT1/ptm/m/n/10 TinyYOLO adopts Task-Aligned Learn-ing (TAL) [[]20[]]
  []
 
@@ -912,27 +912,7 @@ Underfull \hbox (badness 2012) in paragraph at lines 180--181
 [3]
 
 
-Overfull \hbox (128.9896pt too wide) in paragraph at lines 237--246
- [][] 
- []
-
-
-Overfull \hbox (124.9896pt too wide) in paragraph at lines 255--264
- [][] 
- []
-
-
-Overfull \hbox (9.56653pt too wide) in paragraph at lines 273--285
- [][] 
- []
-
-
 LaTeX Warning: `h' float specifier changed to `ht'.
-
-
-Overfull \hbox (14.83847pt too wide) in paragraph at lines 291--302
- [][] 
- []
 
 
 LaTeX Warning: `h' float specifier changed to `ht'.
@@ -944,27 +924,25 @@ LaTeX Warning: `h' float specifier changed to `ht'.
 LaTeX Warning: `h' float specifier changed to `ht'.
 
 
-Overfull \hbox (4.33807pt too wide) in paragraph at lines 342--354
- [][] 
- []
+LaTeX Warning: `h' float specifier changed to `ht'.
 
 
-
-
-Underfull \hbox (badness 2334) in paragraph at lines 372--373
-[]\OT1/ptm/m/n/10 Under FP32, SiLU achieves slightly higher ac-cu-racy
- []
 
 
 
 [5]
-Overfull \hbox (24.76645pt too wide) in paragraph at lines 387--397
+Underfull \hbox (badness 2334) in paragraph at lines 377--378
+[]\OT1/ptm/m/n/10 Under FP32, SiLU achieves slightly higher ac-cu-racy
+ []
+
+
+Overfull \hbox (4.76645pt too wide) in paragraph at lines 393--403
  [][] 
  []
 
+
+
 (./tinyyolo_ieee_conf.bbl
-
-
 Underfull \hbox (badness 3907) in paragraph at lines 46--48
 []\OT1/ptm/m/n/8 ------, ``YOLOv3: An in-cre-men-tal im-prove-ment,'' \OT1/ptm/
 m/it/8 arXiv preprint
@@ -977,13 +955,13 @@ Underfull \hbox (badness 3872) in paragraph at lines 50--52
  []
 
 
+
+[6]
 Underfull \hbox (badness 2922) in paragraph at lines 114--117
 []\OT1/ptm/m/n/8 A. G. Howard, M. Z. B. Chen, D. Kalenichenko, W. Wang,
  []
 
-
-
-[6])
+)
 
 ** Conference Paper **
 Before submitting the final camera ready copy, remember to:
@@ -1010,10 +988,10 @@ Package rerunfilecheck Info: File `tinyyolo_ieee_conf.out' has not changed.
 (rerunfilecheck)             Checksum: 545880482BDD18388C1D72036359CE0D;7633.
  ) 
 Here is how much of TeX's memory you used:
- 23937 strings out of 474662
- 471395 string characters out of 5751109
+ 23939 strings out of 474662
+ 471451 string characters out of 5751109
  880249 words of memory out of 5000000
- 46468 multiletter control sequences out of 15000+600000
+ 46470 multiletter control sequences out of 15000+600000
  604601 words of font info for 124 fonts, out of 8000000 for 9000
  319 hyphenation exceptions out of 8191
  84i,10n,91p,2041b,882s stack positions out of 10000i,1000n,20000p,200000b,200000s
@@ -1039,7 +1017,7 @@ ic/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt10.pfb></usr/local/texlive/202
 c/texmf-dist/fonts/type1/urw/times/utmbi8a.pfb></usr/local/texlive/2025basic/te
 xmf-dist/fonts/type1/urw/times/utmr8a.pfb></usr/local/texlive/2025basic/texmf-d
 ist/fonts/type1/urw/times/utmri8a.pfb>
-Output written on tinyyolo_ieee_conf.pdf (7 pages, 278208 bytes).
+Output written on tinyyolo_ieee_conf.pdf (7 pages, 278042 bytes).
 PDF statistics:
  458 PDF objects out of 1000 (max. 8388607)
  402 compressed objects within 5 object streams
