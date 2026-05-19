@@ -352,7 +352,15 @@ Loss normalization: single $N_{\text{pos}}$ across all scales (R1 fix — was in
 | **EMA Decay** | **`--ema-decay 0.9998` (Configurable)** |
 | AMP | FP16 on GPU |
 
-**Evaluation Memory Safety Optimization:** To prevent memory exhaustion (OOM) during evaluation on large datasets under YOLO-standard confidence thresholds (`--val-conf 0.001`), TinyYOLO incorporates a *Per-Image Class-Aware Matching Engine* inside `DetectionMetrics`. Instead of globally matching all predictions across the entire dataset (which creates a massive $N_{\text{predictions}} \times N_{\text{ground\_truths}}$ matrix requiring 90 GB of RAM on VOC), the engine isolates matching within each image boundary. This limits the maximum pairwise matrix size per image to at most $300 \times 20$ elements (~24 KB of RAM), reducing the peak memory footprint to virtually zero while maintaining perfect mathematical correctness.
+**Evaluation Memory Safety and Metric Correctness (R1.2):** To prevent memory exhaustion (OOM) during evaluation on large datasets under YOLO-standard confidence thresholds (`--val-conf 0.001`), TinyYOLO incorporates a *Per-Image Class-Aware Matching Engine* inside `DetectionMetrics`. 
+
+This engine resolves two critical legacy issues:
+1. **Global Coordinate Leakage:** The legacy framework globally concatenated predictions and ground truths across all images, computing a giant global IoU matrix. This mathematically allowed a bounding box predicted in Image #1 to match a ground truth in Image #4000 if their absolute coordinates and class matched. By enforcing strict per-image matching boundaries, the new engine restricts matches to the same image, completely resolving this data leakage.
+2. **Class-Averaging Inflation:** The legacy code computed mean AP by dividing only by "active" classes ($AP > 0$) rather than all $N_c = 20$ classes, causing an artificial **5.0×** inflation of the reported mAP50. We have corrected this to comply with standard COCO/VOC evaluation protocols by averaging over all classes in the dataset.
+
+By isolating matches per image boundary, the peak pairwise matrix size is limited to at most $300 \times 20$ elements (~24 KB of RAM), reducing memory footprint to virtually zero while ensuring 100% mathematically correct and scientifically rigorous metrics.
+
+---
 
 ---
 

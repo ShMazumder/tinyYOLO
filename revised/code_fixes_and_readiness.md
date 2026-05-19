@@ -470,17 +470,19 @@ def apply_qat(model, calibration_loader, n_batches=500):
 **File:** `tinyYOLO/utils/metrics.py` — `DetectionMetrics` class
 
 **Before:**
-1. Predictions and ground truths from all batches were globally concatenated into single giant arrays.
-2. In `DetectionMetrics.compute()`, the global arrays were sent to `match_predictions()`, which calculated a global pairwise IoU matrix of shape `[N_predictions, N_ground_truths]`.
-3. Under YOLO-standard validation confidence (`--val-conf 0.001`), the early model outputs over 1.5 million noisy candidate detections.
-4. A pairwise matrix of size $1,500,000 \times 15,000$ requires 90 GB of RAM, instantly crashing Colab.
-5. In addition, it was mathematically incorrect: predictions on Image #1 could match ground truths on Image #4000 if coordinates overlapped in absolute pixel space.
+1. **Global Coordinate Leakage:** Predictions and ground truths from all batches were globally concatenated into giant single arrays and matched globally. A bounding box predicted in Image #1 could match a ground truth in Image #4000 if their absolute coordinates and class matched. This artificially inflated the True Positive count (e.g. 3,222 TPs out of 12,032 ground truths at Epoch 100) and inflated overall recall.
+2. **Class-Averaging Inflation:** The mean AP was calculated by dividing only by "active" classes ($AP > 0$) rather than all $N_c = 20$ classes:
+   $$\text{mAP50} = \frac{0.6597 + 0.3204 + 0.3801 + 0.3311}{4} = 0.4228 \text{ (42.28\%)}$$
+   instead of averaging over all 20 classes:
+   $$\text{mAP50} = \frac{0.6597 + 0.3204 + 0.3801 + 0.3311}{20} = 0.0845 \text{ (8.45\%)}$$
+   This mathematically multiplied the reported mAP50 by **5.0×**!
+3. **RAM OOM Crash:** Calculating a global pairwise IoU matrix of shape $1,500,000 \times 15,000$ under YOLO-standard `--val-conf 0.001` required 90 GB of RAM, instantly crashing Colab.
 
 **After:**
-1. Bounding box matching is isolated and performed **per-image** inside `_match_per_image(self, iou_thresh)`.
-2. Since NMS limits predictions per image to at most 300, the peak pairwise matrix size per image is at most $300 \times 20$ elements (~24 KB of RAM).
-3. Peak memory overhead is reduced to virtually zero, while predictions are strictly restricted to match only ground truths on the **same image** and of the **same class** (100% mathematically correct).
-4. Boolean TP/FP arrays are concatenated and globally sorted by confidence to compute standard precision, recall, and AP curves.
+1. **Per-Image Isolation:** Bounding box matching is isolated and performed strictly **per-image** inside `_match_per_image(self, iou_thresh)`. A prediction on Image #1 can *only* match a ground truth on Image #1, eliminating the coordinate leakage.
+2. **Standard Class Averaging:** Mean AP is calculated by averaging over all $N_c$ classes (including those with $AP = 0$) in accordance with COCO/VOC standard protocols.
+3. **Zero RAM Overhead:** Bounding predictions per image to at most 300 limits the peak pairwise matrix size per image to at most $300 \times 20$ elements (~24 KB of RAM), reducing peak memory footprint to virtually zero and resolving the OOM crash.
+4. **Sorted Curve Generation:** Boolean TP/FP arrays are accumulated per-image and sorted globally by confidence to compute standard precision, recall, and AP curves.
 
 **Impact:** Complete resolution of the Epoch 10 evaluation OOM crash, making validation on VOC/COCO fully stable, instantaneous, and mathematically exact.
 

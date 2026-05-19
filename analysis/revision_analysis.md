@@ -58,6 +58,7 @@ The original manuscript received **Major Revision** with 8 mandatory and 11 mino
 | P4 | Batch size / worker tuning — T4: 32→64, Colab: auto-allocates physical 2-core workers | `tinyYOLO/utils/env.py` | ✅ Applied |
 | P5 | Notebook execution — get_ipython().system() for tqdm compat | `experiments/01-04_*.ipynb` | ✅ Applied |
 | P6 | tqdm progress bars — single-line epoch monitoring | `scripts/train.py` | ✅ Applied |
+| P7 | Per-Image Metric Engine — bounds memory <24 KB (resolves OOM), eliminates global coordinate leakage, corrects class-averaging inflation bug | `tinyYOLO/utils/metrics.py` | ✅ Applied |
 
 ---
 
@@ -85,6 +86,7 @@ Obj BCE:    pos_weight=4.0      (counteracts 99.9% negative cell imbalance)
 Box decode: sigmoid*imgsz       (matches training coord system, no grid offsets)
 Augment:    OpenCV-native       (HSV jitter, HFlip, Grayscale — no PIL)
 Caching:    Dynamic Auto-Cacher (safely caches based on available RAM limits)
+Metrics:    Per-Image Matching  (isolates boundaries, fixes coordinate leakage + AP averaging)
 Warmup:     3 epochs linear     (per-iteration granularity)
 Mosaic:     4-image numpy       (cv2.resize on uint8, not tensor F.interpolate)
 Seed:       deterministic       (torch + numpy + random + CUDA)
