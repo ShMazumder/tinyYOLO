@@ -378,10 +378,13 @@ where $o^* = 1$ for cells assigned as positive by TAL and $o^* = 0$ otherwise.
 | **Warmup** | **3 epochs, linear 0→LR₀** | **Prevents gradient instability at initialization (NEW)** |
 | Weight Decay | 1×10⁻⁴ (conv weights only) | Separated: bias/BN params exempt |
 | BatchNorm | ε=10⁻³, momentum=0.03 | YOLO-standard [10] |
-| EMA | decay=0.9999 | Stabilizes final weights |
+| **EMA** | **decay=0.9998 (configurable)** | **Stabilizes final weights with faster metric tracking** |
 | Gradient Clip | max_norm=10.0 | Prevents gradient explosion |
 | AMP | FP16 on GPU | 2× training throughput |
 | **Deterministic** | **torch.manual_seed(42)** | **Reproducibility (NEW)** |
+| **Val Confidence** | **`--val-conf 0.001` (YOLO-Standard)** | **Prevents mAP metric collapse in early training** |
+| **Workers** | **2 on Colab, 4 on Kaggle** | **Optimizes CPU thread allocation to prevent scheduling thrashing** |
+| **Caching** | **Dynamic auto-caching** | **Enables safe RAM caching based on available system RAM limits** |
 
 **Warmup (NEW).** All modern YOLO variants since v4 employ 3–5 epochs of linear learning rate warmup. Training a tiny model with full learning rate from epoch 1 causes initial gradient instability (manifested as high initial losses of ~2.6 in our earlier experiments). The 3-epoch warmup linearly ramps the learning rate from 0 to $\text{lr}_0$, allowing early-epoch parameter updates to explore without large destructive gradients.
 

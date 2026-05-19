@@ -346,8 +346,10 @@ Loss normalization: single $N_{\text{pos}}$ across all scales (R1 fix — was in
 | **Mosaic** | **p=1.0, disabled last 10% (NEW)** |
 | **Seed** | **42 (deterministic, NEW)** |
 | Augmentation | OpenCV-native HSV jitter, HFlip, Grayscale |
-| Image Caching | RAM pre-load for datasets <5 GB |
-| EMA | decay=0.9999 |
+| **Image Caching** | **Dynamic memory-aware auto-caching manager** |
+| **Workers** | **Auto-tuned per environment (2 on Colab, 4 on Kaggle)** |
+| **Val Confidence** | **`--val-conf 0.001` (YOLO-Standard, prevents metric collapse)** |
+| **EMA Decay** | **`--ema-decay 0.9998` (Configurable)** |
 | AMP | FP16 on GPU |
 
 ---

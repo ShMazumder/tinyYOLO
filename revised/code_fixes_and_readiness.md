@@ -452,20 +452,22 @@ def apply_qat(model, calibration_loader, n_batches=500):
 
 **Impact:** ~5–10× faster per-sample augmentation.
 
-### Perf P3: RAM Image & Label Caching
+### Perf P3: Dynamic RAM Image & Label Caching
 
 **File:** `scripts/train.py` — `SimpleDetectionDataset.__init__()`
 
-- **Image cache:** Pre-loads all images into RAM at init when dataset is <5 GB and fits in 40% of free memory.
+- **Image cache:** Dynamic hardware-aware auto-caching. It automatically disables caching for large datasets (like VOC) on memory-constrained runtimes (like Colab free tier with 12.7 GB RAM) to guarantee 100% safety from OOM crashes, while automatically enabling it on higher-RAM platforms (like Kaggle 30 GB or RunPod/Vast.ai) to achieve maximum speed.
 - **Label path cache:** Builds `idx → label_path` dict at init — eliminates 3× `Path.exists()` calls per sample.
 - **Label data cache:** Pre-reads all label files into memory.
-- **Workers:** Automatically set to `0` when cache is active (avoids forked workers duplicating cache → OOM).
+- **Workers:** Automatically set to `0` when cache is active (avoids multi-processing serialization overhead).
 
-**Impact:** Eliminates disk I/O during training. Val set (4952 images, ~2.4 GB) is always cached.
+**Impact:** Eliminates disk I/O during training. Val set (4,952 images, ~2.4 GB) is always cached dynamically on safe systems.
 
 ### Perf P4: Batch Size & Worker Tuning
 
 **File:** `tinyYOLO/utils/env.py`
+
+* **Google Colab Optimal Workers:** Automatically set `recommended_workers = 2` to match Colab's physical 2 vCPU cores, eliminating thread-context-switching delays.
 
 | GPU Tier | Old Batch | New Batch | Rationale |
 |----------|-----------|-----------|----------|

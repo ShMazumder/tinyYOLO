@@ -264,7 +264,7 @@ Full training pipeline with COCO128 auto-download, vectorized CIoU loss, AMP, EM
 **What happens when you run training:**
 1. Auto-detects environment (Colab/Kaggle/RunPod/local) and configures batch size, workers, device
 2. Downloads dataset automatically (if not cached)
-3. **Pre-caches images in RAM** (if dataset <5 GB and memory allows) — eliminates disk I/O
+3. **Dynamic RAM Auto-Caching**: Automatically caches small datasets (<1.5 GB) and large datasets on high-memory platforms (Kaggle, RunPod, local), while safely disabling RAM caching on low-memory platforms (Colab free tier) to prevent OOM restarts.
 4. Builds model, applies YOLO-standard BatchNorm (`eps=1e-3, momentum=0.03`)
 5. Trains with AdamW (separate weight decay groups) + cosine LR + AMP + gradient clipping
 6. Uses **vectorized CIoU box loss** + BCE classification + BCE objectness with `pos_weight=4.0` (weighted 2.0 / 1.0 / 1.0)
@@ -598,7 +598,7 @@ The training script (`scripts/train.py`) computes all of the following during an
 | **Per-class AP** | AP for each class individually | Final evaluation |
 | **Confusion Matrix** | TP/FP counts per class | Final evaluation |
 
-### Training Configuration (YOLO-Standard, R1 Updated)
+### Training Configuration (YOLO-Standard, R1 Calibrated)
 
 | Component | Setting | Reference |
 |-----------|---------|----------|
@@ -612,6 +612,10 @@ The training script (`scripts/train.py`) computes all of the following during an
 | **Mosaic** | p=1.0, disabled last 10% (NEW in R1) | +4.3% mAP |
 | **Augmentation** | ColorJitter(0.4), Grayscale(0.1), HFlip(0.5), Perspective(0.15) | Distortion reduced from 0.2 |
 | **Seed** | 42 (deterministic training, NEW in R1) | `cudnn.deterministic=True` |
+| **Val Confidence** | `--val-conf 0.001` (YOLO-Standard) | Prevents mAP collapse to 0.0 |
+| **EMA Decay** | `--ema-decay 0.9998` (Configurable) | Smooths metric variance |
+| **Workers** | Auto-tuned per system (2 on Colab, 4 on Kaggle) | Perfectly maps physical cores |
+| **Image Caching** | Dynamic Memory-Aware Auto-Caching Manager | Bypasses on low-RAM to prevent OOM |
 
 ### Auto-Generated Report Files
 

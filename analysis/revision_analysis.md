@@ -54,8 +54,8 @@ The original manuscript received **Major Revision** with 8 mandatory and 11 mino
 | P1c | Channel index fix — classes at `pred[:, 5:]` not `pred[:, 4:]` (objectness head) | `tinyYOLO/utils/postprocess.py` | ✅ Applied |
 | P1d | Pre-NMS top-1000 cap — prevents memory blowup from excess detections | `tinyYOLO/utils/postprocess.py` | ✅ Applied |
 | P2 | OpenCV-native augmentation — replaced PIL pipeline | `scripts/train.py` | ✅ Applied |
-| P3 | RAM image + label caching — auto-cache datasets <5 GB | `scripts/train.py` | ✅ Applied |
-| P4 | Batch size / worker tuning — T4: 32→64, resolution scaling relaxed | `tinyYOLO/utils/env.py` | ✅ Applied |
+| P3 | Dynamic RAM caching manager — auto-caches safely based on free RAM limits | `scripts/train.py` | ✅ Applied |
+| P4 | Batch size / worker tuning — T4: 32→64, Colab: auto-allocates physical 2-core workers | `tinyYOLO/utils/env.py` | ✅ Applied |
 | P5 | Notebook execution — get_ipython().system() for tqdm compat | `experiments/01-04_*.ipynb` | ✅ Applied |
 | P6 | tqdm progress bars — single-line epoch monitoring | `scripts/train.py` | ✅ Applied |
 
@@ -84,7 +84,7 @@ Loss:       vectorized          (torch.where + batched CIoU, zero Python loops)
 Obj BCE:    pos_weight=4.0      (counteracts 99.9% negative cell imbalance)
 Box decode: sigmoid*imgsz       (matches training coord system, no grid offsets)
 Augment:    OpenCV-native       (HSV jitter, HFlip, Grayscale — no PIL)
-Caching:    RAM pre-load        (40% of free RAM + all labels at init)
+Caching:    Dynamic Auto-Cacher (safely caches based on available RAM limits)
 Warmup:     3 epochs linear     (per-iteration granularity)
 Mosaic:     4-image numpy       (cv2.resize on uint8, not tensor F.interpolate)
 Seed:       deterministic       (torch + numpy + random + CUDA)
