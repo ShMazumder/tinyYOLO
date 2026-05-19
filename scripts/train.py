@@ -83,6 +83,12 @@ def parse_args():
     parser.add_argument('--attention', type=str, default='default',
                         choices=['default', 'eca', 'se', 'none'],
                         help='Override attention type (default=use variant built-in)')
+    parser.add_argument('--freeze-epochs', type=int, default=0,
+                        help='Freeze backbone parameters for first N epochs')
+    parser.add_argument('--grad-clip', type=float, default=10.0,
+                        help='Gradient clipping max norm')
+    parser.add_argument('--amp', action='store_true', help='Force enable AMP')
+    parser.add_argument('--no-amp', action='store_true', help='Force disable AMP')
     return parser.parse_args()
 
 
@@ -1257,6 +1263,10 @@ def train_single(args, imgsz, env):
 
     # Use AMP if available
     use_amp = (device != 'cpu' and train_cfg.get('amp', False))
+    if getattr(args, 'amp', False):
+        use_amp = True
+    elif getattr(args, 'no_amp', False):
+        use_amp = False
     scaler = torch.amp.GradScaler('cuda') if use_amp else None
 
     # Multi-task loss selection
@@ -1303,6 +1313,18 @@ def train_single(args, imgsz, env):
             sampler.set_epoch(epoch)
             
         model.train()
+
+        # Freeze/unfreeze backbone logic
+        if getattr(args, 'freeze_epochs', 0) > 0:
+            freeze = epoch < args.freeze_epochs
+            raw_model = model.module if hasattr(model, 'module') else model
+            for param in raw_model.backbone.parameters():
+                param.requires_grad = not freeze
+            if rank in (-1, 0) and epoch == 0 and freeze:
+                print(f"  [FREEZE] Backbone frozen for the first {args.freeze_epochs} epochs")
+            if rank in (-1, 0) and epoch == args.freeze_epochs:
+                print(f"  [UNFREEZE] Backbone unfrozen at epoch {epoch+1}")
+
         epoch_losses = {'box': 0, 'cls': 0, 'obj': 0, 'total': 0}
         n_batches = 0
         t0 = time.time()
@@ -1351,7 +1373,7 @@ def train_single(args, imgsz, env):
                     loss, loss_dict = loss_fn(outputs, targets)
                 scaler.scale(loss).backward()
                 scaler.unscale_(optimizer)
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=10.0)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=args.grad_clip)
                 scaler.step(optimizer)
                 scaler.update()
             else:
@@ -1360,7 +1382,7 @@ def train_single(args, imgsz, env):
                     outputs = outputs[0]
                 loss, loss_dict = loss_fn(outputs, targets)
                 loss.backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=10.0)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=args.grad_clip)
                 optimizer.step()
 
             for k in epoch_losses:
