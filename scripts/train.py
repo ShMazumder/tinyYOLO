@@ -91,6 +91,12 @@ def parse_args():
     parser.add_argument('--no-amp', action='store_true', help='Force disable AMP')
     parser.add_argument('--eval-every', type=int, default=None,
                         help='Evaluation frequency in epochs (default: epochs // 10)')
+    parser.add_argument('--val-conf', type=float, default=0.001,
+                        help='Confidence threshold for validation (default: 0.001)')
+    parser.add_argument('--ema-decay', type=float, default=0.9998,
+                        help='EMA decay rate (default: 0.9998)')
+    parser.add_argument('--close-mosaic', type=int, default=None,
+                        help='Epoch at which to disable mosaic augmentation (default: 90%% of epochs)')
     return parser.parse_args()
 
 
@@ -1187,7 +1193,10 @@ def train_single(args, imgsz, env):
     base_dataset = SimpleDetectionDataset(train_dir, imgsz=imgsz, augment=True)
     # Wrap with mosaic augmentation (disabled for quick tests and last 10% of epochs)
     use_mosaic = not args.quick and epochs > 10
-    mosaic_disable_epoch = int(epochs * 0.9) if use_mosaic else 0
+    if getattr(args, 'close_mosaic', None) is not None:
+        mosaic_disable_epoch = args.close_mosaic
+    else:
+        mosaic_disable_epoch = int(epochs * 0.9) if use_mosaic else 0
     dataset = MosaicDataset(base_dataset, imgsz=imgsz, enable=use_mosaic)
 
     # DDP Sampler
@@ -1275,7 +1284,7 @@ def train_single(args, imgsz, env):
     loss_fn = MultiTaskLoss(task=args.task, nc=nc).to(device)
 
     # EMA (Exponential Moving Average)
-    ema_decay = 0.9999
+    ema_decay = getattr(args, 'ema_decay', 0.9998)
     ema_model = {k: v.clone() for k, v in model.state_dict().items()}
 
     # Evaluation imports
@@ -1420,7 +1429,7 @@ def train_single(args, imgsz, env):
             # Use module directly for evaluation if in DDP
             eval_model = model.module if hasattr(model, 'module') else model
             eval_model.eval()
-            det_metrics = DetectionMetrics(nc=nc, conf_thresh=0.15)
+            det_metrics = DetectionMetrics(nc=nc, conf_thresh=args.val_conf)
 
             with torch.no_grad():
                 for val_images, val_targets in val_loader:
@@ -1432,7 +1441,7 @@ def train_single(args, imgsz, env):
                         val_outputs = val_outputs[0]
 
                     # Decode predictions → [N, 6] (x1,y1,x2,y2,conf,cls)
-                    pred_list = decode_predictions(val_outputs, imgsz, conf_thresh=0.15, nc=nc)
+                    pred_list = decode_predictions(val_outputs, imgsz, conf_thresh=args.val_conf, nc=nc)
                     pred_list = non_max_suppression(pred_list, iou_thresh=0.45)
 
                     # Decode ground truth → [M, 5] (x1,y1,x2,y2,cls)
@@ -1515,7 +1524,7 @@ def train_single(args, imgsz, env):
         print(f"\n  Running final evaluation...")
         eval_model = model.module if hasattr(model, 'module') else model
         eval_model.eval()
-        final_metrics_calc = DetectionMetrics(nc=nc, conf_thresh=0.15)
+        final_metrics_calc = DetectionMetrics(nc=nc, conf_thresh=args.val_conf)
 
         with torch.no_grad():
             for val_images, val_targets in val_loader:
@@ -1526,7 +1535,7 @@ def train_single(args, imgsz, env):
                 if isinstance(val_outputs, tuple):
                     val_outputs = val_outputs[0]
 
-                pred_list = decode_predictions(val_outputs, imgsz, conf_thresh=0.15, nc=nc)
+                pred_list = decode_predictions(val_outputs, imgsz, conf_thresh=args.val_conf, nc=nc)
                 pred_list = non_max_suppression(pred_list, iou_thresh=0.45)
                 gt_list = decode_targets(val_targets, imgsz)
                 final_metrics_calc.update(pred_list, gt_list)
