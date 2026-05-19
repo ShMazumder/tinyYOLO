@@ -325,9 +325,8 @@ class DetectionMetrics:
             if abs(iou_thresh - 0.5) < 1e-4:
                 per_class_ap50 = per_class_ap
                 
-            # Mean AP at this threshold
-            ap_values = [v for v in per_class_ap.values() if v > 0]
-            mean_ap = np.mean(ap_values) if ap_values else 0.0
+            # Mean AP at this threshold (averaged over all classes in accordance with COCO/VOC standard protocol)
+            mean_ap = np.mean(list(per_class_ap.values())) if per_class_ap else 0.0
             ap_per_thresh.append(mean_ap)
 
         results['per_class_ap50'] = per_class_ap50
