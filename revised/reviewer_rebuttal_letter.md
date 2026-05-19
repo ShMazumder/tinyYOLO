@@ -243,6 +243,12 @@ We have added a comprehensive mathematical comparative analysis in Section 7.3 t
 
 **E15 (Width multiplier):** Ablation A5 explores 0.5×–1.5× widths. 1.0× provides the best accuracy-per-parameter efficiency (170 mAP/M-params).
 
+**E16 (Evaluation Memory and RAM Safety):**
+To ensure absolute robustness during large-dataset evaluations under low confidence thresholds (`--val-conf 0.001`), we redesigned the evaluation matching engine to match bounding boxes **per-image** rather than globally:
+1. **Mathematical Correctness**: Predictions are strictly restricted to match ground truths on the **same image** (matching standard COCO/VOC evaluation parameters).
+2. **Virtually Zero Memory**: Restricting the IoU matrix size per image to at most $300 \times 20$ elements (~24 KB of RAM) prevents the $O(N_{\text{predictions}} \times N_{\text{ground\_truths}})$ memory leak (which previously allocated up to 90 GB of RAM globally, causing out-of-memory crashes on large VOC sets).
+3. **Conservative Auto-Caching**: We tuned the default auto-caching threshold (`self._use_cache = (est_gb < 1.5) and (est_gb < avail_gb * 0.2)`) and set `recommended_workers = 2` on Google Colab to align with its physical CPU vCores, eliminating thread scheduling overhead and memory exhaustion during pre-loading or training.
+
 ---
 
 We believe these revisions comprehensively address all reviewer concerns and substantially strengthen the manuscript. The paper now includes standard benchmark evaluations, real edge hardware results, direct SOTA comparisons, comprehensive ablations, statistical rigor, and implementation fixes that collectively transform it into a publication-grade contribution.

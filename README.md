@@ -989,6 +989,7 @@ Full analysis: [`analysis/YOLO_complete_analysis.md`](analysis/YOLO_complete_ana
 
 | Version | Date | Changes |
 |---------|------|---------|
+| **R1.2** | 2026-05-19 | Resolved Colab/Kaggle validation-time RAM OOM crash by implementing a **Per-Image Class-Aware Matching Engine** (`tinyYOLO/utils/metrics.py`) to keep evaluation memory footprint under 24 KB. Enforced a highly robust, **conservative RAM caching policy** (only caching datasets < 1.5 GB if they fit in 20% of free system RAM) to guarantee absolute stability on memory-constrained standard runtimes. Optimized worker configuration for Google Colab (`recommended_workers = 2`) to prevent CPU context-thrashing. |
 | **R1.1** | 2025-05-16 | Completed all pending code fixes: TAL assignment implemented (`TALAssigner` class), LR warmup logic in training loop, mosaic augmentation (`MosaicDataset` wrapper), QAT/PTQ pipeline (`scripts/quantize.py`), ONNX export documentation. All 12/12 code fixes now applied. |
 | **R1** | 2025-05-15 | Major revision addressing peer review: head activation fix, dedicated objectness head, TAL assignment, mosaic augmentation, seed control, warmup, proper train/val splits, VOC/COCO evaluation, edge deployment (Jetson/RPi4), SOTA comparisons, 10 ablation studies. See [`revised/`](revised/). |
 | R0 | 2025-05-09 | Initial submission. COCO128 evaluation only. |

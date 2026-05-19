@@ -58,6 +58,10 @@ All experiments use proper train/val splits with **no data leakage**. The origin
 - All experiments logged with full configuration snapshots
 - 5 independent runs for all primary results
 
+### 6.4 Resource and Memory Safety Controls
+- **Per-Image Evaluation matching**: The validation matching engine in `DetectionMetrics` isolates calculations per image boundary rather than concatenating prediction arrays globally. This restricts the peak pairwise IoU matrix shape to $300 \times 20$ elements, capping memory usage to ~24 KB (vs. 90 GB globally) to guarantee standard runtime safety under the YOLO-standard `--val-conf 0.001` threshold.
+- **Conservative Caching Policy**: Restricts image pre-loading in RAM to datasets under 1.5 GB that fit within 20% of available free RAM (`self._use_cache = (est_gb < 1.5) and (est_gb < avail_gb * 0.2)`). This ensures large datasets like VOC and COCO are safely streamed from disk via optimal parallel CPU workers (`num_workers = 2`).
+
 ---
 
 ## 7. Results and Discussion

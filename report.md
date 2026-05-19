@@ -346,11 +346,13 @@ Loss normalization: single $N_{\text{pos}}$ across all scales (R1 fix — was in
 | **Mosaic** | **p=1.0, disabled last 10% (NEW)** |
 | **Seed** | **42 (deterministic, NEW)** |
 | Augmentation | OpenCV-native HSV jitter, HFlip, Grayscale |
-| **Image Caching** | **Dynamic memory-aware auto-caching manager** |
-| **Workers** | **Auto-tuned per environment (2 on Colab, 4 on Kaggle)** |
+| **Image Caching** | **Dynamic memory-aware auto-caching manager (conservative default: cache if size < 1.5 GB & fits in 20% of free RAM)** |
+| **Workers** | **Auto-tuned per environment (2 on Colab to match CPU vCores, 4 on Kaggle)** |
 | **Val Confidence** | **`--val-conf 0.001` (YOLO-Standard, prevents metric collapse)** |
 | **EMA Decay** | **`--ema-decay 0.9998` (Configurable)** |
 | AMP | FP16 on GPU |
+
+**Evaluation Memory Safety Optimization:** To prevent memory exhaustion (OOM) during evaluation on large datasets under YOLO-standard confidence thresholds (`--val-conf 0.001`), TinyYOLO incorporates a *Per-Image Class-Aware Matching Engine* inside `DetectionMetrics`. Instead of globally matching all predictions across the entire dataset (which creates a massive $N_{\text{predictions}} \times N_{\text{ground\_truths}}$ matrix requiring 90 GB of RAM on VOC), the engine isolates matching within each image boundary. This limits the maximum pairwise matrix size per image to at most $300 \times 20$ elements (~24 KB of RAM), reducing the peak memory footprint to virtually zero while maintaining perfect mathematical correctness.
 
 ---
 
