@@ -89,6 +89,8 @@ def parse_args():
                         help='Gradient clipping max norm')
     parser.add_argument('--amp', action='store_true', help='Force enable AMP')
     parser.add_argument('--no-amp', action='store_true', help='Force disable AMP')
+    parser.add_argument('--eval-every', type=int, default=None,
+                        help='Evaluation frequency in epochs (default: epochs // 10)')
     return parser.parse_args()
 
 
@@ -1284,7 +1286,10 @@ def train_single(args, imgsz, env):
     )
 
     # Eval frequency: every N epochs (and always on last epoch)
-    eval_every = max(1, epochs // 10) if epochs > 5 else 1
+    if getattr(args, 'eval_every', None) is not None:
+        eval_every = args.eval_every
+    else:
+        eval_every = max(1, epochs // 10) if epochs > 5 else 1
 
     # Validation dataloader — uses SEPARATE val directory (no data leakage)
     if not val_dir:
@@ -1443,16 +1448,35 @@ def train_single(args, imgsz, env):
             dist.barrier()
 
         if rank in (-1, 0):
-            # Print row
-            p = epoch_metrics.get('precision', 0)
-            r = epoch_metrics.get('recall', 0)
-            f1 = epoch_metrics.get('f1', 0)
-            m50 = epoch_metrics.get('mAP50', 0)
+            # Print row with correct formatting depending on whether validation was executed
+            if is_eval_epoch:
+                p_str = f"{epoch_metrics.get('precision', 0):>6.3f}"
+                r_str = f"{epoch_metrics.get('recall', 0):>6.3f}"
+                f1_str = f"{epoch_metrics.get('f1', 0):>6.3f}"
+                m50_str = f"{epoch_metrics.get('mAP50', 0):>7.4f}"
+                
+                p_val = epoch_metrics.get('precision', 0)
+                r_val = epoch_metrics.get('recall', 0)
+                f1_val = epoch_metrics.get('f1', 0)
+                m50 = epoch_metrics.get('mAP50', 0)
+                m50_95 = epoch_metrics.get('mAP50_95', 0)
+            else:
+                p_str = "     -"
+                r_str = "     -"
+                f1_str = "     -"
+                m50_str = "      -"
+                
+                # Carry over previous validation metrics to keep training curves smooth in history.json
+                p_val = history[-1]['precision'] if history else 0.0
+                r_val = history[-1]['recall'] if history else 0.0
+                f1_val = history[-1]['f1'] if history else 0.0
+                m50 = history[-1]['mAP50'] if history else 0.0
+                m50_95 = history[-1]['mAP50_95'] if history else 0.0
 
             print(f"  {epoch+1:>4}/{epochs} "
                   f"{epoch_losses['box']:>8.4f} {epoch_losses['cls']:>8.4f} "
                   f"{epoch_losses['obj']:>8.4f} {epoch_losses['total']:>8.4f} "
-                  f"{p:>6.3f} {r:>6.3f} {f1:>6.3f} {m50:>7.4f} "
+                  f"{p_str} {r_str} {f1_str} {m50_str} "
                   f"{lr:>10.6f} {elapsed:>5.1f}s", flush=True)
 
             history.append({
@@ -1460,11 +1484,11 @@ def train_single(args, imgsz, env):
                 'lr': lr,
                 'time': round(elapsed, 1),
                 **epoch_losses,
-                'precision': round(p, 4),
-                'recall': round(r, 4),
-                'f1': round(f1, 4),
+                'precision': round(p_val, 4),
+                'recall': round(r_val, 4),
+                'f1': round(f1_val, 4),
                 'mAP50': round(m50, 4),
-                'mAP50_95': round(epoch_metrics.get('mAP50_95', 0), 4),
+                'mAP50_95': round(m50_95, 4),
             })
 
             # Save best (by mAP if available, else by loss)
