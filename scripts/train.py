@@ -860,7 +860,8 @@ class DetectionLoss(nn.Module):
         v = (4 / (math.pi ** 2)) * (
             torch.atan(w_target / h_target) - torch.atan(w_pred / h_pred)
         ) ** 2
-        alpha = v / (1 - iou + v + eps)
+        with torch.no_grad():
+            alpha = v / (1 - iou + v + eps)
 
         ciou = iou - rho2 / c2 - alpha * v
         return 1.0 - ciou  # Loss: 0 when perfect match
@@ -960,7 +961,8 @@ class DetectionLoss(nn.Module):
                 w_t = (tx2 - tx1).clamp(min=eps)
                 h_t = (ty2 - ty1).clamp(min=eps)
                 v = (4 / (math.pi ** 2)) * (torch.atan(w_t / h_t) - torch.atan(w_p / h_p)) ** 2
-                alpha = v / (1 - iou + v + eps)
+                with torch.no_grad():
+                    alpha = v / (1 - iou + v + eps)
                 ciou_loss = 1.0 - (iou - rho2 / c2 - alpha * v)
                 total_box += ciou_loss.sum()
 
