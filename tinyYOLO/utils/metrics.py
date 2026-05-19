@@ -147,7 +147,7 @@ def compute_ap(precision, recall):
 class DetectionMetrics:
     """
     Accumulates predictions and ground truths across batches,
-    then computes comprehensive detection metrics.
+    then computes comprehensive detection metrics per-image to prevent memory overflow.
     """
 
     def __init__(self, nc=80, conf_thresh=0.25, iou_thresholds=None):
@@ -203,6 +203,59 @@ class DetectionMetrics:
                 self.all_gt_boxes.append(np.zeros((0, 4)))
                 self.all_gt_classes.append(np.zeros(0, dtype=int))
 
+    def _match_per_image(self, iou_thresh):
+        """
+        Perform class-aware matching of predictions to ground truth per image.
+        This prevents giant global IoU matrices and ensures 100% mathematical correctness.
+        """
+        n_images = len(self.all_pred_boxes)
+        
+        class_tps = {c: [] for c in range(self.nc)}
+        class_fps = {c: [] for c in range(self.nc)}
+        class_scores = {c: [] for c in range(self.nc)}
+        class_gt_counts = {c: 0 for c in range(self.nc)}
+        
+        global_tps = []
+        global_fps = []
+        global_fn_count = 0
+        
+        for img_idx in range(n_images):
+            pred_boxes = self.all_pred_boxes[img_idx]
+            pred_scores = self.all_pred_scores[img_idx]
+            pred_classes = self.all_pred_classes[img_idx]
+            
+            gt_boxes = self.all_gt_boxes[img_idx]
+            gt_classes = self.all_gt_classes[img_idx]
+            
+            # Run matching for this image
+            tp_img, fp_img, fn_img_count = match_predictions(
+                pred_boxes, pred_scores, pred_classes,
+                gt_boxes, gt_classes, iou_thresh
+            )
+            
+            global_tps.append(tp_img)
+            global_fps.append(fp_img)
+            global_fn_count += fn_img_count
+            
+            # Group by class
+            for k in range(len(pred_boxes)):
+                c = int(pred_classes[k])
+                if 0 <= c < self.nc:
+                    class_tps[c].append(tp_img[k])
+                    class_fps[c].append(fp_img[k])
+                    class_scores[c].append(pred_scores[k])
+                    
+            for j in range(len(gt_boxes)):
+                c = int(gt_classes[j])
+                if 0 <= c < self.nc:
+                    class_gt_counts[c] += 1
+                    
+        # Concatenate global arrays
+        global_tp = np.concatenate(global_tps) if global_tps else np.zeros(0, dtype=bool)
+        global_fp = np.concatenate(global_fps) if global_fps else np.zeros(0, dtype=bool)
+        
+        return class_tps, class_fps, class_scores, class_gt_counts, global_tp, global_fp, global_fn_count
+
     def compute(self):
         """
         Compute all metrics.
@@ -211,14 +264,8 @@ class DetectionMetrics:
             dict with: precision, recall, f1, mAP50, mAP50_95,
             per_class_ap, confusion_matrix, etc.
         """
-        all_pred_boxes = np.concatenate(self.all_pred_boxes) if self.all_pred_boxes else np.zeros((0, 4))
-        all_pred_scores = np.concatenate(self.all_pred_scores) if self.all_pred_scores else np.zeros(0)
-        all_pred_classes = np.concatenate(self.all_pred_classes) if self.all_pred_classes else np.zeros(0, dtype=int)
-        all_gt_boxes = np.concatenate(self.all_gt_boxes) if self.all_gt_boxes else np.zeros((0, 4))
-        all_gt_classes = np.concatenate(self.all_gt_classes) if self.all_gt_classes else np.zeros(0, dtype=int)
-
-        n_pred = len(all_pred_boxes)
-        n_gt = len(all_gt_boxes)
+        n_pred = sum(len(x) for x in self.all_pred_boxes)
+        n_gt = sum(len(x) for x in self.all_gt_boxes)
 
         results = {
             'n_predictions': n_pred,
@@ -233,74 +280,61 @@ class DetectionMetrics:
             })
             return results
 
-        # --- Per-image matching for each IoU threshold ---
+        # --- Match per image for each IoU threshold ---
         ap_per_thresh = []
+        
+        tp50 = None
+        fp50 = None
+        fn50_count = 0
+        per_class_ap50 = {}
 
         for iou_thresh in self.iou_thresholds:
+            class_tps, class_fps, class_scores, class_gt_counts, global_tp, global_fp, global_fn = self._match_per_image(iou_thresh)
+            
+            # Save IoU=0.5 results for overall metrics
+            if abs(iou_thresh - 0.5) < 1e-4:
+                tp50 = global_tp
+                fp50 = global_fp
+                fn50_count = global_fn
+                
             per_class_ap = {}
-            all_tp = []
-            all_fp = []
-            total_gt = 0
-
             for cls_id in range(self.nc):
-                # Filter by class
-                pred_mask = all_pred_classes == cls_id
-                gt_mask = all_gt_classes == cls_id
-
-                cls_pred_boxes = all_pred_boxes[pred_mask]
-                cls_pred_scores = all_pred_scores[pred_mask]
-                cls_gt_boxes = all_gt_boxes[gt_mask]
-
-                n_cls_gt = len(cls_gt_boxes)
-                total_gt += n_cls_gt
-
-                if len(cls_pred_boxes) == 0:
-                    per_class_ap[cls_id] = 0.0
-                    continue
-
+                n_cls_gt = class_gt_counts[cls_id]
+                cls_scores = np.array(class_scores[cls_id])
+                
                 if n_cls_gt == 0:
                     per_class_ap[cls_id] = 0.0
-                    all_fp.extend([True] * len(cls_pred_boxes))
-                    all_tp.extend([False] * len(cls_pred_boxes))
                     continue
-
-                # Match
-                cls_pred_cls = np.full(len(cls_pred_boxes), cls_id)
-                cls_gt_cls = np.full(n_cls_gt, cls_id)
-
-                tp, fp, fn = match_predictions(
-                    torch.tensor(cls_pred_boxes), cls_pred_scores,
-                    cls_pred_cls, torch.tensor(cls_gt_boxes),
-                    cls_gt_cls, iou_thresh
-                )
-
-                all_tp.extend(tp)
-                all_fp.extend(fp)
-
+                if len(cls_scores) == 0:
+                    per_class_ap[cls_id] = 0.0
+                    continue
+                    
+                cls_tp = np.array(class_tps[cls_id])
+                cls_fp = np.array(class_fps[cls_id])
+                
                 # Sort by score for AP
-                sort_idx = np.argsort(-cls_pred_scores)
-                tp_sorted = tp[sort_idx]
-                fp_sorted = fp[sort_idx]
-
+                sort_idx = np.argsort(-cls_scores)
+                tp_sorted = cls_tp[sort_idx]
+                fp_sorted = cls_fp[sort_idx]
+                
                 precision, recall = compute_precision_recall(
                     tp_sorted, fp_sorted, n_cls_gt
                 )
                 per_class_ap[cls_id] = compute_ap(precision, recall)
-
+                
+            if abs(iou_thresh - 0.5) < 1e-4:
+                per_class_ap50 = per_class_ap
+                
             # Mean AP at this threshold
             ap_values = [v for v in per_class_ap.values() if v > 0]
             mean_ap = np.mean(ap_values) if ap_values else 0.0
             ap_per_thresh.append(mean_ap)
 
-            if iou_thresh == 0.5:
-                results['per_class_ap50'] = per_class_ap
+        results['per_class_ap50'] = per_class_ap50
 
         # --- Overall metrics at IoU=0.5 ---
-        tp50, fp50, fn50 = match_predictions(
-            torch.tensor(all_pred_boxes), all_pred_scores,
-            all_pred_classes, torch.tensor(all_gt_boxes),
-            all_gt_classes, iou_thresh=0.5
-        )
+        if tp50 is None:
+            _, _, _, _, tp50, fp50, fn50_count = self._match_per_image(0.5)
 
         tp_count = tp50.sum()
         fp_count = fp50.sum()
@@ -315,12 +349,15 @@ class DetectionMetrics:
             'f1': round(float(f1), 4),
             'tp': int(tp_count),
             'fp': int(fp_count),
-            'fn': int(fn50),
-            'mAP50': round(float(ap_per_thresh[0]), 4),
-            'mAP50_95': round(float(np.mean(ap_per_thresh)), 4),
+            'fn': int(fn50_count),
+            'mAP50': round(float(ap_per_thresh[0]), 4) if ap_per_thresh else 0.0,
+            'mAP50_95': round(float(np.mean(ap_per_thresh)), 4) if ap_per_thresh else 0.0,
         })
 
         # --- Per-class metrics at IoU=0.5 ---
+        all_pred_classes = np.concatenate(self.all_pred_classes) if self.all_pred_classes else np.zeros(0, dtype=int)
+        all_gt_classes = np.concatenate(self.all_gt_classes) if self.all_gt_classes else np.zeros(0, dtype=int)
+
         per_class_metrics = {}
         for cls_id in range(self.nc):
             pred_mask = all_pred_classes == cls_id

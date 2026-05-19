@@ -614,13 +614,8 @@ class SimpleDetectionDataset(Dataset):
         elif cache:
             self._use_cache = (est_gb < avail_gb * 0.8)
         else:
-            # Auto-tuning default:
-            # - Cache small datasets (< 1.5 GB) if they fit in 45% of free RAM
-            # - Cache larger datasets (like VOC) if they fit in 30% of free RAM and are under 16 GB
-            if est_gb < 1.5:
-                self._use_cache = (est_gb < avail_gb * 0.45)
-            else:
-                self._use_cache = (est_gb < avail_gb * 0.3) and (est_gb < 16.0)
+            # Conservative default: cache only if dataset is small (< 1.5 GB) and fits in 20% of free RAM
+            self._use_cache = (est_gb < 1.5) and (est_gb < avail_gb * 0.2)
             
         if self._use_cache:
             print(f"  [CACHE] Pre-loading {len(self.img_files)} images into RAM (~{est_gb:.1f} GB)...")
