@@ -71,7 +71,7 @@ def detect_environment():
     if os.environ.get('COLAB_GPU') or os.environ.get('COLAB_RELEASE_TAG'):
         env['platform'] = 'colab'
         env['data_dir'] = '/content/datasets'
-        env['recommended_workers'] = 4  # Colab has 2 vCPUs but benefits from 4 workers
+        env['recommended_workers'] = 2  # Colab has 2 vCPUs, 2 workers is optimal
     elif os.environ.get('KAGGLE_KERNEL_RUN_TYPE'):
         env['platform'] = 'kaggle'
         env['data_dir'] = '/kaggle/working/datasets'

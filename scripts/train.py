@@ -97,6 +97,8 @@ def parse_args():
                         help='EMA decay rate (default: 0.9998)')
     parser.add_argument('--close-mosaic', type=int, default=None,
                         help='Epoch at which to disable mosaic augmentation (default: 90%% of epochs)')
+    parser.add_argument('--cache', action='store_true', help='Force cache images in RAM')
+    parser.add_argument('--no-cache', action='store_true', help='Force disable image caching in RAM to save memory')
     return parser.parse_args()
 
 
@@ -487,7 +489,7 @@ class SimpleDetectionDataset(Dataset):
     Works with COCO128, VOC, COCO, and custom YOLO-format datasets.
     """
 
-    def __init__(self, img_dir, imgsz=320, augment=True):
+    def __init__(self, img_dir, imgsz=320, augment=True, cache=None, no_cache=None):
         # Support single path or list of paths (e.g., VOC train2007 + train2012)
         if isinstance(img_dir, (list, tuple)):
             img_dirs = [Path(d) for d in img_dir]
@@ -597,16 +599,23 @@ class SimpleDetectionDataset(Dataset):
         # --- Cache all images in RAM (eliminates disk I/O bottleneck) ---
         self._img_cache = [None] * len(self.img_files)
         import psutil
-        avail_gb = psutil.virtual_memory().available / (1024 ** 3) if 'psutil' in sys.modules else 999
+        avail_gb = 999
         try:
             import psutil as _ps
             avail_gb = _ps.virtual_memory().available / (1024 ** 3)
-        except ImportError:
-            avail_gb = 999  # assume enough if psutil not available
+        except:
+            pass
         est_gb = len(self.img_files) * imgsz * imgsz * 3 / (1024 ** 3)
-        # Cache if dataset fits in 40% of free RAM
-        # On Kaggle (30GB): 8GB train fits (8 < 12). On Colab (12.7GB): 8GB skipped (8 > 5)
-        self._use_cache = (est_gb < avail_gb * 0.4)
+        
+        # Smart adaptive caching logic
+        if no_cache:
+            self._use_cache = False
+        elif cache:
+            self._use_cache = (est_gb < avail_gb * 0.8)
+        else:
+            # Conservative default: cache only if dataset is small (< 1.5 GB) and fits in 20% of free RAM
+            self._use_cache = (est_gb < 1.5) and (est_gb < avail_gb * 0.2)
+            
         if self._use_cache:
             print(f"  [CACHE] Pre-loading {len(self.img_files)} images into RAM (~{est_gb:.1f} GB)...")
             for i, fp in enumerate(self.img_files):
@@ -619,7 +628,7 @@ class SimpleDetectionDataset(Dataset):
                     print(f"    {i+1}/{len(self.img_files)} cached", flush=True)
             print(f"  [CACHE] Done — {sum(1 for x in self._img_cache if x is not None)} images in RAM")
         else:
-            print(f"  [CACHE] Skipped (need ~{est_gb:.1f} GB, only {avail_gb:.1f} GB free)")
+            print(f"  [CACHE] Skipped (need ~{est_gb:.1f} GB, RAM caching disabled/conservative limit reached)")
             self._use_cache = False
 
         # Pre-cache labels too
@@ -1190,7 +1199,9 @@ def train_single(args, imgsz, env):
     world_size = int(os.environ.get('WORLD_SIZE', 1))
 
     # SimpleDetectionDataset handles both single path and list of paths
-    base_dataset = SimpleDetectionDataset(train_dir, imgsz=imgsz, augment=True)
+    base_dataset = SimpleDetectionDataset(train_dir, imgsz=imgsz, augment=True,
+                                          cache=getattr(args, 'cache', False),
+                                          no_cache=getattr(args, 'no_cache', False))
     # Wrap with mosaic augmentation (disabled for quick tests and last 10% of epochs)
     use_mosaic = not args.quick and epochs > 10
     if getattr(args, 'close_mosaic', None) is not None:
@@ -1304,7 +1315,9 @@ def train_single(args, imgsz, env):
     if not val_dir:
         print(f"  [WARN] No validation directory specified, using training dir (not recommended)")
         val_dir = train_dir
-    val_dataset = SimpleDetectionDataset(val_dir, imgsz=imgsz, augment=False)
+    val_dataset = SimpleDetectionDataset(val_dir, imgsz=imgsz, augment=False,
+                                         cache=getattr(args, 'cache', False),
+                                         no_cache=getattr(args, 'no_cache', False))
     val_workers = 0 if val_dataset._use_cache else n_workers
     val_loader = DataLoader(val_dataset, batch_size=batch, shuffle=False,
                             num_workers=val_workers,

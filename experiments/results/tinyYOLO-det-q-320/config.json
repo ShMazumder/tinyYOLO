@@ -14,7 +14,7 @@
   "best_mAP50": 0.2809,
   "final_lr": 1e-05,
   "platform": "local",
-  "timestamp": "2026-05-19T13:07:55.238733",
+  "timestamp": "2026-05-19T13:46:45.042479",
   "seed": 42,
   "warmup_epochs": 3,
   "mosaic": false,
