@@ -465,9 +465,9 @@ def apply_qat(model, calibration_loader, n_batches=500):
 
 ---
 
-### Perf P7: Per-Image Class-Aware Metric Computation (CRITICAL)
+### Perf P7: Per-Image Class-Aware Metric Computation and Evaluation Overhaul (CRITICAL)
 
-**File:** `tinyYOLO/utils/metrics.py` — `DetectionMetrics` class
+**File:** `tinyYOLO/utils/metrics.py` — `DetectionMetrics` class and `compute_ap` function
 
 **Before:**
 1. **Global Coordinate Leakage:** Predictions and ground truths from all batches were globally concatenated into giant single arrays and matched globally. A bounding box predicted in Image #1 could match a ground truth in Image #4000 if their absolute coordinates and class matched. This artificially inflated the True Positive count (e.g. 3,222 TPs out of 12,032 ground truths at Epoch 100) and inflated overall recall.
@@ -477,14 +477,19 @@ def apply_qat(model, calibration_loader, n_batches=500):
    $$\text{mAP50} = \frac{0.6597 + 0.3204 + 0.3801 + 0.3311}{20} = 0.0845 \text{ (8.45\%)}$$
    This mathematically multiplied the reported mAP50 by **5.0×**!
 3. **RAM OOM Crash:** Calculating a global pairwise IoU matrix of shape $1,500,000 \times 15,000$ under YOLO-standard `--val-conf 0.001` required 90 GB of RAM, instantly crashing Colab.
+4. **Average Precision (AP) Linear Interpolation Inflation:** The old implementation in `compute_ap` used standard linear interpolation (`np.interp`) to sample precision across 101 recall levels. Because of this, it drew a diagonal line from the last valid recall point (e.g., $r = 0.1$ with precision $1.0$) to the sentinel at $r = 1.0$ with precision $0.0$. This inflated the AP for low-recall classes by over **500%** (e.g., a class with 1 True Positive out of 10 Ground Truths, so recall = 0.1 and precision = 1.0, was evaluated at an AP of $0.5495$ instead of the mathematically correct $0.1089$). Conversely, it also underestimated perfect classes ($AP = 1.0$) at $0.9901$ due to boundary interpolation errors.
+5. **Zero-Ground-Truth Class Averaging Bug:** In validation splits with subset sizes (like `coco128`), several classes have zero ground-truth instances. The old code assigned $AP = 0.0$ to these categories and included them in the class-average mAP denominator (e.g., dividing by 80 classes), which artificially penalized the overall `mAP` even when no occurrences existed in the validation set.
 
 **After:**
 1. **Per-Image Isolation:** Bounding box matching is isolated and performed strictly **per-image** inside `_match_per_image(self, iou_thresh)`. A prediction on Image #1 can *only* match a ground truth on Image #1, eliminating the coordinate leakage.
 2. **Standard Class Averaging:** Mean AP is calculated by averaging over all $N_c$ classes (including those with $AP = 0$) in accordance with COCO/VOC standard protocols.
 3. **Zero RAM Overhead:** Bounding predictions per image to at most 300 limits the peak pairwise matrix size per image to at most $300 \times 20$ elements (~24 KB of RAM), reducing peak memory footprint to virtually zero and resolving the OOM crash.
-4. **Sorted Curve Generation:** Boolean TP/FP arrays are accumulated per-image and sorted globally by confidence to compute standard precision, recall, and AP curves.
+4. **Step-Function COCO-Style 101-Point Interpolation:** Overhauled `compute_ap` to perform mathematically correct step-function interpolation:
+   $$p_{interp}(r) = \max_{\tilde{r} \ge r} p(\tilde{r})$$
+   We sample at COCO's 101 recall levels ($0.00, 0.01, \dots, 1.00$) and map indices via a vectorized suffix maximum envelope (`np.maximum.accumulate`), defaulting to $0.0$ if the recall level exceeds the maximum achieved recall. This guarantees 100% exact mathematical AP computations, resolving both the low-recall inflation and perfect-class underestimation.
+5. **Zero-Ground-Truth Category Exclusion:** Following standard COCO protocol (`pycocotools`), categories with zero ground-truth annotations ($N_{gt} = 0$) in the dataset split are assigned no AP score and are excluded from both the numerator and the denominator of the class-averaged mAP calculations.
 
-**Impact:** Complete resolution of the Epoch 10 evaluation OOM crash, making validation on VOC/COCO fully stable, instantaneous, and mathematically exact.
+**Impact:** Complete resolution of the evaluation OOM crash and mathematical inaccuracies, making validation on VOC/COCO fully stable, instantaneous, and mathematically exact in complete alignment with official COCO metrics.
 
 ### Perf P4: Batch Size & Worker Tuning
 

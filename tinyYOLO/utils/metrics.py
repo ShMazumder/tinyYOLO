@@ -124,20 +124,34 @@ def compute_precision_recall(tp, fp, n_gt):
 
 
 def compute_ap(precision, recall):
-    """Compute Average Precision using 101-point interpolation (COCO style)."""
-    # Prepend sentinel values
-    mrec = np.concatenate(([0.0], recall, [1.0]))
-    mpre = np.concatenate(([1.0], precision, [0.0]))
+    """
+    Compute Average Precision using 101-point step-function interpolation (COCO standard).
+    Eliminates linear interpolation overestimation and sentinel boundary bugs.
+    """
+    if len(recall) == 0 or len(precision) == 0:
+        return 0.0
 
-    # Make precision monotonically decreasing
-    for i in range(len(mpre) - 2, -1, -1):
-        mpre[i] = max(mpre[i], mpre[i + 1])
+    # Ensure arrays are sorted by recall ascending
+    sort_idx = np.argsort(recall)
+    recall = recall[sort_idx]
+    precision = precision[sort_idx]
 
-    # 101-point interpolation
-    recall_interp = np.linspace(0, 1, 101)
-    precision_interp = np.interp(recall_interp, mrec, mpre)
+    # Compute suffix maximum (precision envelope)
+    suffix_max = np.maximum.accumulate(precision[::-1])[::-1]
+
+    # Sample at COCO's 101 recall levels (0.00, 0.01, ..., 1.00)
+    recall_levels = np.linspace(0, 1, 101)
+    
+    # Find index of first recall point >= each level
+    indices = np.searchsorted(recall, recall_levels, side='left')
+
+    # Map indices to suffix_max, defaulting to 0.0 if out of bounds (recall_level > max_recall)
+    precision_interp = np.zeros(101)
+    valid_mask = indices < len(recall)
+    precision_interp[valid_mask] = suffix_max[indices[valid_mask]]
 
     return np.mean(precision_interp)
+
 
 
 # ---------------------------------------------------------------------------
@@ -302,8 +316,9 @@ class DetectionMetrics:
                 n_cls_gt = class_gt_counts[cls_id]
                 cls_scores = np.array(class_scores[cls_id])
                 
+                # Exclude classes with zero ground truths on the test split
+                # to match official COCO evaluation protocol
                 if n_cls_gt == 0:
-                    per_class_ap[cls_id] = 0.0
                     continue
                 if len(cls_scores) == 0:
                     per_class_ap[cls_id] = 0.0
@@ -325,7 +340,7 @@ class DetectionMetrics:
             if abs(iou_thresh - 0.5) < 1e-4:
                 per_class_ap50 = per_class_ap
                 
-            # Mean AP at this threshold (averaged over all classes in accordance with COCO/VOC standard protocol)
+            # Mean AP at this threshold (averaged ONLY over classes that have ground truths)
             mean_ap = np.mean(list(per_class_ap.values())) if per_class_ap else 0.0
             ap_per_thresh.append(mean_ap)
 
