@@ -1,3 +1,6 @@
+.vscode
+.flash
+
 __pycache__
 datasets/coco128
 datasets/coco
