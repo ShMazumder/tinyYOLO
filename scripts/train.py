@@ -1214,11 +1214,13 @@ def train_single(args, imgsz, env):
     # DDP Sampler
     sampler = DistributedSampler(dataset, shuffle=True) if rank != -1 else None
     
-    # When images are cached in RAM, workers=0 (no disk I/O to parallelize)
+    # When images are cached in RAM, CPU data augmentations (mosaic, color jitter, resizing)
+    # are still CPU-bound and run on the main thread if workers=0, causing GPU starvation.
+    # We use background workers to parallelize augmentations and overlap CPU-GPU work.
     if base_dataset._use_cache:
-        n_workers = 0
+        n_workers = min(train_cfg.get('workers', 8), max(os.cpu_count() or 2, 2))
         if rank in (-1, 0):
-            print(f"  Workers:  0 (images cached in RAM, no disk I/O needed)")
+            print(f"  Workers:  {n_workers} (images cached in RAM, multiprocessing enabled for augmentations)")
     else:
         n_workers = min(train_cfg['workers'], max(os.cpu_count() or 2, 2))
         if rank in (-1, 0):
