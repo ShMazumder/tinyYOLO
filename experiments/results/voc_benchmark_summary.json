@@ -1,0 +1,7 @@
+{
+  "experiment": "voc_benchmark",
+  "imgsz": 320,
+  "epochs": 100,
+  "tinyyolo_q": {},
+  "tinyyolo_s": {}
+}
