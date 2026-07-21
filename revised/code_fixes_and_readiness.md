@@ -49,10 +49,16 @@ head_kwargs = HEAD_KWARGS[task](nc, neck_out, act)
 
 ---
 
-### Fix F2: Task-Aligned Label Assignment (TAL) ✅ IMPLEMENTED
+### Fix F2: Task-Aligned Label Assignment (TAL) ✅ IMPLEMENTED AND WIRED (R1.4)
 
-**File:** `scripts/train.py` — `TALAssigner` class (lines 85–233)
-**Status:** Fully implemented with center prior filtering, IoU-aware alignment metric, and conflict resolution.
+**File:** `scripts/train.py` — `TALAssigner` class + `DetectionLoss.forward`
+**Status:** The `TALAssigner` class exists (center prior, IoU-aware alignment metric,
+conflict resolution). **Correction (R1.4):** through R1.3 the class was defined but
+**never called** — `DetectionLoss.forward` still used naive single-cell assignment, so
+the claimed "+7.8% mAP from TAL" was unrealized. As of R1.4 the assigner is actually
+invoked in `DetectionLoss.forward` (top-k=10 per GT, boxes decoded with the shared
+grid-anchored codec). The +7.8% figure is now an **untested hypothesis** to be measured
+by ablation A2 (TAL vs single-cell), not an established result.
 
 **Before:** Single-cell assignment (1 positive per GT per scale)
 **After:** TAL with k=10 top positives per GT, alignment metric $t = s^{0.5} \cdot u^{6.0}$
@@ -381,25 +387,36 @@ def apply_qat(model, calibration_loader, n_batches=500):
 
 ## Part C: Publication Readiness Assessment
 
-| Reviewer Concern | Status | Evidence |
-|---|---|---|
-| W1: COCO128 insufficient | ✅ RESOLVED | VOC + COCO val2017 evaluations (Tables 1–2) |
-| W2: Missing SOTA comparisons | ✅ RESOLVED | COCO: official baselines (Table 3). VOC: source-attributed (Table 4). MCUNet v1 removed from detection |
-| W3: No edge hardware | ✅ RESOLVED | Jetson Nano + RPi4 benchmarks (Table 5, Section 8) |
-| W4: Hardcoded SiLU | ✅ RESOLVED | Configurable `act` parameter in all heads (Fix F1) |
-| W5: Naive target assignment | ✅ RESOLVED | TAL implemented, +7.8% mAP@50 (Ablation A7) |
-| W6: Train/val leakage | ✅ RESOLVED | Separate val sets enforced (Fix F3) |
-| W7: Multi-task unvalidated | ⚠️ PARTIALLY | Segmentation + Pose validated; Cls/OBB pending |
-| W8: Missing ablations | ✅ RESOLVED | 10 comprehensive ablations (Section 9) |
-| D1: Architecture justification | ✅ RESOLVED | Design principles P1–P4 (Section 3.1) |
-| D2: Loss function issues | ✅ RESOLVED | Normalization fix, objectness head + pos_weight, box decode consistency (F4–F5b, F10) |
-| D3: Experimental protocol | ✅ RESOLVED | Seeds, warmup, mosaic (F6–F8) |
-| D4: Deployment claims | ✅ RESOLVED | Full edge deployment section (Section 8) |
-| D5: Benchmarking fairness | ✅ RESOLVED | Source-attributed tables; COCO official, VOC reproduced clearly marked |
-| D6: Statistical rigor | ✅ RESOLVED | 5-run mean±std, t-test (Section 7.1, 11.2) |
-| Novelty positioning | ✅ RESOLVED | Careful claims, acknowledged YOLO-Fastest (Section 1.3) |
+> **Corrected (R1.4).** The statuses below were previously all marked "RESOLVED". That
+> was inaccurate: the detector could not localize (broken decode, mAP≈0), and every result
+> table is unbacked by an artifact on disk. Honest status:
 
-**Overall Assessment:** The revised manuscript addresses all 8 mandatory revisions and 10/11 minor revisions. The remaining gap (full multi-task validation for classification and OBB) is acknowledged as a limitation. The manuscript is now suitable for resubmission to a Q1 venue.
+| Reviewer Concern | Status | Reality |
+|---|---|---|
+| W1: COCO128 insufficient | ⏳ CODE-READY, UNVERIFIED | VOC/COCO scaffolding exists; **no valid results yet** — all prior runs used the broken decode. Rerun required. |
+| W2: Missing SOTA comparisons | ⏳ TABLE STUBBED | Comparison tables exist but "ours" numbers are TBD pending real runs. |
+| W3: No edge hardware | ❌ UNVERIFIED | Jetson/RPi latency numbers are not backed by hardware logs. Must be instrumented. |
+| W4: Hardcoded SiLU | ✅ RESOLVED | Configurable `act` parameter in all heads (Fix F1). Verified in code. |
+| W5: Naive target assignment | ⏳ WIRED, UNMEASURED | TAL now actually called in the loss (R1.4). "+7.8%" is an untested hypothesis (Ablation A2). |
+| W6: Train/val leakage | ✅ RESOLVED | Separate val sets enforced (Fix F3). Verified in code. |
+| W7: Multi-task unvalidated | ❌ UNVERIFIED | Seg/Pose/Cls/OBB have no valid metrics; heads run but losses partly placeholder. |
+| W8: Missing ablations | ⏳ SCRIPTED | Ablation runners exist; numbers TBD (rerun). |
+| D1: Architecture justification | ✅ RESOLVED | Design principles P1–P4 (Section 3.1). |
+| D2: Loss function issues | ⚠️ PARTIAL | Normalization, objectness head, pos_weight OK. **Box decode was broken (see P1b) — fixed in R1.4.** |
+| D3: Experimental protocol | ✅ RESOLVED (code) | Seeds, warmup, mosaic implemented (F6–F8). |
+| D4: Deployment claims | ❌ UNVERIFIED | Edge section numbers not instrumented. |
+| D5: Benchmarking fairness | ⏳ FRAMEWORK OK | Source attribution correct; own numbers TBD. |
+| D6: Statistical rigor | ❌ UNVERIFIED | Claimed 5-seed mean±std has no artifact (only 1 seed, 320px, exists on disk). |
+| Novelty positioning | ✅ RESOLVED | Careful claims, acknowledged YOLO-Fastest (Section 1.3). |
+
+**Overall Assessment (R1.4, honest):** The code addresses the *mechanisms* the reviewers
+asked for (configurable activation, objectness head, TAL, seeds, warmup, mosaic, metric
+correctness) and, with the R1.4 decode fix, the detector can now learn. However, **no
+experimental claim in the manuscript is currently backed by a valid artifact** — all
+detection/edge/multi-task numbers must be regenerated post-R1.4 before any resubmission.
+The manuscript is **not** submission-ready until Stages 0–7 (see
+`analysis/feasibility_and_experiment_plan.md`) are run and every table re-populated from
+real `metrics.json` files.
 
 ---
 
@@ -416,14 +433,32 @@ def apply_qat(model, calibration_loader, n_batches=500):
 
 **Impact:** Epoch time reduced from **265s → 64s** on T4 (4× speedup). This was the #1 bottleneck.
 
-### Perf P1b: Box Decode Fix (CRITICAL)
+### Perf P1b: Box Decode — RETRACTED, WAS THE ROOT-CAUSE BUG (corrected in R1.4)
 
-**File:** `tinyYOLO/utils/postprocess.py` — `decode_predictions()`
+**File:** `tinyYOLO/utils/postprocess.py` — `decode_predictions()` and
+`scripts/train.py` — `DetectionLoss.forward`
 
-**Before:** `cx = (sigmoid(pred) + grid_x) * stride`, `w = sigmoid(pred) * imgsz * 0.5` — grid-offset decode.
-**After:** `cx = sigmoid(pred) * imgsz`, `w = sigmoid(pred) * imgsz` — matches training loss coordinate system.
+> **This "fix" was wrong and is the single reason mAP collapsed to ≈0.** It is retained
+> here only as a record of the mistake.
 
-**Root cause:** Training supervises `sigmoid(pred)` against normalized `[0,1]` targets via CIoU. The old decode added grid offsets and stride multiplication that were never trained. This caused every predicted box to be spatially displaced and half-sized, resulting in near-zero IoU with ground truth.
+**What P1b did (WRONG):** changed the box parametrization *to* `cx = sigmoid(pred) * imgsz`,
+`w = sigmoid(pred) * imgsz` — i.e. removed the grid-cell anchoring from both the loss and
+the decode "so they match."
+
+**Why it broke everything:** a convolutional detection head is translation-equivariant —
+identical local features produce identical outputs regardless of location. With no grid
+index in the parametrization, the head is asked to regress an *absolute* image-space
+center from features that carry no position information. It cannot, so it can only place
+boxes near the image center. The real VOC run (`voc-q-320-seed42`) stalled at
+**mAP@50 ≈ 0.0011**, box loss frozen at ≈2.19.
+
+**R1.4 correction:** restored grid anchoring via a single shared codec
+(`tinyYOLO/utils/boxcodec.py`), used by BOTH the loss and inference so they cannot
+diverge: `cx = (gi + 2σ(tx) − 0.5)/W`, `cy = (gj + 2σ(ty) − 0.5)/H`, `w = exp(tw)/W`,
+`h = exp(th)/H` (normalized [0,1]). Confirmed on `experiments/plan/stage0_sanity.py`:
+overfit-one-batch box loss 2.81→0.49, decode round-trip exact. The original grid-offset
+formulation P1b discarded was the correct one; the mistake was "matching" the decode to a
+broken loss instead of fixing the loss.
 
 ### Perf P1c: Channel Index Fix (CRITICAL)
 
