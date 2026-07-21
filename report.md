@@ -33,7 +33,7 @@ Deploying object detection on resource-constrained edge devices — microcontrol
 
 This paper presents TinyYOLO, a 0.23M-parameter object detection framework constructed from Ghost convolutions, depthwise separable feature fusion (LitePAN), and decoupled anchor-free detection heads. TinyYOLO introduces a dual-variant architecture: a *standard* variant employing SiLU activations with SE and spatial attention for FP32/FP16 deployment, and a *quantized* variant replacing all activations with ReLU6 and all attention modules with ECA blocks to guarantee end-to-end INT8 compatibility on edge accelerators. The framework supports five vision tasks — detection, instance segmentation, pose estimation, image classification, and oriented bounding box detection — through task-specific heads sharing a common 0.08M-parameter backbone.
 
-We evaluate TinyYOLO on Pascal VOC 2007+2012 (16.5K images, 20 classes) and COCO val2017 (5K images, 80 classes) under controlled experimental conditions with fixed random seeds and deterministic training. On VOC, TinyYOLO achieves mAP@50 of 38.7 ± 0.9% (standard) and 41.2 ± 0.7% (quantized) at 416×416 resolution, with INT8 inference latencies of 28.3 ms on Jetson Nano (TensorRT) and 67.4 ms on Raspberry Pi 4 (TFLite). Comprehensive ablation studies validate each architectural component, and direct comparisons against NanoDet (0.95M), YOLO-Fastest (0.25M), PicoDet-XS (0.93M), and MCUNetV2 (0.74M) on identical hardware establish TinyYOLO's position within the accuracy–efficiency Pareto frontier for sub-1M detectors.
+We evaluate TinyYOLO on Pascal VOC 2007+2012 (16.5K images, 20 classes) and COCO val2017 (5K images, 80 classes) under controlled experimental conditions with fixed random seeds and deterministic training. **[RESULTS PENDING — R1.4.** All previously reported detection, quantization, and edge-latency figures were produced with a broken box decode (mAP≈0) and are retracted. Numbers below are placeholders (`TBD`) to be regenerated after the R1.4 decode fix; see `CHANGELOG.md` and `analysis/feasibility_and_experiment_plan.md`.**]** Target VOC mAP@50 and INT8 edge latencies on Jetson Nano (TensorRT) and Raspberry Pi 4 (TFLite) are to be measured. Comprehensive ablation studies are scripted, and direct comparisons against NanoDet (0.95M), YOLO-Fastest (0.25M), PicoDet-XS (0.93M), and MCUNetV2 (0.74M) on identical hardware establish TinyYOLO's intended position within the accuracy–efficiency Pareto frontier for sub-1M detectors.
 
 **Keywords:** lightweight object detection, edge deployment, Ghost convolution, INT8 quantization, YOLO, anchor-free detection, depthwise separable convolution
 
@@ -397,20 +397,25 @@ By isolating matches per image boundary, the peak pairwise matrix size is limite
 
 ## 7. Results and Discussion
 
+> **[RESULTS PENDING — R1.4]** All numbers in §7 were produced with the broken decode
+> (real VOC run: mAP@50 ≈ 0.0011) and have **no valid backing artifact**. They are
+> replaced with `TBD` and must be regenerated with ≥3 seeds after the R1.4 fix
+> (Stage 2/3 in `analysis/feasibility_and_experiment_plan.md`).
+
 ### 7.1 Pascal VOC Results
 
 | Model | Params | mAP@50 (%) | mAP@50-95 (%) |
 |---|---|---|---|
-| TinyYOLO-std | 0.23M | 38.7 ± 0.9 | 18.5 ± 0.6 |
-| TinyYOLO-q | 0.22M | 41.2 ± 0.7 | 20.1 ± 0.5 |
-| TinyYOLO-q (INT8) | 0.22M | 40.5 ± 0.8 | 19.6 ± 0.6 |
+| TinyYOLO-std | 0.23M | TBD (rerun) | TBD (rerun) |
+| TinyYOLO-q | 0.22M | TBD (rerun) | TBD (rerun) |
+| TinyYOLO-q (INT8) | 0.22M | TBD (rerun) | TBD (rerun) |
 
 ### 7.2 COCO val2017 Results
 
 | Model | Params | mAP@50 | mAP@50-95 | AP_S | AP_M | AP_L |
 |---|---|---|---|---|---|---|
-| TinyYOLO-std | 0.23M | 18.2 ± 0.7 | 8.4 ± 0.5 | 2.2 ± 0.3 | 17.4 ± 0.8 | 31.2 ± 1.1 |
-| TinyYOLO-q | 0.22M | 19.7 ± 0.5 | 9.3 ± 0.4 | 2.6 ± 0.2 | 19.1 ± 0.6 | 32.8 ± 0.9 |
+| TinyYOLO-std | 0.23M | TBD | TBD | TBD | TBD | TBD |
+| TinyYOLO-q | 0.22M | TBD | TBD | TBD | TBD | TBD |
 
 ### 7.3 SOTA Comparison
 
@@ -425,13 +430,16 @@ By isolating matches per image boundary, the peak pairwise matrix size is limite
 | Model | Params | GFLOPs | mAP@50 (%) | mAP@50-95 (%) | Source |
 |---|---|---|---|---|---|
 | YOLO-Fastest [21] | 0.25M | 0.23 | ~15.4 | ~6.8 | Estimated\* |
-| **TinyYOLO-q (ours)** | **0.22M** | **0.24** | **19.7** | **9.3** | This work |
+| **TinyYOLO-q (ours)** | **0.22M** | **0.24** | **TBD (rerun)** | **TBD (rerun)** | This work |
 | NanoDet-m [22] | 0.95M | 0.72 | 27.3 | 13.1 | Official |
 | PicoDet-XS [24] | 0.93M | 0.67 | 28.9 | 14.5 | Official |
 | NanoDet-Plus-m [23] | 1.17M | 0.90 | 31.2 | 16.8 | Official |
 | YOLOv5n [47] | 1.90M | 4.50 | 38.4 | 22.1 | Official |
 | YOLOv8n [10] | 3.20M | 8.70 | 44.7 | 28.3 | Official |
 | YOLO11n [48] | 2.62M | 6.50 | 54.2 | 39.5 | Official |
+
+> Baseline rows are official published figures (kept for context). The **ours** row is
+> `TBD` pending real post-R1.4 runs.
 
 \* YOLO-Fastest COCO mAP estimated from repository; official benchmarks focus on VOC.
 
@@ -440,57 +448,72 @@ By isolating matches per image boundary, the peak pairwise matrix size is limite
 | Model | Params | GFLOPs | mAP@50 (%) | Source |
 |---|---|---|---|---|
 | YOLO-Fastest [21] | 0.25M | 0.23 | 61.02† | Official |
-| **TinyYOLO-q (ours)** | **0.22M** | **0.24** | **41.2 / 62.8†** | This work |
+| **TinyYOLO-q (ours)** | **0.22M** | **0.24** | **TBD (rerun, both protocols)** | This work |
 | MCUNetV2 [26] | 0.74M | 0.32 | 64.6 | Official (256kB SRAM) |
-| NanoDet-m [22] | 0.95M | 0.72 | 48.3‡ | Reproduced |
-| PicoDet-XS [24] | 0.93M | 0.67 | 50.1‡ | Reproduced |
+| NanoDet-m [22] | 0.95M | 0.72 | TBD‡ | Reproduced |
+| PicoDet-XS [24] | 0.93M | 0.67 | TBD‡ | Reproduced |
 
-† Official YOLO-Fastest VOC mAP uses 11-point VOC2007 interpolation, not COCO-style 101-point. We report under both protocols where possible.
-‡ Author-reproduced: retrained using official model code on VOC 2007+2012 under identical training protocol (416×416, 300 epochs, batch 64, Tesla T4).
+† Official YOLO-Fastest VOC mAP uses 11-point VOC2007 interpolation, not COCO-style 101-point. We will report under both protocols once real runs exist.
+‡ Author-reproduced numbers are also pending (no artifact yet): retrain official model code on VOC 2007+2012 under an identical protocol before quoting.
 
-**Analysis.** At the sub-0.25M parameter scale, TinyYOLO-q targets the same deployment niche as YOLO-Fastest (0.25M). 
-
-1. **Legacy mAP Discrepancy Resolution:** Under legacy 11-point VOC2007 interpolation (Table 4), TinyYOLO-q achieves **62.8% mAP@50**, outperforming YOLO-Fastest's official **61.02%** by **1.78% absolute mAP** with 12% fewer parameters (0.22M vs. 0.25M). When evaluated using the modern high-resolution COCO 101-point interpolation protocol, TinyYOLO-q achieves **41.2%**. This metric drop is a mathematical artifact of the legacy interpolation: legacy 11-point interpolation computes $AP_{11} = \frac{1}{11} \sum \max_{\tilde{r} \geq r} p(\tilde{r})$, which propagates sparse, high-precision spikes backwards over broad recall bins. Modern 101-point interpolation averages over 101 points, capturing rapid precision drop-offs and preventing isolated spikes from biasing the overall score.
-2. **Anchor-Free vs. Anchor-Based Design:** YOLO-Fastest uses hand-crafted dataset-specific anchor box priors optimized for VOC, whereas TinyYOLO is anchor-free. Anchor-free design requires higher spatial capacity to learn boundary offsets dynamically but scales and generalizes far better to complex domains, as evidenced by TinyYOLO-q's superior mAP on COCO (19.7% vs. estimated ~15.4%).
-3. **Multi-Task Representational Overhead:** TinyYOLO-q's backbone parameters (~70K) are shared to support five tasks (segmentation, pose, etc.), whereas YOLO-Fastest dedicates 100% of its network exclusively to single-task detection. The capacity sharing introduces representational trade-offs, yet TinyYOLO-q matches or exceeds single-task SOTA under fair metric controls.
+**Analysis (to be written from real results).** At the sub-0.25M parameter scale,
+TinyYOLO-q targets the same deployment niche as YOLO-Fastest (0.25M). The comparison
+above is a *framework* only — the "ours" numbers are `TBD` pending post-R1.4 runs, so no
+win/loss claim against YOLO-Fastest, NanoDet, or PicoDet can be made yet. Two design
+points that remain valid regardless of the eventual numbers: (1) TinyYOLO is anchor-free
+whereas YOLO-Fastest uses dataset-specific anchor priors; (2) TinyYOLO's ~70K backbone is
+shared across five task heads, trading single-task capacity for multi-task extensibility.
+Whether these translate into competitive accuracy is exactly what Stage 2/3 must measure.
+The earlier claim that TinyYOLO-q reaches 62.8% (11-pt) / 41.2% (101-pt) and beats
+YOLO-Fastest is **retracted** — it was computed from the broken detector.
 
 ---
 
 ## 8. Edge Deployment Validation (NEW in R1)
 
+> **[UNVERIFIED — must be instrumented on real hardware.]** The latencies below are not
+> backed by device logs. Measure with `trtexec` (Jetson) / TFLite benchmark (RPi) per
+> Stage 6; do not cite until logged.
+
 ### 8.1 Inference Latency
 
 | Platform | Runtime | FP32 | FP16 | INT8 | INT8 FPS |
 |---|---|---|---|---|---|
-| Tesla T4 | TensorRT | 12.4 ms | 7.8 ms | 5.2 ms | 192 |
-| Jetson Nano | TensorRT | 89.2 ms | 48.6 ms | 28.3 ms | 35.3 |
-| Raspberry Pi 4 | TFLite | 142.5 ms | — | 67.4 ms | 14.8 |
+| Tesla T4 | TensorRT | TBD | TBD | TBD | TBD |
+| Jetson Nano | TensorRT | TBD | TBD | TBD | TBD |
+| Raspberry Pi 4 | TFLite | TBD | — | TBD | TBD |
 
 ### 8.2 Quantization Accuracy Preservation
 
 | Variant | FP32 mAP@50 | INT8 (QAT) mAP@50 | Δ | Model Size |
 |---|---|---|---|---|
-| Standard | 38.7% | 36.9% | -1.8% | 0.24 MB |
-| **Quantized** | **41.2%** | **40.5%** | **-0.7%** | **0.22 MB** |
+| Standard | TBD | TBD | TBD | ~0.24 MB (est.) |
+| **Quantized** | **TBD** | **TBD** | **TBD** | **~0.22 MB (est.)** |
+
+_The previously reported 0.7% INT8 drop is retracted; realistic expectation at 0.22M is 1–3%._
 
 ---
 
 ## 9. Ablation Studies (NEW in R1)
 
-10 comprehensive ablations on VOC, 100 epochs, quantized baseline:
+> **[ALL ABLATION DELTAS UNVERIFIED — scripted, not yet run under R1.4.]** The findings
+> below were produced with the broken detector (mAP≈0), so the deltas are meaningless.
+> Each is replaced with `TBD`; regenerate via `stage4_ablations.py` / `04_ablations.ipynb`.
+
+10 ablations planned on VOC, 100 epochs, quantized baseline:
 
 | # | Ablation | Key Finding |
 |---|---|---|
-| A1 | Ghost vs Standard Conv | −2.4% mAP but 46% fewer params |
-| A2 | Attention: ECA vs SE vs None | ECA best (+1.6%), fewest params |
-| A3 | LitePAN vs FPN vs None | PAN pathway adds +3.8% |
-| A4 | ReLU6 vs SiLU (with INT8) | ReLU6: −0.9% INT8 drop vs SiLU: −4.6% |
-| A5 | Width multiplier 0.5–1.5× | 1.0× optimal efficiency point |
-| A6 | Resolution 224–640 | 416 optimal accuracy-latency |
-| A7 | **TAL vs single-cell** | **+7.8% mAP@50, 41% faster convergence** |
-| A8 | QAT vs PTQ | QAT: 98.9% accuracy retention |
-| A9 | **Mosaic augmentation** | **+4.3% mAP@50** |
-| A10 | Dedicated objectness head | +2.6% mAP, 62% fewer FPs |
+| A1 | Ghost vs Standard Conv | TBD (rerun) |
+| A2 | Attention: ECA vs SE vs None | TBD (rerun) |
+| A3 | LitePAN vs FPN vs None | TBD (rerun) |
+| A4 | ReLU6 vs SiLU (with INT8) | TBD (rerun) |
+| A5 | Width multiplier 0.5–1.5× | TBD (rerun) |
+| A6 | Resolution 224–640 | TBD (rerun) |
+| A7 | **TAL vs single-cell** | TBD (rerun — TAL now wired, R1.4) |
+| A8 | QAT vs PTQ | TBD (rerun) |
+| A9 | **Mosaic augmentation** | TBD (rerun) |
+| A10 | Dedicated objectness head | TBD (rerun) |
 
 ---
 
@@ -498,22 +521,27 @@ By isolating matches per image boundary, the peak pairwise matrix size is limite
 
 | Task | Box mAP@50 | Task-Specific Metric | Params |
 |---|---|---|---|
-| Segmentation | 18.9% | Mask mAP@50: 15.6% | 0.29M |
-| Pose | 30.1% | Keypoint AP@50: 23.4% | 0.27M |
+| Segmentation | TBD (rerun) | Mask mAP@50: TBD | 0.29M |
+| Pose | TBD (rerun) | Keypoint AP@50: TBD | 0.27M |
+
+_Unverified; seg/pose losses are partly placeholder (see `MultiTaskLoss`). Validate before claiming._
 
 ---
 
 ## 11. Discussion
 
-- Quantized variant outperforms standard by 2.5% mAP@50 — attributed to bounded activation stability, ECA efficiency, and simpler optimization landscape (p < 0.01 across 5 runs)
-- Cumulative training recipe improvements: ~19.4% mAP@50 gain over initial implementation
-- Real-time INT8 inference (35 FPS) validated on Jetson Nano
+> **[Discussion pending real results.]** The claims below were based on the retracted
+> (broken-decode) numbers and are withdrawn until Stage 2/5/6 are run.
+
+- Whether the quantized variant out- or under-performs the standard variant is `TBD` (hypothesis: quantized ≥ standard due to bounded activations; must be shown with p-values across ≥3 seeds).
+- Cumulative training-recipe gain over the initial implementation: `TBD`.
+- Real-time INT8 inference on Jetson Nano: `TBD` (instrument, do not estimate).
 
 ---
 
 ## 12. Limitations
 
-1. Accuracy ceiling at 0.22M params — AP_S only 2.4–2.8% on COCO
+1. Accuracy ceiling at 0.22M params — small-object AP is expected to be very low (order ~2% AP_S on COCO); exact value TBD after rerun
 2. Multi-task: Seg + Pose validated; Cls/OBB pending
 3. Edge platforms: Jetson Nano + RPi4 tested; MCU-class untested
 4. No knowledge distillation employed
@@ -524,7 +552,7 @@ By isolating matches per image boundary, the peak pairwise matrix size is limite
 
 ## 13. Conclusion
 
-TinyYOLO demonstrates that sub-0.25M parameter object detection with multi-task extensibility and INT8-native design is viable for edge deployment. The quantized variant achieves 41.2% mAP@50 on VOC with only 0.7% accuracy loss under INT8 quantization, operating at 35 FPS on Jetson Nano. Future work targets knowledge distillation, NAS-based channel optimization, and microcontroller deployment.
+TinyYOLO proposes sub-0.25M parameter object detection with multi-task extensibility and INT8-native design for edge deployment. **As of R1.4 the architecture is validated to train (localization confirmed on a sanity overfit), but no accuracy, quantization, or latency result is yet backed by a valid run** — the prior headline figures (VOC 41.2% mAP@50, 0.7% INT8 loss, 35 FPS Jetson) were produced with a broken decode and are retracted. Establishing real numbers on VOC/COCO and on Jetson/RPi hardware is the immediate next step; future work then targets knowledge distillation, NAS-based channel optimization, and microcontroller deployment.
 
 ---
 
