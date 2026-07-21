@@ -6,6 +6,16 @@
 
 ---
 
+> **⚠️ DO NOT SEND AS-IS (R1.4 correction).** This letter cites accuracy, ablation, and
+> edge-latency numbers (e.g. VOC 41.2%, COCO 19.7%, 62.8% 11-pt, +7.8% TAL, 28.3 ms Jetson)
+> that were produced with a **broken box decode** (real VOC run: mAP@50 ≈ 0.0011) and are
+> **retracted**. Every such figure below is `TBD` pending regeneration under the R1.4 fix.
+> The letter must be rewritten from real results before any resubmission. Code-mechanism
+> claims (configurable activation, objectness head, TAL now wired, seeds, warmup, mosaic,
+> metric correctness) are valid; their *quantitative* impact is not yet measured.
+
+---
+
 Dear Reviewer,
 
 We sincerely thank you for your thorough and constructive review. Your detailed technical analysis identified critical issues that, when addressed, have substantially strengthened the manuscript. Below we provide point-by-point responses to each concern, detailing the root cause, implemented fix, and manuscript changes.
