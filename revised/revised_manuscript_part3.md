@@ -2,6 +2,15 @@
 
 ---
 
+> **⚠️ RETRACTION (R1.4).** Every numeric result in this part (VOC/COCO benchmarks §7,
+> SOTA tables, edge latency §8, ablations §9, multi-task §10) was produced with a broken
+> box decode (real VOC run: mAP@50 ≈ 0.0011) and is **retracted**. Treat all mAP/AP/FPS/Δ
+> figures below as `TBD`, to be regenerated with ≥3 seeds after the R1.4 fix
+> (`analysis/feasibility_and_experiment_plan.md`). Experimental *protocol* stands; *numbers*
+> do not.
+
+---
+
 ## 6. Experimental Setup
 
 ### 6.1 Datasets
@@ -85,7 +94,7 @@ All experiments use proper train/val splits with **no data leakage**. The origin
 
 Key observations:
 1. The quantized variant outperforms the standard variant by 2.5% mAP@50, consistent with the hypothesis that ReLU6's bounded activation prevents gradient explosion in tiny models.
-2. INT8 quantization (QAT) degrades mAP@50 by only 0.7% absolute relative to FP32, validating the INT8-native design.
+2. INT8 quantization (QAT) mAP degradation is `TBD` (target: small; realistic 1–3% at this scale). The previously claimed 0.7% is retracted.
 3. Standard deviation across 5 runs is below 1.0% mAP@50, confirming reproducibility with deterministic training.
 
 ### 7.2 Main Results on COCO val2017
@@ -140,7 +149,7 @@ As expected, COCO performance is substantially lower than VOC due to the 4× cla
 
 1. **Resolution of the Legacy mAP Discrepancy.** At first glance, a comparison between TinyYOLO-q and YOLO-Fastest on Pascal VOC (Table 4) suggests a severe performance discrepancy: YOLO-Fastest reports an official mAP@50 of 61.02%, while TinyYOLO-q is reported at 41.2%. However, this comparison is fundamentally biased due to mismatched evaluation metrics. Legacy object detection repositories (including YOLO-Fastest) compute mAP@50 using the old VOC2007 **11-point interpolation** protocol. Modern pipelines (such as Ultralytics and TinyYOLO) employ the standard COCO **101-point interpolation** protocol, which is far more conservative. 
 
-When evaluated under the identical 11-point interpolation protocol, TinyYOLO-q achieves **62.8% mAP@50**, outperforming YOLO-Fastest (61.02%) by **1.78% absolute mAP** while operating with fewer parameters (0.22M vs. 0.25M).
+Any win/loss claim against YOLO-Fastest is `TBD` — the "ours" VOC mAP (both 11-point and 101-point protocols) must be re-measured post-R1.4. The earlier claim of 62.8% (11-pt) beating YOLO-Fastest's 61.02% is **retracted**.
 
 The mathematical cause of this ~21.6% absolute metric shift in lightweight models is a well-documented phenomenon. In low-capacity regimes, the model's precision-recall curve is highly step-like, characterized by sparse, high-confidence correct detections at low recall levels, followed by rapid precision drop-offs. The 11-point interpolation metric computes average precision by taking the maximum precision over 11 coarse recall bins:
 $$AP_{11} = \frac{1}{11} \sum_{r \in \{0, 0.1, \dots, 1.0\}} p_{interp}(r), \quad \text{where } p_{interp}(r) = \max_{\tilde{r} \geq r} p(\tilde{r})$$
@@ -182,7 +191,7 @@ The relationship between parameters and mAP@50 follows an approximately logarith
 | Raspberry Pi 4 | TFLite | 142.5 | — | 67.4 | 14.8 |
 
 **Key findings:**
-1. INT8 on Jetson Nano achieves 35 FPS — above the 30 FPS real-time threshold for typical edge applications.
+1. Jetson Nano INT8 FPS is `TBD` (must be instrumented with `trtexec`); whether it clears the 30 FPS real-time threshold is to be shown, not assumed.
 2. Raspberry Pi 4 at 14.8 FPS is suitable for non-real-time applications (e.g., periodic monitoring, agricultural inspection).
 3. TensorRT INT8 provides 3.2× speedup over TensorRT FP16 on Jetson Nano, and 2.4× over FP32 on T4.
 
@@ -201,7 +210,7 @@ The relationship between parameters and mAP@50 follows an approximately logarith
 | Quantized | INT8 (PTQ) | 39.8 | -1.4 | 0.22 |
 | **Quantized** | **INT8 (QAT)** | **40.5** | **-0.7** | **0.22** |
 
-The standard variant loses 4.6% mAP@50 under PTQ INT8 — caused by SiLU's non-monotonic region and SE's FC bottleneck accumulating quantization error. The quantized variant loses only 1.4% under PTQ and 0.7% under QAT, validating the INT8-native design philosophy.
+The relative INT8 robustness of the quantized (ReLU6+ECA) vs. standard (SiLU+SE) variant is the design hypothesis — ReLU6 avoids SiLU's non-monotonic region and ECA avoids SE's FC bottleneck. The exact PTQ/QAT drops for each variant are `TBD` (the earlier 4.6% / 1.4% / 0.7% figures are retracted).
 
 ### 8.4 Memory Footprint
 
@@ -246,7 +255,7 @@ Ghost convolutions reduce parameters by 46% and FLOPs by 50% at a cost of 2.4% m
 | Spatial (P4) + SE (P5) | 0.23M | 36.9 ± 0.9 | +1.1 |
 | **ECA (P4) + ECA (P5)** | **0.22M** | **37.4 ± 0.6** | **+1.6** |
 
-ECA provides the best accuracy (+1.6%) with the fewest additional parameters (<100). Spatial attention underperforms ECA despite higher computational cost, suggesting that channel-wise recalibration is more beneficial than spatial attention for the limited-capacity backbone.
+Hypothesis: ECA provides strong accuracy at the fewest additional parameters (<100), and channel-wise recalibration may beat spatial attention for a limited-capacity backbone. The accuracy deltas are `TBD` (ablation A3, rerun); the earlier "+1.6%" is retracted.
 
 ### A3. Neck Design: LitePAN vs. Simple FPN
 
