@@ -39,6 +39,16 @@ change record going forward — update it in the same commit as any code/doc cha
   true issue was mAP≈0). Updated `presentation/README.md` "Q1-ready" copy. Left
   `review/peer_review.md` as historical reviewer input.
 
+### Fixed
+- **Scale-aware label assignment** (`DetectionLoss._select_level_gts`, `scripts/train.py`).
+  Second bug found via the COCO128 smoke run: TAL assigned every GT at all 3 scales, flooding
+  the coarse P5 grid (~70 positives / 100 cells at 320px). With `pos_weight=4` this made the
+  objectness loss enormous (~7–11) and unlearnable, so confidences never rose above the init
+  floor → **0 predictions at eval, mAP 0** (box loss trained fine — decode was OK). Fix routes
+  each GT to only the FPN level matching its size (small→P3, medium→P4, large→P5), standard
+  FCOS/FPN practice. Box loss had already confirmed the decode fix (0.99→0.73); this addresses
+  the objectness/confidence collapse. _Re-run stage1 to verify predictions > 0 and mAP > 0._
+
 ### Added
 - **A1 decode ablation switch** — `TINYYOLO_LEGACY_DECODE=1` reverts `boxcodec` to the broken
   pre-R1.4 `sigmoid` decode (affects both loss and inference since they share the codec). Lets

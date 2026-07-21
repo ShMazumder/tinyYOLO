@@ -920,6 +920,22 @@ class DetectionLoss(nn.Module):
             alpha = v / (1 - iou + v + eps)
         return 1.0 - (iou - rho2 / c2 - alpha * v)
 
+    @staticmethod
+    def _select_level_gts(gt_labels, gt_bboxes, si, n_levels, t_lo=0.08, t_hi=0.24):
+        """Scale-aware GT->level routing. Returns the GTs whose size matches FPN
+        level `si` (0 = finest/P3, n_levels-1 = coarsest/P5). Without this, every
+        GT is assigned at every scale, flooding the coarse grid with positives and
+        blowing up the objectness loss. Size = sqrt(normalized w*h)."""
+        if n_levels <= 1:
+            return gt_labels, gt_bboxes
+        size = torch.sqrt(gt_bboxes[:, 2].clamp(min=0) * gt_bboxes[:, 3].clamp(min=0))
+        lvl = torch.zeros_like(size, dtype=torch.long)
+        lvl[size >= t_lo] = 1
+        lvl[size >= t_hi] = 2
+        lvl = lvl.clamp(max=n_levels - 1)
+        sel = lvl == si
+        return gt_labels[sel], gt_bboxes[sel]
+
     def forward(self, predictions, targets):
         """
         Task-Aligned (TAL) detection loss.
@@ -942,7 +958,8 @@ class DetectionLoss(nn.Module):
         total_obj = torch.tensor(0.0, device=device)
         total_pos = 0
 
-        for pred in predictions:
+        n_levels = len(predictions)
+        for si, pred in enumerate(predictions):
             B, C, H, W = pred.shape
             Ncell = H * W
             pred_box = pred[:, :4, :, :]     # [B, 4, H, W] raw
@@ -969,8 +986,14 @@ class DetectionLoss(nn.Module):
                 if vm.sum() == 0:
                     continue
                 gt_b = targets[b][vm]
-                gt_labels = gt_b[:, 0].long()
-                gt_bboxes = gt_b[:, 1:5]
+                gt_labels_all = gt_b[:, 0].long()
+                gt_bboxes_all = gt_b[:, 1:5]
+
+                # Scale-aware: only GTs sized for this level supervise it.
+                gt_labels, gt_bboxes = self._select_level_gts(
+                    gt_labels_all, gt_bboxes_all, si, n_levels)
+                if gt_bboxes.shape[0] == 0:
+                    continue
 
                 pos_mask, _, pos_labels, pos_bboxes, _ = self.assigner.assign(
                     cls_sig[b], dec_det[b], gt_labels, gt_bboxes, grid_cells, H, W)
