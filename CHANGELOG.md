@@ -39,7 +39,15 @@ change record going forward — update it in the same commit as any code/doc cha
   true issue was mAP≈0). Updated `presentation/README.md` "Q1-ready" copy. Left
   `review/peer_review.md` as historical reviewer input.
 
+### Added
+- **A1 decode ablation switch** — `TINYYOLO_LEGACY_DECODE=1` reverts `boxcodec` to the broken
+  pre-R1.4 `sigmoid` decode (affects both loss and inference since they share the codec). Lets
+  `stage4_ablations.py` run grid-anchored-vs-legacy as an automated A/B with no code edits.
+  Never enable for a real run.
+
 ### Verified
+- **TAL + decode confirmed together** — `stage0_sanity.py` with TAL wired: total loss 5.13→0.31
+  (94% drop), box 0.99→0.14. Localization learns; TAL gives denser positives than single-cell.
 - **Decode fix confirmed on real execution** via `experiments/plan/stage0_sanity.py`:
   decode round-trip exact (err 0.0), 284 grad tensors none-zero/no-NaN, overfit-one-
   batch total loss 6.63→1.14 and box 2.81→0.49 by step 100 (old broken decode floored

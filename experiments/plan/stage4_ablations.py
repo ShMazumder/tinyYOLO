@@ -10,6 +10,7 @@
 #   change per arm; each is listed with the exact file/knob so a run is trivial.
 
 # %%
+import os
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -40,6 +41,38 @@ def report(label, arms):
             rows.append([arm_label, n, f"{stats['mAP50'][0]*100:.1f} ± {stats['mAP50'][1]*100:.1f}"])
     print(f"\n  == {label} ==")
     print_table(rows, ["arm", "n", "mAP@50 (%)"])
+
+# %% [markdown]
+# ## A1 — Box decode: grid-anchored (R1.4) vs legacy `sigmoid*imgsz` (the bug)
+# Automated via the `TINYYOLO_LEGACY_DECODE` env flag — no code edit. Expect the
+# legacy arm to collapse toward mAP≈0, quantifying the R1.4 fix. Short (40 ep) is
+# enough to see the gap.
+
+# %%
+def run_arm_env(tag, env_flag=None, imgsz=RES, epochs=40):
+    names = []
+    prev = os.environ.get("TINYYOLO_LEGACY_DECODE")
+    if env_flag:
+        os.environ["TINYYOLO_LEGACY_DECODE"] = "1"
+    else:
+        os.environ.pop("TINYYOLO_LEGACY_DECODE", None)
+    try:
+        for s in SEEDS_3:
+            name = f"abl_{tag}_seed{s}"
+            run_train(name, task="det", variant="quantized", imgsz=imgsz,
+                      epochs=epochs, seed=s, data=DATA, dry_run=DRY_RUN)
+            names.append(name)
+    finally:
+        if prev is None:
+            os.environ.pop("TINYYOLO_LEGACY_DECODE", None)
+        else:
+            os.environ["TINYYOLO_LEGACY_DECODE"] = prev
+    return names
+
+report("A1 decode", [
+    ("grid-anchored (R1.4)", run_arm_env("A1_grid", env_flag=False)),
+    ("legacy sigmoid*imgsz", run_arm_env("A1_legacy", env_flag=True)),
+])
 
 # %% [markdown]
 # ## A3 — Attention: ECA vs SE vs None  (CLI: --attention)
@@ -73,8 +106,7 @@ report("A7 mosaic", [
 #
 # | # | Ablation | File & knob | Arms |
 # |---|---|---|---|
-# | A1 | **Decode** (quantifies R1.4) | temporarily restore old `sigmoid*imgsz` in `boxcodec.decode_boxes` / `postprocess` | new grid-anchored vs old |
-# | A2 | **Assignment** | wire `TALAssigner` (defined in `scripts/train.py`) into `DetectionLoss.forward` | single-cell vs TAL(k=10) |
+# | A2 | **Assignment** | TAL is now the default (R1.4). For the single-cell arm, set `DetectionLoss.assigner.topk = 1` or restore single-cell assignment | single-cell vs TAL(k=10) |
 # | A4 | Ghost vs standard conv | `tinyYOLO/modules/backbone.py` conv type | ghost vs conv |
 # | A5 | Activation ReLU6 vs SiLU (+INT8 drop) | `configs/*/*.yaml` act, or compare variants | relu6 vs silu |
 # | A8 | Objectness head vs max-class proxy | `tinyYOLO/modules/heads.py` obj branch | dedicated vs proxy |

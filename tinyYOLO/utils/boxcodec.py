@@ -28,9 +28,18 @@ All outputs are normalized to the [0,1] image fraction. Multiply by `imgsz`
 for pixel coordinates.
 """
 
+import os
 import torch
 
 WH_MAX = 4.0  # exp(4)=54.6 cells max side; clamp guards against blow-up
+
+
+def _legacy_decode():
+    """A1-ablation switch. When TINYYOLO_LEGACY_DECODE is set, the codec reverts
+    to the broken pre-R1.4 `sigmoid` parametrization (no grid anchoring). This
+    exists ONLY to reproduce the decode ablation (grid-anchored vs old) as an
+    A/B — it is the bug that zeroed mAP; never enable it for a real run."""
+    return os.environ.get("TINYYOLO_LEGACY_DECODE", "0") not in ("0", "", "false", "False")
 
 
 def decode_boxes(raw, gi, gj, W, H, wh_max=WH_MAX):
@@ -47,9 +56,15 @@ def decode_boxes(raw, gi, gj, W, H, wh_max=WH_MAX):
         [..., 4] boxes as (cx, cy, w, h) in [0,1] image fraction.
     """
     tx, ty, tw, th = raw[..., 0], raw[..., 1], raw[..., 2], raw[..., 3]
+
+    if _legacy_decode():
+        # Broken pre-R1.4 decode (A1 ablation only): absolute normalized center,
+        # no grid index -> a conv head cannot localize -> mAP collapses.
+        return torch.stack([torch.sigmoid(tx), torch.sigmoid(ty),
+                            torch.sigmoid(tw), torch.sigmoid(th)], dim=-1)
+
     gi = gi.to(raw.dtype)
     gj = gj.to(raw.dtype)
-
     cx = (gi + 2.0 * torch.sigmoid(tx) - 0.5) / W
     cy = (gj + 2.0 * torch.sigmoid(ty) - 0.5) / H
     w = torch.exp(torch.clamp(tw, max=wh_max)) / W
