@@ -34,7 +34,7 @@ We sincerely thank you for your thorough and constructive review. Your detailed 
 - **Pascal VOC 2007+2012** (16,551 train / 4,952 test images, 20 classes) — Table 1
 - **COCO val2017** (118K train / 5K val images, 80 classes) — Table 2
 
-All results report mean ± std over 5 independent runs with fixed seeds {42, 123, 256, 512, 1024}. The 4.7× mAP variance observed on COCO128 reduces to ±0.7% mAP@50 on VOC across 5 runs, confirming the earlier instability was a dataset size artifact. COCO128 results are retained only in supplementary material as a smoke test reference.
+The protocol is: mean ± std over 5 independent runs with fixed seeds {42, 123, 256, 512, 1024}. `[R1.4: no such multi-seed VOC result exists yet — only one seed at 320px is on disk, and it used the broken decode. Variance/stability claims are TBD.]`
 
 **Manuscript changes:** Sections 6–7 completely rewritten. Tables 1–4 added.
 
@@ -218,13 +218,13 @@ All primary results now report mean ± std over 5 independent runs. Statistical 
 
 ## Response to Questions (E1–E15)
 
-**E1 (Target assignment):** Addressed via TAL implementation. Single-cell was an initial prototype; TAL provides +7.8% improvement (Ablation A7).
+**E1 (Target assignment):** TAL is implemented and, as of R1.4, actually wired into `DetectionLoss` (through R1.3 the assigner existed but was never called). Its mAP improvement over single-cell is `TBD` (ablation A2); the earlier "+7.8%" is retracted.
 
 **E2 (Head activation):** Fixed. All heads now propagate variant-appropriate activation. Impact: +1.8% mAP@50 for quantized INT8.
 
 **E3 (Validation leakage):** Confirmed and fixed. All metrics are now on held-out test sets.
 
-**E4 (Standard benchmarks):** VOC: 41.2% mAP@50 (quantized), COCO: 19.7% mAP@50. Results consistent with capacity limitations.
+**E4 (Standard benchmarks):** VOC and COCO mAP@50 are `TBD` (rerun under R1.4). The earlier "VOC 41.2% / COCO 19.7%" figures are retracted.
 
 **E5 (YOLO-Fastest comparison):** Direct comparison added. We thank the reviewer for highlighting YOLO-Fastest (0.25M parameters) as the primary baseline at this scale. Our comparative analysis on Pascal VOC (Table 4) and Section 7.3 has been completely revised to address the apparent performance gap:
 1. **Metric Resolution:** The apparent gap (41.2% ours vs. 61.02% YOLO-Fastest) is entirely a mathematical artifact of the evaluation metric. YOLO-Fastest was officially evaluated using the legacy VOC2007 **11-point interpolation** protocol. In contrast, modern pipelines (like TinyYOLO) use the standard COCO **101-point interpolation** protocol, which averages precision over a high-resolution grid and is significantly more conservative for lightweight models whose precision-recall curves exhibit step-like drops.
