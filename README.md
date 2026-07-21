@@ -424,36 +424,43 @@ python scripts/train.py --task seg --variant standard --imgsz 224,320,416 --swee
 
 > **Note on Parameters:** Metrics are obtained with only **0.22M–0.23M parameters** (vs. YOLOv8n's 3.2M) on extremely light budgets, designed specifically for microcontrollers and edge hardware where model size < 1MB is the strict bottleneck.
 
-#### 📊 Final Experimental Results (R1 Revision)
+#### 📊 Final Experimental Results
 
-##### 1. Pascal VOC 2007 Test Benchmarks (416×416, 300 epochs, 5 seeds)
+> **⚠️ RESULTS PENDING (R1.4).** Every number in this section was produced with a broken
+> box decode (the real VOC run scored **mAP@50 ≈ 0.0011**) and is **retracted**. Values are
+> replaced with `TBD` and must be regenerated after the R1.4 fix — see
+> [`CHANGELOG.md`](CHANGELOG.md) and
+> [`analysis/feasibility_and_experiment_plan.md`](analysis/feasibility_and_experiment_plan.md).
+> Edge latencies must be instrumented on real hardware, not estimated.
+
+##### 1. Pascal VOC 2007 Test Benchmarks (416×416, ≥3 seeds — to run)
 
 | Model | Params | GFLOPs | mAP@50 (%) | mAP@50-95 (%) | P (%) | R (%) | F1 (%) |
 |---|---|---|---|---|---|---|---|
-| **TinyYOLO-std (FP32)** | 0.23M | 0.25 | **38.7 ± 0.9** | 18.5 ± 0.6 | 42.5 ± 1.1 | 36.8 ± 0.9 | 39.4 ± 1.0 |
-| **TinyYOLO-q (FP32)** | 0.22M | 0.24 | **41.2 ± 0.7** | 20.1 ± 0.5 | 44.8 ± 0.9 | 38.9 ± 0.8 | 41.6 ± 0.8 |
-| **TinyYOLO-q (INT8-QAT)** | 0.22M | 0.24 | **40.5 ± 0.8** | 19.6 ± 0.6 | 44.1 ± 1.0 | 38.2 ± 0.9 | 40.9 ± 0.9 |
+| **TinyYOLO-std (FP32)** | 0.23M | 0.25 | TBD | TBD | TBD | TBD | TBD |
+| **TinyYOLO-q (FP32)** | 0.22M | 0.24 | TBD | TBD | TBD | TBD | TBD |
+| **TinyYOLO-q (INT8-QAT)** | 0.22M | 0.24 | TBD | TBD | TBD | TBD | TBD |
 
-##### 2. COCO val2017 Benchmarks (416×416, 300 epochs, 5 seeds)
+##### 2. COCO val2017 Benchmarks (416×416, ≥3 seeds — to run)
 
 | Model | Params | GFLOPs | mAP@50 (%) | mAP@50-95 (%) | AP_S (%) | AP_M (%) | AP_L (%) |
 |---|---|---|---|---|---|---|---|
-| **TinyYOLO-std (FP32)** | 0.23M | 0.25 | **18.2 ± 0.7** | 8.4 ± 0.5 | 2.2 ± 0.3 | 17.4 ± 0.8 | 31.2 ± 1.1 |
-| **TinyYOLO-q (FP32)** | 0.22M | 0.24 | **19.7 ± 0.5** | 9.3 ± 0.4 | 2.6 ± 0.2 | 19.1 ± 0.6 | 32.8 ± 0.9 |
-| **TinyYOLO-q (INT8-QAT)** | 0.22M | 0.24 | **19.1 ± 0.6** | 8.9 ± 0.5 | 2.4 ± 0.3 | 18.4 ± 0.7 | 31.9 ± 1.0 |
+| **TinyYOLO-std (FP32)** | 0.23M | 0.25 | TBD | TBD | TBD | TBD | TBD |
+| **TinyYOLO-q (FP32)** | 0.22M | 0.24 | TBD | TBD | TBD | TBD | TBD |
+| **TinyYOLO-q (INT8-QAT)** | 0.22M | 0.24 | TBD | TBD | TBD | TBD | TBD |
 
-##### 3. Edge Hardware Inference Latency (416×416, batch=1, median)
+##### 3. Edge Hardware Inference Latency (416×416, batch=1 — to instrument)
 
 | Platform | Runtime | FP32 (ms) | FP16 (ms) | INT8 (ms) | INT8 FPS |
 |---|---|---|---|---|---|
-| **Tesla T4** | TensorRT | 12.4 | 7.8 | 5.2 | **192.3** |
-| **Jetson Nano** | TensorRT | 89.2 | 48.6 | 28.3 | **35.3** |
-| **Raspberry Pi 4** | TFLite | 142.5 | — | 67.4 | **14.8** |
+| **Tesla T4** | TensorRT | TBD | TBD | TBD | TBD |
+| **Jetson Nano** | TensorRT | TBD | TBD | TBD | TBD |
+| **Raspberry Pi 4** | TFLite | TBD | — | TBD | TBD |
 
-##### 4. Multi-Task Quantitative Validation (COCO val2017)
+##### 4. Multi-Task Quantitative Validation (COCO — to run)
 
-*   **Instance Segmentation (TinySegment - 0.28M):** Box mAP@50 of **18.9 ± 0.5%**, Mask mAP@50 of **15.6 ± 0.6%**
-*   **Pose Estimation (TinyPose - 0.26M):** Box mAP@50 of **30.1 ± 0.7%**, Keypoint AP@50 of **23.4 ± 0.9%**
+*   **Instance Segmentation (TinySegment - 0.28M):** Box mAP@50 `TBD`, Mask mAP@50 `TBD`
+*   **Pose Estimation (TinyPose - 0.26M):** Box mAP@50 `TBD`, Keypoint AP@50 `TBD`
 
 ---
 
@@ -461,11 +468,13 @@ python scripts/train.py --task seg --variant standard --imgsz 224,320,416 --swee
 
 | Resolution | GFLOPs | Best mAP@50 | Predictions | Finding |
 |-----------|--------|-------------|-------------|--------|
-| 160×160 | 0.04 | 0.000 | 0 | Too small |
-| 224×224 | 0.07 | 0.000 | 0 | Too small |
-| 320×320 | 0.15 | 0.212 | 1322 | Baseline |
-| **416×416** | **0.25** | **0.328** | **311** | **🏆 Optimal** |
-| 640×640 | 0.59 | 0.251 | 16 | Diminishing returns |
+| 160×160 | 0.04 | TBD | TBD | rerun |
+| 224×224 | 0.07 | TBD | TBD | rerun |
+| 320×320 | 0.15 | TBD | TBD | rerun |
+| **416×416** | **0.25** | **TBD** | **TBD** | rerun |
+| 640×640 | 0.59 | TBD | TBD | rerun |
+
+_(GFLOPs are real, measured from the model; mAP/prediction columns retracted — broken-decode.)_
 
 #### Latency Benchmarks (Tesla T4, batch=1)
 
