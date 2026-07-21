@@ -43,7 +43,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from tinyYOLO.utils.env import detect_environment, get_training_config, print_env_report
 from tinyYOLO.models import build_model
 from tinyYOLO.utils.benchmark import count_parameters, estimate_flops
-from tinyYOLO.utils.boxcodec import decode_boxes
+from tinyYOLO.utils.boxcodec import decode_boxes, decode_grid, make_grid
 
 
 TASK_DATA_MAP = {
@@ -816,17 +816,19 @@ class DetectionLoss(nn.Module):
     for tiny models where CIoU magnitude is ~0.8–1.0.
     """
 
-    def __init__(self, nc=80):
+    def __init__(self, nc=80, topk=10):
         super().__init__()
         self.nc = nc
         self.bce = nn.BCEWithLogitsLoss(reduction='mean')
-        # Objectness BCE needs pos_weight: ~0.1% of cells are positive
+        # Objectness BCE needs pos_weight: positives are a small fraction of cells
         self.obj_bce = nn.BCEWithLogitsLoss(reduction='mean',
                                              pos_weight=torch.tensor([4.0]))
         # Loss weights tuned for tiny models (CIoU starts ~1.0 for small models)
         self.box_weight = 2.0
         self.cls_weight = 1.0
         self.obj_weight = 1.0
+        # Task-Aligned Assigner (R1.4: now actually wired into forward)
+        self.assigner = TALAssigner(topk=topk)
 
     @staticmethod
     def _ciou(pred_box, target_box, eps=1e-7):
@@ -891,124 +893,124 @@ class DetectionLoss(nn.Module):
         ciou = iou - rho2 / c2 - alpha * v
         return 1.0 - ciou  # Loss: 0 when perfect match
 
+    @staticmethod
+    def _ciou_vec(pred, tgt, eps=1e-7):
+        """Vectorized CIoU loss for [N,4] (cx,cy,w,h) boxes. Returns [N] loss."""
+        p_cx, p_cy, p_w, p_h = pred[:, 0], pred[:, 1], pred[:, 2], pred[:, 3]
+        t_cx, t_cy, t_w, t_h = tgt[:, 0], tgt[:, 1], tgt[:, 2], tgt[:, 3]
+        px1, py1, px2, py2 = p_cx - p_w / 2, p_cy - p_h / 2, p_cx + p_w / 2, p_cy + p_h / 2
+        tx1, ty1, tx2, ty2 = t_cx - t_w / 2, t_cy - t_h / 2, t_cx + t_w / 2, t_cy + t_h / 2
+
+        inter = ((torch.min(px2, tx2) - torch.max(px1, tx1)).clamp(min=0) *
+                 (torch.min(py2, ty2) - torch.max(py1, ty1)).clamp(min=0))
+        area_p = (px2 - px1).clamp(min=0) * (py2 - py1).clamp(min=0)
+        area_t = (tx2 - tx1).clamp(min=0) * (ty2 - ty1).clamp(min=0)
+        union = area_p + area_t - inter + eps
+        iou = inter / union
+
+        enc_x1, enc_y1 = torch.min(px1, tx1), torch.min(py1, ty1)
+        enc_x2, enc_y2 = torch.max(px2, tx2), torch.max(py2, ty2)
+        rho2 = (p_cx - t_cx) ** 2 + (p_cy - t_cy) ** 2
+        c2 = (enc_x2 - enc_x1) ** 2 + (enc_y2 - enc_y1) ** 2 + eps
+
+        w_p, h_p = (px2 - px1).clamp(min=eps), (py2 - py1).clamp(min=eps)
+        w_t, h_t = (tx2 - tx1).clamp(min=eps), (ty2 - ty1).clamp(min=eps)
+        v = (4 / (math.pi ** 2)) * (torch.atan(w_t / h_t) - torch.atan(w_p / h_p)) ** 2
+        with torch.no_grad():
+            alpha = v / (1 - iou + v + eps)
+        return 1.0 - (iou - rho2 / c2 - alpha * v)
+
     def forward(self, predictions, targets):
         """
-        Vectorized loss computation — no Python for-loops over batch/targets.
+        Task-Aligned (TAL) detection loss.
+
+        For every scale and image, TALAssigner selects the top-k positive cells
+        per GT from the alignment metric t = s^alpha * u^beta (dense supervision),
+        instead of the old naive single-cell assignment. Boxes are decoded with
+        the shared grid-anchored codec so the loss and inference agree.
 
         Args:
             predictions: list of [B, 5+nc, H, W] from model
-            targets: [B, max_objects, 5] (cls, cx, cy, w, h)
+            targets: [B, max_objects, 5] (cls, cx, cy, w, h) normalized
         """
         device = predictions[0].device
         targets = targets.to(device)
-
-        # Find all valid targets (w > 0) — vectorized
         valid_mask = targets[:, :, 2] > 0  # [B, max_objects]
-        N_pos = max(valid_mask.sum().item(), 1)
 
         total_box = torch.tensor(0.0, device=device)
         total_cls = torch.tensor(0.0, device=device)
         total_obj = torch.tensor(0.0, device=device)
+        total_pos = 0
 
         for pred in predictions:
             B, C, H, W = pred.shape
-            pred_box = pred[:, :4, :, :]     # [B, 4, H, W]
+            Ncell = H * W
+            pred_box = pred[:, :4, :, :]     # [B, 4, H, W] raw
             pred_obj = pred[:, 4:5, :, :]    # [B, 1, H, W]
             pred_cls = pred[:, 5:, :, :]     # [B, nc, H, W]
 
-            # === Objectness target (vectorized scatter) ===
+            # Decode every cell once (grad path) + detached copy for assignment.
+            cx, cy, w, h = decode_grid(pred_box)                 # each [B, H, W], normalized
+            dec = torch.stack([cx, cy, w, h], dim=-1).reshape(B, Ncell, 4)   # grad
+            dec_det = dec.detach()
+            cls_flat = pred_cls.permute(0, 2, 3, 1).reshape(B, Ncell, self.nc)   # logits, grad
+            cls_sig = torch.sigmoid(cls_flat).detach()           # scores for assigner
+
+            # Grid cell centers (normalized), row-major index j*W + i.
+            gi_g, gj_g = make_grid(W, H, device)                 # [H, W]
+            gcx = ((gi_g + 0.5) / W).reshape(Ncell)
+            gcy = ((gj_g + 0.5) / H).reshape(Ncell)
+            grid_cells = torch.stack([gcx, gcy], dim=1)          # [Ncell, 2]
+
             obj_target = torch.zeros(B, 1, H, W, device=device)
 
-            # Get grid indices for all valid targets at once
-            all_cx = targets[:, :, 1]  # [B, max_obj]
-            all_cy = targets[:, :, 2]  # [B, max_obj]
-            gi = (all_cx * W).long().clamp(0, W - 1)  # [B, max_obj]
-            gj = (all_cy * H).long().clamp(0, H - 1)  # [B, max_obj]
+            for b in range(B):
+                vm = valid_mask[b]
+                if vm.sum() == 0:
+                    continue
+                gt_b = targets[b][vm]
+                gt_labels = gt_b[:, 0].long()
+                gt_bboxes = gt_b[:, 1:5]
 
-            # Set objectness targets using advanced indexing
-            b_idx, t_idx = torch.where(valid_mask)  # indices of valid targets
-            if len(b_idx) > 0:
-                obj_target[b_idx, 0, gj[b_idx, t_idx], gi[b_idx, t_idx]] = 1.0
+                pos_mask, _, pos_labels, pos_bboxes, _ = self.assigner.assign(
+                    cls_sig[b], dec_det[b], gt_labels, gt_bboxes, grid_cells, H, W)
+
+                npos = int(pos_mask.sum().item())
+                if npos == 0:
+                    continue
+                total_pos += npos
+
+                # Objectness target: 1 at positive cells (row-major matches grid_cells).
+                obj_target[b].view(Ncell)[pos_mask] = 1.0
+
+                pos_idx = pos_mask.nonzero(as_tuple=True)[0]
+
+                # Classification BCE at positive cells.
+                cls_pred_pos = cls_flat[b][pos_idx]              # [npos, nc] logits
+                cls_tgt = torch.zeros_like(cls_pred_pos)
+                valid_c = (pos_labels >= 0) & (pos_labels < self.nc)
+                if valid_c.any():
+                    cls_tgt[valid_c, pos_labels[valid_c]] = 1.0
+                total_cls += self.bce(cls_pred_pos, cls_tgt) * npos
+
+                # CIoU box loss at positive cells (grad through decoded preds).
+                total_box += self._ciou_vec(dec[b][pos_idx], pos_bboxes).sum()
 
             total_obj += self.obj_bce(pred_obj, obj_target)
 
-            # === CIoU + Classification (vectorized) ===
-            if len(b_idx) > 0:
-                # Gather all valid target info
-                v_cls = targets[b_idx, t_idx, 0].long()  # [N_valid]
-                v_cx = targets[b_idx, t_idx, 1]
-                v_cy = targets[b_idx, t_idx, 2]
-                v_w = targets[b_idx, t_idx, 3]
-                v_h = targets[b_idx, t_idx, 4]
-                v_gi = gi[b_idx, t_idx]
-                v_gj = gj[b_idx, t_idx]
-
-                # Classification — batched BCE
-                cls_preds = pred_cls[b_idx, :, v_gj, v_gi]  # [N_valid, nc]
-                cls_targets = torch.zeros_like(cls_preds)
-                valid_cls = (v_cls >= 0) & (v_cls < self.nc)
-                if valid_cls.any():
-                    cls_targets[valid_cls, v_cls[valid_cls]] = 1.0
-                total_cls += self.bce(cls_preds, cls_targets) * cls_preds.shape[0]
-
-                # CIoU box loss — batched.
-                # Grid-anchored decode (shared codec) so predicted boxes carry
-                # their cell index (v_gi, v_gj). The old code used bare
-                # sigmoid(raw) as an ABSOLUTE normalized center, which a
-                # translation-equivariant conv head cannot learn -> mAP ~0.
-                raw_box = pred_box[b_idx, :, v_gj, v_gi]                    # [N_valid, 4] raw
-                box_preds = decode_boxes(raw_box, v_gi, v_gj, W, H)        # [N_valid, 4] cxcywh in [0,1]
-                box_targets = torch.stack([v_cx, v_cy, v_w, v_h], dim=1)   # [N_valid, 4]
-
-                # Batched CIoU
-                eps = 1e-7
-                p_cx, p_cy, p_w, p_h = box_preds[:, 0], box_preds[:, 1], box_preds[:, 2], box_preds[:, 3]
-                t_cx, t_cy, t_w, t_h = box_targets[:, 0], box_targets[:, 1], box_targets[:, 2], box_targets[:, 3]
-
-                px1, py1 = p_cx - p_w / 2, p_cy - p_h / 2
-                px2, py2 = p_cx + p_w / 2, p_cy + p_h / 2
-                tx1, ty1 = t_cx - t_w / 2, t_cy - t_h / 2
-                tx2, ty2 = t_cx + t_w / 2, t_cy + t_h / 2
-
-                inter_x1 = torch.max(px1, tx1)
-                inter_y1 = torch.max(py1, ty1)
-                inter_x2 = torch.min(px2, tx2)
-                inter_y2 = torch.min(py2, ty2)
-                inter = (inter_x2 - inter_x1).clamp(min=0) * (inter_y2 - inter_y1).clamp(min=0)
-
-                area_p = (px2 - px1).clamp(min=0) * (py2 - py1).clamp(min=0)
-                area_t = (tx2 - tx1).clamp(min=0) * (ty2 - ty1).clamp(min=0)
-                union = area_p + area_t - inter + eps
-                iou = inter / union
-
-                enc_x1, enc_y1 = torch.min(px1, tx1), torch.min(py1, ty1)
-                enc_x2, enc_y2 = torch.max(px2, tx2), torch.max(py2, ty2)
-                rho2 = (p_cx - t_cx) ** 2 + (p_cy - t_cy) ** 2
-                c2 = (enc_x2 - enc_x1) ** 2 + (enc_y2 - enc_y1) ** 2 + eps
-
-                w_p = (px2 - px1).clamp(min=eps)
-                h_p = (py2 - py1).clamp(min=eps)
-                w_t = (tx2 - tx1).clamp(min=eps)
-                h_t = (ty2 - ty1).clamp(min=eps)
-                v = (4 / (math.pi ** 2)) * (torch.atan(w_t / h_t) - torch.atan(w_p / h_p)) ** 2
-                with torch.no_grad():
-                    alpha = v / (1 - iou + v + eps)
-                ciou_loss = 1.0 - (iou - rho2 / c2 - alpha * v)
-                total_box += ciou_loss.sum()
-
-        # Normalize
-        total_box = total_box / N_pos
-        total_cls = total_cls / N_pos
+        N = max(total_pos, 1)
+        total_box = total_box / N
+        total_cls = total_cls / N
 
         total_loss = (self.box_weight * total_box +
                       self.cls_weight * total_cls +
                       self.obj_weight * total_obj)
 
         return total_loss, {
-            'box': total_box.item(),
-            'cls': total_cls.item(),
-            'obj': total_obj.item(),
-            'total': total_loss.item(),
+            'box': float(total_box.item()) if torch.is_tensor(total_box) else float(total_box),
+            'cls': float(total_cls.item()) if torch.is_tensor(total_cls) else float(total_cls),
+            'obj': float(total_obj.item()),
+            'total': float(total_loss.item()),
         }
 
 

@@ -987,6 +987,8 @@ Full analysis: [`analysis/YOLO_complete_analysis.md`](analysis/YOLO_complete_ana
 
 ## Revision History
 
+> Full, authoritative change log: [`CHANGELOG.md`](CHANGELOG.md). Update it with every code/doc change.
+
 | Version | Date | Changes |
 |---------|------|---------|
 | **R1.4** | 2026-07-22 | **Critical box-decode fix.** Replaced the `cx = σ(pred) × imgsz` box parametrization (used in both `DetectionLoss` and `postprocess.decode_predictions`) with a single grid-anchored anchor-free codec (`tinyYOLO/utils/boxcodec.py`) shared by training and inference. The old decode omitted the grid cell index, so a translation-equivariant conv head could not learn localization — the real VOC run stalled at **mAP@50 ≈ 0.001**. Note: prior checkpoints (`best.pt`, `ema.pt`) use the broken parametrization and are invalid; all detection results must be regenerated. |
