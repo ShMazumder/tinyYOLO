@@ -830,7 +830,9 @@ class DetectionLoss(nn.Module):
         # Objectness positive weight. cls/obj are summed and normalized by N_pos
         # (YOLOX-style), NOT mean-reduced — mean dilutes the <1% positive signal
         # ~100x so confidences never rise and eval yields 0 predictions.
-        self.obj_pos_weight = 1.0
+        # Mild positive emphasis (2.0) helps objectness climb off the init floor
+        # faster; the dominant factor is total gradient-step count (dataset/batch).
+        self.obj_pos_weight = 2.0
         # Task-Aligned Assigner (R1.4: now actually wired into forward)
         self.assigner = TALAssigner(topk=topk)
 

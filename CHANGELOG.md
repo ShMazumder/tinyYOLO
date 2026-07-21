@@ -62,6 +62,15 @@ change record going forward — update it in the same commit as any code/doc cha
   `stage4_ablations.py` run grid-anchored-vs-legacy as an automated A/B with no code edits.
   Never enable for a real run.
 
+### Diagnosed
+- **"0 predictions" root cause = under-training, not a bug.** `diagnose_confidence.py` on the
+  trained `best.pt` showed objectness stuck at the init floor (obj max 0.014 ≈ σ(-4.6)) and cls
+  near floor — confidences never left initialization. Cause: coco128 has 128 images, so at the
+  auto batch (128) the run does **1 gradient step/epoch ≈ 100 steps total** — far too few (stage0
+  overfit needed 300 steps). Pipeline is correct; the smoke test was starved of steps. Fixes:
+  `stage1` now forces `--batch 16` (~800 steps); `obj_pos_weight` 1.0→2.0 to climb faster. Real
+  training (VOC, ~12.9k steps/run) is unaffected.
+
 ### Verified
 - **TAL + decode confirmed together** — `stage0_sanity.py` with TAL wired: total loss 5.13→0.31
   (94% drop), box 0.99→0.14. Localization learns; TAL gives denser positives than single-cell.

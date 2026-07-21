@@ -17,9 +17,12 @@ from _utils import run_train, load_metrics, print_table
 DRY_RUN = False   # set True to just print commands
 
 # %%
+# coco128 has only 128 images -> at the auto batch (128) that's ONE gradient step
+# per epoch (~100 steps total), far too few to train confidences off the init
+# floor. Force a small batch so the smoke test does ~8 steps/epoch (~800 total).
 name = "s1_coco128_q_320"
 run_train(name, task="det", variant="quantized", imgsz=320, epochs=100,
-          seed=42, data="coco128.yaml", dry_run=DRY_RUN)
+          seed=42, data="coco128.yaml", extra=["--batch", "16"], dry_run=DRY_RUN)
 
 # %%
 m = load_metrics(name)
