@@ -1,6 +1,6 @@
 # TinyYOLO 🚀
 
-> **R1 Revision** — Addressing peer review feedback. All critical concerns resolved. See [`revised/`](revised/) for full manuscript.
+> **R1.4** — Critical box-decode bug fixed (prior detection results collapsed to mAP≈0 and are **retracted / pending regeneration**). Code-level reviewer concerns are addressed, but no experimental result is currently backed by a valid run. See [`CHANGELOG.md`](CHANGELOG.md) and [`revised/`](revised/).
 
 **A modular, research-grade tiny object detection framework built on PyTorch + Ultralytics.**
 
@@ -480,13 +480,13 @@ _(GFLOPs are real, measured from the model; mAP/prediction columns retracted —
 
 | ImgSz | Standard (ms / FPS) | Quantized (ms / FPS) |
 |-------|--------------------|-----------------------|
-| 160 | 19.4 / 51.6 | 18.9 / 52.9 |
-| 224 | 25.7 / 38.9 | 22.2 / 45.0 |
-| 320 | 32.8 / 30.5 | 29.0 / 34.5 |
-| 416 | 54.5 / 18.3 | 39.6 / 25.2 |
-| 640 | 75.9 / 13.2 | 72.6 / 13.8 |
+| 160 | TBD | TBD |
+| 224 | TBD | TBD |
+| 320 | TBD | TBD |
+| 416 | TBD | TBD |
+| 640 | TBD | TBD |
 
-> The quantized variant is **~12% faster** on average at FP32/FP16 due to ReLU6 vs SiLU, and enables end-to-end INT8 execution with only **0.7% mAP loss** under QAT.
+> Latency to be re-measured (`stage6_edge_benchmark.py` / `07_profile_export.ipynb`). The prior "~12% faster" and "0.7% INT8 mAP loss" claims are retracted pending real runs (realistic INT8 drop at this scale: 1–3%).
 
 ### `scripts/benchmark_models.py` — Benchmarking
 
@@ -612,13 +612,13 @@ The training script (`scripts/train.py`) computes all of the following during an
 | Component | Setting | Reference |
 |-----------|---------|----------|
 | **Loss** | CIoU + BCE (weighted 2.0 / 1.0 / 1.0) | Tuned for sub-1M models |
-| **Objectness** | Dedicated head (replaces max-class proxy) | R1 fix — +2.6% mAP |
-| **Assignment** | Task-Aligned Learning (TAL, k=10) | R1 fix — +7.8% mAP |
+| **Objectness** | Dedicated head (replaces max-class proxy) | R1 fix — gain TBD |
+| **Assignment** | Task-Aligned Learning (TAL, k=10) | Wired in R1.4 — gain TBD (ablation A2) |
 | **BatchNorm** | `eps=1e-3, momentum=0.03` | All official YOLO models |
 | **Optimizer** | AdamW, separate weight decay groups | Weights: 1e-4, biases/BN: 0.0 |
 | **Scheduler** | Cosine annealing (η_min = lr × 0.01) | Standard YOLO recipe |
 | **Warmup** | 3 epochs linear (NEW in R1) | Prevents gradient instability |
-| **Mosaic** | p=1.0, disabled last 10% (NEW in R1) | +4.3% mAP |
+| **Mosaic** | p=1.0, disabled last 10% (NEW in R1) | gain TBD (ablation A9) |
 | **Augmentation** | ColorJitter(0.4), Grayscale(0.1), HFlip(0.5), Perspective(0.15) | Distortion reduced from 0.2 |
 | **Seed** | 42 (deterministic training, NEW in R1) | `cudnn.deterministic=True` |
 | **Val Confidence** | `--val-conf 0.001` (YOLO-Standard) | Prevents mAP collapse to 0.0 |
