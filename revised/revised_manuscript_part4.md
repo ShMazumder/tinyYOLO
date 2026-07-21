@@ -2,17 +2,24 @@
 
 ---
 
+> **⚠️ RETRACTION (R1.4).** All accuracy, ablation-gain, latency, FPS, and power figures in
+> this part are retracted (produced with a broken decode, real VOC mAP@50 ≈ 0.0011) and are
+> `TBD` pending regeneration under R1.4. Qualitative discussion is kept where it does not
+> depend on the specific numbers.
+
+---
+
 ## 11. Discussion
 
 ### 11.1 Accuracy–Efficiency Trade-off Analysis
 
 TinyYOLO occupies a unique position in the lightweight detector landscape: it operates at a parameter scale (0.22–0.23M) where only YOLO-Fastest is directly comparable, while providing capabilities (multi-task support, INT8-native design) not available in any model at this scale. The accuracy–efficiency Pareto analysis (Section 7.4) reveals that TinyYOLO-q sits on the frontier — no model achieves higher mAP@50 at comparable parameter count.
 
-However, the gap to models 4× larger (e.g., official NanoDet-m at 0.95M achieving 27.3% mAP@50 on COCO vs. TinyYOLO's 19.7%) suggests that TinyYOLO's practical value lies in deployment scenarios where the larger models genuinely cannot fit, rather than as a general-purpose lightweight detector. Candidate deployment targets include: (i) microcontrollers with 256–512 KB SRAM (e.g., STM32H7 series), where MCUNetV2 [26] has demonstrated success on VOC, (ii) ultra-low-power vision sensors (e.g., Sony IMX500), and (iii) multi-model pipelines where TinyYOLO serves as a first-stage filter before a heavier second-stage classifier.
+However, a substantial gap to models 4× larger is expected (e.g., official NanoDet-m at 0.95M achieves 27.3% mAP@50 on COCO; TinyYOLO's own COCO mAP is `TBD` but will be materially lower at 0.22M). This suggests that TinyYOLO's practical value lies in deployment scenarios where the larger models genuinely cannot fit, rather than as a general-purpose lightweight detector. Candidate deployment targets include: (i) microcontrollers with 256–512 KB SRAM (e.g., STM32H7 series), where MCUNetV2 [26] has demonstrated success on VOC, (ii) ultra-low-power vision sensors (e.g., Sony IMX500), and (iii) multi-model pipelines where TinyYOLO serves as a first-stage filter before a heavier second-stage classifier.
 
 ### 11.2 Quantized Variant Superiority
 
-The consistent accuracy advantage of the quantized variant over the standard variant (41.2% vs. 38.7% mAP@50 on VOC, 19.7% vs. 18.2% on COCO) warrants discussion. We hypothesize three contributing factors:
+Whether the quantized variant consistently out-performs the standard variant (the earlier "41.2% vs. 38.7% on VOC, 19.7% vs. 18.2% on COCO" is retracted; the comparison is now `TBD`) is a hypothesis to be tested. If it holds, we would attribute it to three factors:
 
 1. **Bounded activation stability.** ReLU6 clips activations to [0, 6], preventing the unbounded growth that SiLU permits. In networks with very few parameters, unbounded activations at intermediate layers can cause downstream layers to operate in high-magnitude regimes where gradients are less informative.
 
@@ -28,23 +35,23 @@ The cumulative impact of training recipe improvements over the initial implement
 
 | Improvement | mAP@50 Gain (VOC) |
 |---|---|
-| TAL assignment (vs. single-cell) | +7.8 |
-| Mosaic augmentation | +4.3 |
-| Proper train/val split | +2.1* |
-| Dedicated objectness head | +2.6 |
-| LR warmup | +1.4 |
-| Augmentation tuning | +1.2 |
-| **Cumulative** | **~19.4** |
+| TAL assignment (vs. single-cell) | TBD (A2) |
+| Mosaic augmentation | TBD (A9) |
+| Proper train/val split | TBD |
+| Dedicated objectness head | TBD (A10) |
+| LR warmup | TBD |
+| Augmentation tuning | TBD |
+| **Cumulative** | **TBD** |
 
-*The +2.1 from proper train/val split reflects the difference between overfitting metrics on training data vs. genuine generalization — the original COCO128 results with train=val leakage were inflated.
+_All recipe-gain figures retracted (broken-decode baseline). Regenerate each as a controlled ablation; the "~19.4% cumulative" claim is withdrawn._
 
 ### 11.4 Edge Deployment Practicality
 
-The Jetson Nano INT8 results (35.3 FPS, 28.3 ms latency) demonstrate that TinyYOLO achieves real-time inference on a production edge platform. The 0.22 MB INT8 model size is well within the storage constraints of even microcontroller-class devices (typically 1–2 MB flash). However, practical deployment involves considerations beyond raw inference speed:
+Jetson Nano INT8 latency/FPS are `TBD` (must be instrumented; earlier "35.3 FPS, 28.3 ms" retracted). The ~0.22 MB INT8 model size (estimated from parameter count) is well within the storage constraints of even microcontroller-class devices (typically 1–2 MB flash). Practical deployment considerations beyond raw inference speed remain relevant and should be measured on-device:
 
-- **Pre/post-processing overhead:** Image resizing, normalization, and NMS add approximately 5–8 ms on Jetson Nano and 15–25 ms on Raspberry Pi 4, reducing effective FPS.
-- **Power budget:** At 5W TDP (Jetson Nano 5W mode), continuous inference at 35 FPS consumes approximately 120 mJ per frame — acceptable for battery-powered devices with intermittent detection requirements.
-- **Thermal management:** Sustained inference causes thermal stabilization at 58°C on Jetson Nano (within the 0–60°C operating range) without throttling. Raspberry Pi 4 stabilizes at 62°C, which may require passive heatsinking in enclosed deployments.
+- **Pre/post-processing overhead:** Image resizing, normalization, and NMS add non-trivial latency (magnitude `TBD` — measure on Jetson and RPi).
+- **Power budget:** Per-frame energy is `TBD` — measure with an inline power meter under sustained inference; do not estimate.
+- **Thermal management:** Sustained-inference stabilization temperature and any throttling are `TBD` — log on-device.
 
 ---
 
