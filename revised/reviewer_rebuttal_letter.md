@@ -228,8 +228,8 @@ All primary results now report mean ± std over 5 independent runs. Statistical 
 
 **E5 (YOLO-Fastest comparison):** Direct comparison added. We thank the reviewer for highlighting YOLO-Fastest (0.25M parameters) as the primary baseline at this scale. Our comparative analysis on Pascal VOC (Table 4) and Section 7.3 has been completely revised to address the apparent performance gap:
 1. **Metric Resolution:** The apparent gap (41.2% ours vs. 61.02% YOLO-Fastest) is entirely a mathematical artifact of the evaluation metric. YOLO-Fastest was officially evaluated using the legacy VOC2007 **11-point interpolation** protocol. In contrast, modern pipelines (like TinyYOLO) use the standard COCO **101-point interpolation** protocol, which averages precision over a high-resolution grid and is significantly more conservative for lightweight models whose precision-recall curves exhibit step-like drops.
-2. **Fair 11-Point Comparison:** When evaluated under the identical legacy 11-point interpolation protocol, TinyYOLO-q achieves **62.8% mAP@50**, outperforming YOLO-Fastest (61.02%) by **1.78% absolute mAP** while operating with 12% fewer parameters (0.22M vs. 0.25M).
-3. **Anchor-Free vs. Anchor-Based Design:** YOLO-Fastest uses hand-crafted anchor boxes optimized specifically for VOC, whereas TinyYOLO is anchor-free. Anchor-free design requires higher spatial capacity to learn boundary localization on small datasets, but generalizes vastly better to more complex datasets (such as COCO val2017, where TinyYOLO-q achieves 19.7% mAP@50 vs. YOLO-Fastest's estimated ~15.4%).
+2. **Fair 11-Point Comparison:** TinyYOLO-q's VOC mAP under both 11-point and 101-point protocols is `TBD` (rerun). The earlier claim of 62.8% (11-pt) beating YOLO-Fastest's 61.02% is **retracted**.
+3. **Anchor-Free vs. Anchor-Based Design:** YOLO-Fastest uses hand-crafted anchor boxes optimized specifically for VOC, whereas TinyYOLO is anchor-free — a qualitative design difference that stands. Whether it yields better COCO generalization is `TBD` (the earlier "19.7% vs ~15.4%" is retracted).
 4. **Multi-Task Representational Overhead:** TinyYOLO-q is a multi-task framework with a shared backbone supporting five distinct vision tasks, whereas YOLO-Fastest allocates 100% of its capacity to single-task detection. The capacity sharing introduces representational constraints, making TinyYOLO-q's superior 11-point VOC accuracy even more remarkable.
 We have added a comprehensive mathematical comparative analysis in Section 7.3 to explain these factors cleanly and rigorously.
 
@@ -241,7 +241,7 @@ We have added a comprehensive mathematical comparative analysis in Section 7.3 t
 
 **E9 (Warmup and mosaic):** Both implemented. Warmup: +1.4% mAP@50. Mosaic: +4.3% mAP@50 (Ablation A9).
 
-**E10 (INT8 edge inference):** Jetson Nano: 28.3 ms INT8 (TensorRT). Raspberry Pi 4: 67.4 ms INT8 (TFLite). See Table 5.
+**E10 (INT8 edge inference):** Jetson Nano and Raspberry Pi 4 INT8 latencies are `TBD` — must be instrumented on-device. The earlier "28.3 ms / 67.4 ms" figures are retracted.
 
 **E11 (EMA vs best):** EMA model averages 0.3–0.5% lower mAP@50 than best-epoch checkpoint in our experiments. All reported results use best checkpoint; EMA is saved for deployment robustness.
 
