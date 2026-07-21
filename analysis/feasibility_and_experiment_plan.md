@@ -43,7 +43,7 @@ The paper's headline numbers (VOC 41.2%, COCO 19.7% mAP@50, 0.7% INT8 drop, all 
 ### 1.4 Principal risks
 
 1. **Capacity ceiling.** 0.22M params is a genuine wall. The idea is only competitive inside the *sub-0.3M niche* (vs YOLO-Fastest), not against NanoDet/PicoDet (~1M) or YOLOv8n (3.2M). Frame the contribution as niche + INT8 + multi-task, never as general SOTA.
-2. **Assignment is currently naive.** `TALAssigner` is defined but **never called** — `DetectionLoss.forward` uses single-cell assignment. The paper credits TAL with "+7.8% mAP"; that gain is presently unrealized. Wiring TAL is the single highest-value next code change.
+2. **Assignment.** `TALAssigner` was defined but **never called** through R1.3 — the loss used single-cell assignment. **Fixed in R1.4:** TAL is now wired into `DetectionLoss.forward` (top-k=10, shared codec). The paper's "+7.8% mAP" is still an untested hypothesis to be measured by ablation A2 (TAL vs single-cell).
 3. **Small-object AP.** Structural; expect ~2%. Don't over-promise AP_S.
 4. **Reproducibility / integrity.** Every result table must be regenerated from actual runs with saved `config.json` + `metrics.json`. No number enters the manuscript without a matching artifact.
 5. **Multi-scale assignment.** Each GT is currently assigned to its cell at *all three* scales identically. Scale-aware assignment (size→level) is a likely accuracy lever.
@@ -94,7 +94,7 @@ Baseline for all ablations unless noted: **TinyYOLO-quantized, VOC 2007+2012, 41
 | # | Ablation | Variable | Why it matters |
 |---|---|---|---|
 | A1 | **Decode** | grid-anchored (new) vs `σ×imgsz` (old) | Quantifies the R1.4 fix; expected to be the single largest jump |
-| A2 | **Assignment** | single-cell vs **TAL (k=10)** | Requires wiring `TALAssigner`; paper's claimed +7.8% |
+| A2 | **Assignment** | single-cell vs **TAL (k=10)** | TAL wired in R1.4; measure gain vs single-cell (paper claimed +7.8%) |
 | A3 | Attention | ECA vs SE vs none | Justifies the quantized-variant choice |
 | A4 | Ghost vs standard conv | conv type | Params/accuracy trade |
 | A5 | Activation | ReLU6 vs SiLU (+ measure INT8 drop) | Core dual-variant justification |

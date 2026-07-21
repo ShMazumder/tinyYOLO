@@ -56,8 +56,8 @@
 | Platform | FP32 (ms) | FP16 (ms) | INT8 (ms) | Status |
 |----------|-----------|-----------|-----------|--------|
 | Tesla T4 | 12.4 | 7.8 | 5.2 | ✅ Measured |
-| Jetson Nano | 89.2 | 48.6 | 28.3 | ✅ Measured |
-| RPi4 | 142.5 | N/A | 67.4 | ✅ Measured |
+| Jetson Nano | TBD | TBD | TBD | ❌ NOT measured (rerun) |
+| RPi4 | TBD | N/A | TBD | ❌ NOT measured (rerun) |
 
 ---
 

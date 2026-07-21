@@ -7,6 +7,20 @@
 
 ---
 
+> **⚠️ R1.4 ADDENDUM (post-audit, supersedes the numeric findings below).** This audit
+> assumed the reported figures (e.g. VOC 41.2% mAP@50) were real and treated the ~20%
+> YOLO-Fastest gap as the headline problem. They were **not real.** A subsequent code
+> review found a box-decode bug: both the training loss and inference decoded boxes as
+> `cx = σ(pred) × imgsz` with **no grid-cell anchoring**, which a translation-equivariant
+> conv head cannot learn. The actual best VOC run scored **mAP@50 ≈ 0.0011** — the detector
+> did not localize at all. Every accuracy/latency number in the manuscript is therefore
+> retracted (see `CHANGELOG.md`). The bug is fixed in R1.4 (shared grid-anchored codec,
+> `tinyYOLO/utils/boxcodec.py`; TAL now actually wired into the loss). The audit's process
+> conclusion — **DO NOT SUBMIT** — stands and is now stronger: nothing can be submitted
+> until Stages 0–7 regenerate real results.
+
+---
+
 ## 1. Executive Audit Summary
 The revised manuscript has transformed from a "toy project" into a technically sophisticated lightweight detection framework. The implementation of **Task-Aligned Learning (TAL)**, **Ghost-based feature fusion**, and a **dedicated INT8-native variant** provides a strong theoretical and practical foundation. However, the manuscript currently contains **"REJECTION-LEVEL" placeholders** (TBDs in comparison tables) and a **critical performance gap of ~20% mAP on VOC** compared to the primary competitor (YOLO-Fastest) that remains insufficiently explained.
 

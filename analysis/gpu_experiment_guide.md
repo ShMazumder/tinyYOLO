@@ -579,5 +579,5 @@ python scripts/train.py --task det --pretrained --compile --epochs 150 --batch 1
 | `ModuleNotFoundError: tinyYOLO` | Run `pip install -e .` from the project root |
 | `No module named 'tqdm'` | Run `pip install tqdm` |
 | Slow epoch time (>120s on T4) | Ensure latest `train.py` with vectorized loss. Push/pull latest code |
-| mAP stays at 0 or declining | Ensure `postprocess.py` uses `pred[:, 5:]` for classes and `sigmoid*imgsz` decode. Pull latest code |
+| mAP stays at 0 or declining | Ensure `postprocess.py` uses `pred[:, 5:]` for classes and the **R1.4 grid-anchored decode** (`tinyYOLO/utils/boxcodec.py` — `cx=(gi+2σ(tx)−0.5)/W`). **Do NOT use `sigmoid*imgsz`** — that omits the grid cell index and is exactly what caused mAP≈0. Pull latest code (R1.4). |
 | Validation hangs at eval epoch | Pull latest `postprocess.py` — old code had channel index bug generating millions of detections |

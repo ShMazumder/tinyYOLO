@@ -2,6 +2,8 @@
 
 This document accompanies the live interactive presentation designed for the **TinyYOLO R1 Revision**. It outlines the core concept, visual layouts, and typographic hierarchies implemented to achieve an Apple/DeepMind-level aesthetic of calm authority and high-negative-space precision.
 
+> **⚠️ R1.4:** Any slide quoting accuracy/latency numbers (VOC/COCO mAP, Jetson/RPi FPS) is **out of date** — those figures were produced with a broken decode and are retracted (`TBD` pending rerun). Do not present them as results. See `CHANGELOG.md`.
+
 ## The Living Presentation Walkthrough
 
 The browser subagent successfully executed a walkthrough of the slide deck, advancing through all 5 slides to trigger their custom visual transitions. Below is the live animation of the walkthrough:
@@ -41,7 +43,7 @@ The browser subagent successfully executed a walkthrough of the slide deck, adva
 <!-- slide -->
 ### Slide 5: The Living Deliverables
 *   **Narrative:** Celebrates the completely resolved, synchronized, publication-ready submission materials.
-*   **Copy:** *"This revision does not live as code changes alone. It is represented as a structured, fully-synchronized set of submission materials ready for top-tier Q1 venues."*
+*   **Copy:** *"This revision is a structured, synchronized set of submission materials. Note (R1.4): it is not yet submission-ready — a box-decode bug that zeroed detection accuracy has been fixed, and all results must be regenerated before any venue submission."*
 *   **Visual Metaphor:** Sleek capability cards detailing the consolidated manuscript (`report.md`) and the point-by-point rebuttal (`rebuttal_letter.md`) with clean, outline-based document and mail icons.
 ````
 

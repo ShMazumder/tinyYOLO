@@ -239,7 +239,7 @@ We have added a comprehensive mathematical comparative analysis in Section 7.3 t
 
 **E8 (Ghost ratio):** While we did not ablate ratio values in this revision, the standard ratio=2 follows GhostNet's validated configuration. We add this to future work.
 
-**E9 (Warmup and mosaic):** Both implemented. Warmup: +1.4% mAP@50. Mosaic: +4.3% mAP@50 (Ablation A9).
+**E9 (Warmup and mosaic):** Both implemented. Their mAP contributions are `TBD` (ablations; the earlier "+1.4%" warmup and "+4.3%" mosaic figures are retracted).
 
 **E10 (INT8 edge inference):** Jetson Nano and Raspberry Pi 4 INT8 latencies are `TBD` — must be instrumented on-device. The earlier "28.3 ms / 67.4 ms" figures are retracted.
 

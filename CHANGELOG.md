@@ -19,6 +19,26 @@ change record going forward — update it in the same commit as any code/doc cha
 
 ## [Unreleased]
 
+### Docs — repo-wide consistency & integrity pass (R1.4)
+- **Reviewed all package code** (`common/backbone/neck/models/heads`, loss, decode, metrics) as
+  an ML/CV/YOLO review. Architecture is sound; the only substantive defects were the box decode
+  (fixed) and the un-wired TAL (fixed).
+- **Retracted the false "P1b box-decode fix"** narrative in `revised/code_fixes_and_readiness.md`:
+  documented that changing the decode to `sigmoid×imgsz` (removing grid anchoring) was the
+  root-cause bug, not a fix. Downgraded the readiness matrix from "all RESOLVED / Q1-ready" to
+  honest per-item status; overall = **not submission-ready** until results regenerated.
+- **Struck all unbacked result numbers → `TBD (rerun)`** across `report.md`, `README.md`, the four
+  `revised/revised_manuscript_part*.md`, and `revised/reviewer_rebuttal_letter.md` (VOC 41.2%,
+  COCO 19.7%, INT8 0.7%, Jetson/RPi latency, ablation deltas +7.8/+4.3/+2.6/+1.6, multi-task
+  metrics, 62.8% win claim). Added retraction banners to each manuscript part and the rebuttal.
+- **Fixed bug-reintroducing guidance:** `analysis/gpu_experiment_guide.md` and
+  `analysis/revision_analysis.md` previously *instructed* the broken `sigmoid×imgsz` decode —
+  corrected to the R1.4 grid-anchored codec. `analysis/post_experiment_roadmap.md` edge
+  latencies re-marked NOT measured.
+- **Added R1.4 addendum** to `review/final_audit_report.md` (the audit assumed 41.2% was real; the
+  true issue was mAP≈0). Updated `presentation/README.md` "Q1-ready" copy. Left
+  `review/peer_review.md` as historical reviewer input.
+
 ### Verified
 - **Decode fix confirmed on real execution** via `experiments/plan/stage0_sanity.py`:
   decode round-trip exact (err 0.0), 284 grad tensors none-zero/no-NaN, overfit-one-

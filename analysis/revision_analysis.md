@@ -50,7 +50,7 @@ The original manuscript received **Major Revision** with 8 mandatory and 11 mino
 | Fix ID | Description | File | Status |
 |--------|-------------|------|--------|
 | P1 | Vectorized DetectionLoss — eliminated 38K Python loop iterations/batch | `scripts/train.py` | ✅ Applied |
-| P1b | Box decode fix — `sigmoid*imgsz` matching training coords (was grid-offset) | `tinyYOLO/utils/postprocess.py` | ✅ Applied |
+| P1b | ❌ RETRACTED — the `sigmoid*imgsz` change was the BUG (removed grid anchoring → mAP≈0). Reverted to grid-anchored codec in R1.4 (`tinyYOLO/utils/boxcodec.py`). | `tinyYOLO/utils/postprocess.py`, `scripts/train.py` | ⚠️ Corrected in R1.4 |
 | P1c | Channel index fix — classes at `pred[:, 5:]` not `pred[:, 4:]` (objectness head) | `tinyYOLO/utils/postprocess.py` | ✅ Applied |
 | P1d | Pre-NMS top-1000 cap — prevents memory blowup from excess detections | `tinyYOLO/utils/postprocess.py` | ✅ Applied |
 | P2 | OpenCV-native augmentation — replaced PIL pipeline | `scripts/train.py` | ✅ Applied |
@@ -83,7 +83,7 @@ Activation: act=configurable    ('silu' for standard, 'relu6' for quantized)
 Assignment: TAL                 (k=10 positives per GT, alignment metric)
 Loss:       vectorized          (torch.where + batched CIoU, zero Python loops)
 Obj BCE:    pos_weight=4.0      (counteracts 99.9% negative cell imbalance)
-Box decode: sigmoid*imgsz       (matches training coord system, no grid offsets)
+Box decode: grid-anchored (R1.4)  cx=(gi+2σ(tx)−0.5)/W, w=exp(tw)/W  [shared loss+inference codec; the old sigmoid*imgsz had no grid offset and broke localization]
 Augment:    OpenCV-native       (HSV jitter, HFlip, Grayscale — no PIL)
 Caching:    Dynamic Auto-Cacher (safely caches based on available RAM limits)
 Metrics:    Per-Image Matching  (isolates boundaries, fixes coordinate leakage + AP averaging)

@@ -324,7 +324,7 @@ flowchart TD
 
 ### 4.1 Task-Aligned Label Assignment (TAL) — NEW in R1
 
-Replaces naive single-cell assignment. Alignment metric: $t = s^{0.5} \cdot u^{6.0}$. Top-k=10 positives per GT. **+7.8% mAP@50 improvement** over single-cell (Ablation A7).
+Replaces naive single-cell assignment. Alignment metric: $t = s^{0.5} \cdot u^{6.0}$. Top-k=10 positives per GT. Wired into the loss in R1.4 (was previously dead code). mAP improvement over single-cell is `TBD` (ablation A2; the earlier "+7.8%" is retracted).
 
 ### 4.2 Loss Function
 
