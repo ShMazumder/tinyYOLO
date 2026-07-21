@@ -40,6 +40,13 @@ change record going forward — update it in the same commit as any code/doc cha
   `review/peer_review.md` as historical reviewer input.
 
 ### Fixed
+- **cls/obj loss normalization (YOLOX-style) — fixes "0 predictions at eval".** cls and obj
+  losses were `mean`-reduced, diluting the <1% positive signal ~100× (cls gave the true class
+  only 1/nc of the gradient; obj positives were swamped by negatives). Confidences never rose
+  above the init floor, so `obj×cls < val-conf` everywhere → 0 predictions, mAP 0 (boxes were
+  fine — box loss trained to 0.73). Now both are **summed and normalized by N_pos** like the box
+  loss; objectness uses `pos_weight` = 1.0 under the new normalization. _Re-run stage1: expect
+  cls loss to actually drop and predictions/mAP > 0._
 - **Scale-aware label assignment** (`DetectionLoss._select_level_gts`, `scripts/train.py`).
   Second bug found via the COCO128 smoke run: TAL assigned every GT at all 3 scales, flooding
   the coarse P5 grid (~70 positives / 100 cells at 320px). With `pos_weight=4` this made the

@@ -827,6 +827,10 @@ class DetectionLoss(nn.Module):
         self.box_weight = 2.0
         self.cls_weight = 1.0
         self.obj_weight = 1.0
+        # Objectness positive weight. cls/obj are summed and normalized by N_pos
+        # (YOLOX-style), NOT mean-reduced — mean dilutes the <1% positive signal
+        # ~100x so confidences never rise and eval yields 0 predictions.
+        self.obj_pos_weight = 1.0
         # Task-Aligned Assigner (R1.4: now actually wired into forward)
         self.assigner = TALAssigner(topk=topk)
 
@@ -1014,16 +1018,25 @@ class DetectionLoss(nn.Module):
                 valid_c = (pos_labels >= 0) & (pos_labels < self.nc)
                 if valid_c.any():
                     cls_tgt[valid_c, pos_labels[valid_c]] = 1.0
-                total_cls += self.bce(cls_pred_pos, cls_tgt) * npos
+                # Sum (not mean) so the true-class logit gets full gradient,
+                # not 1/nc of it. Normalized by N_pos at the end.
+                total_cls += nn.functional.binary_cross_entropy_with_logits(
+                    cls_pred_pos, cls_tgt, reduction='sum')
 
                 # CIoU box loss at positive cells (grad through decoded preds).
                 total_box += self._ciou_vec(dec[b][pos_idx], pos_bboxes).sum()
 
-            total_obj += self.obj_bce(pred_obj, obj_target)
+            # Objectness over ALL cells, summed (not mean) so sparse positives
+            # are not diluted; normalized by N_pos below (YOLOX-style).
+            total_obj += nn.functional.binary_cross_entropy_with_logits(
+                pred_obj, obj_target,
+                pos_weight=torch.tensor([self.obj_pos_weight], device=device),
+                reduction='sum')
 
         N = max(total_pos, 1)
         total_box = total_box / N
         total_cls = total_cls / N
+        total_obj = total_obj / N
 
         total_loss = (self.box_weight * total_box +
                       self.cls_weight * total_cls +
