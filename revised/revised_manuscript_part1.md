@@ -4,13 +4,22 @@
 
 ---
 
+> **⚠️ RETRACTION NOTICE (R1.4).** All quantitative detection, quantization, edge-latency,
+> ablation, and multi-task results throughout this manuscript were produced with a broken
+> box decode (the real VOC run scored mAP@50 ≈ 0.0011) and are **retracted**. They are
+> superseded by `TBD` placeholders pending regeneration after the R1.4 fix. See
+> `CHANGELOG.md` and `analysis/feasibility_and_experiment_plan.md`. Architectural and
+> methodological content stands; numbers do not.
+
+---
+
 ## Abstract
 
 Deploying object detection on resource-constrained edge devices — microcontrollers, mobile SoCs, and single-board computers operating under sub-1 MB memory and sub-0.5 GFLOP compute budgets — remains an open challenge. Existing YOLO-family detectors, even at their smallest official configurations (e.g., YOLOv8n at 3.2M parameters, 8.7 GFLOPs), exceed these constraints by an order of magnitude, while purpose-built lightweight detectors such as NanoDet and PicoDet typically operate in the 0.9–1.5M parameter range without providing native INT8 quantization compatibility or multi-task extensibility.
 
 This paper presents TinyYOLO, a 0.23M-parameter object detection framework constructed from Ghost convolutions, depthwise separable feature fusion (LitePAN), and decoupled anchor-free detection heads. TinyYOLO introduces a dual-variant architecture: a *standard* variant employing SiLU activations with SE and spatial attention for FP32/FP16 deployment, and a *quantized* variant replacing all activations with ReLU6 and all attention modules with ECA blocks to guarantee end-to-end INT8 compatibility on edge accelerators. The framework provides architectural support for five vision tasks — detection, instance segmentation, pose estimation, image classification, and oriented bounding box detection — through task-specific heads sharing a common 0.08M-parameter backbone, with quantitative validation provided for detection, segmentation, and pose estimation.
 
-We evaluate TinyYOLO on Pascal VOC 2007+2012 (16.5K images, 20 classes) and COCO val2017 (5K images, 80 classes) under controlled experimental conditions with fixed random seeds and deterministic training. On VOC, TinyYOLO achieves mAP@50 of 38.7 ± 0.9% (standard) and 41.2 ± 0.7% (quantized) at 416×416 resolution, with INT8 inference latencies of 28.3 ms on Jetson Nano (TensorRT) and 67.4 ms on Raspberry Pi 4 (TFLite). Comprehensive ablation studies validate each architectural component, and direct comparisons against NanoDet (0.95M), YOLO-Fastest (0.25M), PicoDet-XS (0.93M), and MCUNetV2 (0.74M) on identical hardware establish TinyYOLO's position within the accuracy–efficiency Pareto frontier for sub-1M detectors. COCO comparisons use official baseline numbers; VOC comparisons are author-reproduced under identical conditions and clearly attributed. To our knowledge, TinyYOLO is the smallest YOLO-family framework supporting five vision tasks with a dedicated INT8-native architecture variant, though we note that YOLO-Fastest achieves comparable parameter counts for single-task detection.
+We evaluate TinyYOLO on Pascal VOC 2007+2012 (16.5K images, 20 classes) and COCO val2017 (5K images, 80 classes) under controlled experimental conditions with fixed random seeds and deterministic training. **On VOC and COCO, target mAP@50 and INT8 edge latencies (Jetson Nano via TensorRT, Raspberry Pi 4 via TFLite) are `TBD` pending regeneration under R1.4 — the previously reported figures were invalid (broken decode).** Ablation studies and direct comparisons against NanoDet (0.95M), YOLO-Fastest (0.25M), PicoDet-XS (0.93M), and MCUNetV2 (0.74M) on identical hardware are set up to place TinyYOLO on the accuracy–efficiency Pareto frontier for sub-1M detectors once real numbers exist. COCO comparisons use official baseline numbers; VOC comparisons are author-reproduced under identical conditions and clearly attributed. To our knowledge, TinyYOLO is the smallest YOLO-family framework supporting five vision tasks with a dedicated INT8-native architecture variant, though we note that YOLO-Fastest achieves comparable parameter counts for single-task detection.
 
 **Keywords:** lightweight object detection, edge deployment, Ghost convolution, INT8 quantization, YOLO, anchor-free detection, depthwise separable convolution
 
