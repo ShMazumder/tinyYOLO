@@ -43,6 +43,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from tinyYOLO.utils.env import detect_environment, get_training_config, print_env_report
 from tinyYOLO.models import build_model
 from tinyYOLO.utils.benchmark import count_parameters, estimate_flops
+from tinyYOLO.utils.boxcodec import decode_boxes
 
 
 TASK_DATA_MAP = {
@@ -950,8 +951,13 @@ class DetectionLoss(nn.Module):
                     cls_targets[valid_cls, v_cls[valid_cls]] = 1.0
                 total_cls += self.bce(cls_preds, cls_targets) * cls_preds.shape[0]
 
-                # CIoU box loss — batched
-                box_preds = torch.sigmoid(pred_box[b_idx, :, v_gj, v_gi])  # [N_valid, 4]
+                # CIoU box loss — batched.
+                # Grid-anchored decode (shared codec) so predicted boxes carry
+                # their cell index (v_gi, v_gj). The old code used bare
+                # sigmoid(raw) as an ABSOLUTE normalized center, which a
+                # translation-equivariant conv head cannot learn -> mAP ~0.
+                raw_box = pred_box[b_idx, :, v_gj, v_gi]                    # [N_valid, 4] raw
+                box_preds = decode_boxes(raw_box, v_gi, v_gj, W, H)        # [N_valid, 4] cxcywh in [0,1]
                 box_targets = torch.stack([v_cx, v_cy, v_w, v_h], dim=1)   # [N_valid, 4]
 
                 # Batched CIoU

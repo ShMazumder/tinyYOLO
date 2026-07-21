@@ -334,7 +334,11 @@ Loss normalization: single $N_{\text{pos}}$ across all scales (R1 fix — was in
 
 **Objectness BCE:** Uses `pos_weight=4.0` to counteract extreme class imbalance (~0.1% positive cells per feature map). Without this, the model learns to suppress all objectness predictions.
 
-**Box decode consistency:** Both training and inference operate in normalized [0,1] coordinate space. Decode: `cx = sigmoid(pred) × imgsz`, not grid-offset decode.
+**Box decode consistency (R1.4 fix):** Training and inference share a single grid-anchored, anchor-free codec (`tinyYOLO/utils/boxcodec.py`). Each cell's prediction is decoded relative to its grid index `(gi, gj)`:
+
+$$c_x = \frac{g_i + 2\sigma(t_x) - 0.5}{W},\quad c_y = \frac{g_j + 2\sigma(t_y) - 0.5}{H},\quad w = \frac{e^{\,t_w}}{W},\quad h = \frac{e^{\,t_h}}{H}$$
+
+All outputs are in normalized [0,1] image fraction (multiply by `imgsz` for pixels). The earlier `cx = σ(pred) × imgsz` decode omitted the cell index; because a convolutional head is translation-equivariant it cannot regress an absolute image-space center from identical local features, so localization was impossible and mAP collapsed to ≈0. Anchoring the center to `(gi, gj)` is what makes the head learnable.
 
 ### 4.3 Training Recipe
 

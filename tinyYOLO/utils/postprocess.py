@@ -7,6 +7,8 @@ Decode raw model outputs → bounding boxes + NMS filtering.
 import torch
 import torchvision
 
+from tinyYOLO.utils.boxcodec import decode_grid
+
 
 def decode_predictions(outputs, imgsz, conf_thresh=0.25, nc=80):
     """
@@ -28,14 +30,13 @@ def decode_predictions(outputs, imgsz, conf_thresh=0.25, nc=80):
     for scale_idx, pred in enumerate(outputs):
         B, C, H, W = pred.shape
 
-        # Decode boxes: [B, 4, H, W]
-        # Training loss uses CIoU on sigmoid(pred) vs normalized [0,1] targets,
-        # so decode must use sigmoid * imgsz (NOT grid-offset decode)
+        # Decode boxes: [B, 4, H, W] -> grid-anchored (cx,cy,w,h) in pixels.
+        # Uses the SAME codec as the training loss (tinyYOLO.utils.boxcodec) so
+        # the parametrization can never diverge between train and inference.
+        # The cell index (gi,gj) is added to the center — without it a conv head
+        # (translation-equivariant) cannot localize and mAP collapses to ~0.
         pred_box = pred[:, :4, :, :]
-        cx = torch.sigmoid(pred_box[:, 0]) * imgsz   # center x in pixels
-        cy = torch.sigmoid(pred_box[:, 1]) * imgsz   # center y in pixels
-        w = torch.sigmoid(pred_box[:, 2]) * imgsz     # width in pixels
-        h = torch.sigmoid(pred_box[:, 3]) * imgsz     # height in pixels
+        cx, cy, w, h = decode_grid(pred_box, imgsz=imgsz)  # each [B, H, W]
 
         # Convert to xyxy
         x1 = cx - w / 2
