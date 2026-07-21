@@ -335,7 +335,7 @@ where $s$ is the predicted classification score for the target class, $u$ is the
 
 2. **Quality-aware assignment:** TAL preferentially assigns cells that are already producing good predictions, creating a virtuous cycle where well-initialized regions receive stronger learning signals.
 
-3. **Convergence acceleration:** In our ablation (Section 6.4), TAL reduces the epoch count to reach mAP@50 > 20% by approximately 40% compared to single-cell assignment.
+3. **Convergence acceleration:** TAL is expected to reach a given mAP@50 in fewer epochs than single-cell assignment; the exact speedup is `TBD` (ablation A2, rerun under R1.4 — the earlier "~40%" figure is retracted). Note: TAL was only *wired into the loss* in R1.4; through R1.3 the assigner existed but was not called.
 
 ### 4.2 Loss Function
 
