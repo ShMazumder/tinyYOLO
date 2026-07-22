@@ -152,6 +152,30 @@ r2_arch = infer_arch_from_state_dict(r2_model.state_dict())
 check("detects R2 arch correctly",
       r2_arch == {'use_sppf': True, 'neck_k': 5, 'head_k': 5}, str(r2_arch))
 
+# Wrapped heads (seg/pose/obb) nest the detect head one level deeper, so they take
+# the fallback lookup path. That branch is where the first version of this function
+# crashed on tensor truth-testing — exercise every task, not just 'det'.
+for task in ('det', 'seg', 'pose', 'obb'):
+    nc_t = 1 if task == 'pose' else 20
+    for want in ({'use_sppf': True, 'neck_k': 5, 'head_k': 5},
+                 {'use_sppf': False, 'neck_k': 3, 'head_k': 3}):
+        try:
+            m, _ = build_model(task=task, variant='quantized', nc=nc_t, **want)
+            got = infer_arch_from_state_dict(m.state_dict())
+            check(f"infer_arch round-trip {task} sppf={want['use_sppf']} k={want['neck_k']}",
+                  got == want, f"got {got}")
+        except Exception as e:
+            check(f"infer_arch round-trip {task} sppf={want['use_sppf']} k={want['neck_k']}",
+                  False, f"{type(e).__name__}: {str(e)[:110]}")
+
+# Mixed config: the two kernel sizes are independent knobs and must be read back
+# independently, not inferred from one another.
+m_mixed, _ = build_model(task='det', variant='quantized', nc=20,
+                         use_sppf=True, neck_k=3, head_k=5)
+got_mixed = infer_arch_from_state_dict(m_mixed.state_dict())
+check("infer_arch reads neck_k and head_k independently",
+      got_mixed == {'use_sppf': True, 'neck_k': 3, 'head_k': 5}, str(got_mixed))
+
 # --------------------------------------------------------------------------
 section("5. Kernel sizes are physically 5x5")
 

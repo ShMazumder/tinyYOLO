@@ -103,9 +103,12 @@ def infer_arch_from_state_dict(state_dict):
     use_sppf = any('sppf.cv1' in k for k in keys)
 
     # Depthwise kernel size is literally the spatial extent of the dw weight.
+    # NOTE: use explicit `is None` checks, never `a or b` — truth-testing a
+    # multi-element tensor raises "Boolean value of Tensor ... is ambiguous".
     neck_w = _find('neck.td_conv4.dw.conv.weight')
-    head_w = (_find('head.cls_convs.0.0.dw.conv.weight')
-              or _find('head.detect.cls_convs.0.0.dw.conv.weight'))
+    head_w = _find('head.cls_convs.0.0.dw.conv.weight')          # det
+    if head_w is None:
+        head_w = _find('head.detect.cls_convs.0.0.dw.conv.weight')  # seg/pose/obb
 
     return {
         'use_sppf': use_sppf,
