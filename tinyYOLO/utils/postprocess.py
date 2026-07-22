@@ -10,16 +10,20 @@ import torchvision
 from tinyYOLO.utils.boxcodec import decode_grid
 
 
-def decode_predictions(outputs, imgsz, conf_thresh=0.25, nc=80):
+def decode_predictions(outputs, imgsz, conf_thresh=0.25, nc=80, box_mode='ltrb'):
     """
     Decode multi-scale model outputs into bounding boxes.
 
     Args:
-        outputs: List of [B, 5+nc, H, W] tensors from model (3 scales).
-                 Channels: 4 (bbox) + 1 (obj) + nc (classes)
+        outputs: List of [B, C, H, W] tensors from model (3 scales).
+                 C == nc + 5 -> channels are 4 bbox + 1 obj + nc cls (legacy)
+                 C == nc + 4 -> channels are 4 bbox + nc cls (R2, no objectness)
+                 The layout is inferred from C and nc, so both heads work here.
         imgsz: Input image size.
         conf_thresh: Confidence threshold for filtering.
         nc: Number of classes.
+        box_mode: 'ltrb' or 'exp'. MUST match the head that produced `outputs`;
+                  pass the head's `box_mode` attribute.
 
     Returns:
         List of [N, 6] tensors per batch: (x1, y1, x2, y2, conf, cls).
@@ -36,7 +40,7 @@ def decode_predictions(outputs, imgsz, conf_thresh=0.25, nc=80):
         # The cell index (gi,gj) is added to the center — without it a conv head
         # (translation-equivariant) cannot localize and mAP collapses to ~0.
         pred_box = pred[:, :4, :, :]
-        cx, cy, w, h = decode_grid(pred_box, imgsz=imgsz)  # each [B, H, W]
+        cx, cy, w, h = decode_grid(pred_box, imgsz=imgsz, mode=box_mode)  # each [B, H, W]
 
         # Convert to xyxy
         x1 = cx - w / 2
@@ -44,15 +48,22 @@ def decode_predictions(outputs, imgsz, conf_thresh=0.25, nc=80):
         x2 = cx + w / 2
         y2 = cy + h / 2
 
-        # Objectness: [B, 1, H, W] — dedicated objectness head at index 4
-        pred_obj = torch.sigmoid(pred[:, 4:5, :, :])  # [B, 1, H, W]
+        # Infer the channel layout: with objectness C == nc+5, without it C == nc+4.
+        has_obj = (C == nc + 5)
+        if has_obj:
+            pred_obj = torch.sigmoid(pred[:, 4:5, :, :])   # [B, 1, H, W]
+            pred_cls = pred[:, 5:, :, :]
+        else:
+            pred_obj = None
+            pred_cls = pred[:, 4:, :, :]
 
-        # Class predictions: [B, nc, H, W] — start at index 5 (after 4 bbox + 1 obj)
-        pred_cls = pred[:, 5:, :, :]
         cls_conf, cls_id = torch.sigmoid(pred_cls).max(dim=1)  # [B, H, W]
 
-        # Joint confidence = objectness × class_conf
-        cls_conf = cls_conf * pred_obj.squeeze(1)  # [B, H, W]
+        if has_obj:
+            # Legacy joint confidence = objectness x class_conf
+            cls_conf = cls_conf * pred_obj.squeeze(1)
+        # else: the class score IS the confidence — it was trained against a
+        # soft IoU-quality target, so it already encodes localisation quality.
 
         for b in range(B):
             # Flatten
@@ -165,13 +176,16 @@ def decode_targets(targets, imgsz):
     return results
 
 
-def postprocess_detections(outputs, conf_thres=0.25, iou_thres=0.45, imgsz=416):
+def postprocess_detections(outputs, conf_thres=0.25, iou_thres=0.45, imgsz=416, box_mode='ltrb'):
     """
     Convenience wrapper to decode predictions, apply NMS, and normalize coordinates to [0, 1].
     """
     # 1. Decode predictions (outputs are in imgsz pixel space)
-    nc = outputs[0].shape[1] - 5
-    dets_list = decode_predictions(outputs, imgsz=imgsz, conf_thresh=conf_thres, nc=nc)
+    # Layout is ambiguous without nc, so assume the R2 head (no objectness).
+    # Callers that know nc should call decode_predictions directly.
+    nc = outputs[0].shape[1] - 4
+    dets_list = decode_predictions(outputs, imgsz=imgsz, conf_thresh=conf_thres, nc=nc,
+                                   box_mode=box_mode)
     
     # 2. Apply Non-Maximum Suppression (NMS)
     nms_list = non_max_suppression(dets_list, iou_thresh=iou_thres)

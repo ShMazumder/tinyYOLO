@@ -16,6 +16,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 from tinyYOLO.modules.common import ConvBNAct, DWConv
+from tinyYOLO.utils.boxcodec import BOX_MODE_IDS, BOX_MODE_NAMES
 
 
 class TinyDetect(nn.Module):
@@ -26,26 +27,51 @@ class TinyDetect(nn.Module):
     lighter deployment. Compatible with NMS-free training via
     consistent dual assignment.
 
+    R2: objectness is removed by default. YOLOv8, YOLOv10, YOLO11 and YOLO26 all
+    dropped the objectness branch; NanoDet-Plus (QFL) and PicoDet (VFL) likewise
+    use a joint quality-class score. Keeping obj forces the classification loss to
+    be computed at positive cells only, which leaves background class logits
+    unsupervised — they drift high, the score collapses to `obj` alone, and
+    objectness must then rank ~41 negatives per positive by itself. Measured
+    consequence: with nc=1 (classification trivially solved, cls loss 0.001) mAP50
+    was still 0.011. See analysis/ARCHITECTURE_REDESIGN.md D3.
+
+    Output layout:
+        use_obj=True  -> [B, 4 + 1 + nc, H, W]   (legacy)
+        use_obj=False -> [B, 4 + nc,     H, W]   (R2 default)
+
     Args:
         nc: Number of classes.
         in_channels: List of input channels from neck (one per scale).
         reg_max: Max regression range (0 = no DFL, direct regression).
+        use_obj: Emit a dedicated objectness channel. R2 default: False.
+        box_mode: 'ltrb' (R2 default) or 'exp' (legacy). Stored as a buffer so
+            inference can recover the parametrization from a bare checkpoint.
         act: Activation function name ('silu' for standard, 'relu6' for quantized).
         k: Depthwise kernel size for the cls/reg stacks. Defaults to 5, matching
            NanoDet-Plus and PicoDet, which both use 5x5 depthwise in the head.
            Set 3 to reproduce the pre-R2 head.
     """
 
-    def __init__(self, nc=80, in_channels=None, reg_max=0, act='silu', k=5):
+    def __init__(self, nc=80, in_channels=None, reg_max=0, act='silu', k=5,
+                 use_obj=False, box_mode='ltrb'):
         super().__init__()
         if in_channels is None:
             in_channels = [64, 64, 64]
+        if box_mode not in BOX_MODE_IDS:
+            raise ValueError(f"box_mode must be one of {tuple(BOX_MODE_IDS)}, got {box_mode!r}")
 
         self.nc = nc
         self.nl = len(in_channels)  # Number of detection layers (scales)
         self.reg_max = reg_max
         self.k = k
-        self.no = nc + 5  # Outputs per anchor: 4 bbox + 1 obj + nc classes
+        self.use_obj = use_obj
+        self.box_mode = box_mode
+        # Persisted so export/quantize can recover the decode convention from a
+        # bare state_dict — 'exp' and 'ltrb' weights are shape-identical.
+        self.register_buffer('box_mode_id',
+                             torch.tensor(BOX_MODE_IDS[box_mode], dtype=torch.long))
+        self.no = nc + (5 if use_obj else 4)
 
         # Per-scale decoupled heads
         self.cls_convs = nn.ModuleList()
@@ -71,15 +97,18 @@ class TinyDetect(nn.Module):
             self.reg_preds.append(
                 nn.Conv2d(ch, 4, 1, bias=True)
             )
-            # Objectness prediction (dedicated, replaces max-class proxy)
-            self.obj_preds.append(
-                nn.Conv2d(ch, 1, 1, bias=True)
-            )
+            # Objectness prediction — legacy only (use_obj=True)
+            if use_obj:
+                self.obj_preds.append(nn.Conv2d(ch, 1, 1, bias=True))
 
         self._init_bias()
 
     def _init_bias(self):
-        """Initialize classification and objectness bias for stable early training."""
+        """Focal-style prior bias so early training starts near p=0.01, not p=0.5.
+
+        Without objectness the class logits carry the whole confidence signal, so
+        this prior matters more than it did before.
+        """
         prior = 0.01
         bias_val = -math.log((1 - prior) / prior)
         for cls_pred in self.cls_preds:
@@ -92,7 +121,8 @@ class TinyDetect(nn.Module):
         Args:
             features: List of feature maps from neck [F3, N4, N5].
         Returns:
-            List of [B, 5+nc, H, W] tensors per scale (4 bbox + 1 obj + nc cls).
+            List of [B, no, H, W] per scale, where no = 4 + nc (+1 if use_obj).
+            Channel order is always [box(4), (obj), cls(nc)].
         """
         outputs = []
         for i, feat in enumerate(features):
@@ -100,8 +130,11 @@ class TinyDetect(nn.Module):
             reg_feat = self.reg_convs[i](feat)
             cls_out = self.cls_preds[i](cls_feat)  # [B, nc, H, W]
             reg_out = self.reg_preds[i](reg_feat)  # [B, 4, H, W]
-            obj_out = self.obj_preds[i](feat)       # [B, 1, H, W]
-            outputs.append(torch.cat([reg_out, obj_out, cls_out], dim=1))  # [B, 5+nc, H, W]
+            if self.use_obj:
+                obj_out = self.obj_preds[i](feat)  # [B, 1, H, W]
+                outputs.append(torch.cat([reg_out, obj_out, cls_out], dim=1))
+            else:
+                outputs.append(torch.cat([reg_out, cls_out], dim=1))
         return outputs
 
 
@@ -118,12 +151,14 @@ class TinySegment(nn.Module):
         act: Activation function name ('silu' for standard, 'relu6' for quantized).
     """
 
-    def __init__(self, nc=80, in_channels=None, nm=32, act='silu', k=5):
+    def __init__(self, nc=80, in_channels=None, nm=32, act='silu', k=5,
+                 use_obj=False, box_mode='ltrb'):
         super().__init__()
         if in_channels is None:
             in_channels = [64, 64, 64]
         self.nm = nm
-        self.detect = TinyDetect(nc=nc, in_channels=in_channels, act=act, k=k)
+        self.detect = TinyDetect(nc=nc, in_channels=in_channels, act=act, k=k,
+                                 use_obj=use_obj, box_mode=box_mode)
 
         # Mask coefficient prediction (appended to detection)
         self.mask_preds = nn.ModuleList()
@@ -166,13 +201,15 @@ class TinyPose(nn.Module):
         act: Activation function name ('silu' for standard, 'relu6' for quantized).
     """
 
-    def __init__(self, nc=1, in_channels=None, nk=17, ndim=3, act='silu', k=5):
+    def __init__(self, nc=1, in_channels=None, nk=17, ndim=3, act='silu', k=5,
+                 use_obj=False, box_mode='ltrb'):
         super().__init__()
         if in_channels is None:
             in_channels = [64, 64, 64]
         self.nk = nk
         self.ndim = ndim
-        self.detect = TinyDetect(nc=nc, in_channels=in_channels, act=act, k=k)
+        self.detect = TinyDetect(nc=nc, in_channels=in_channels, act=act, k=k,
+                                 use_obj=use_obj, box_mode=box_mode)
 
         # Keypoint prediction branch — uses variant-appropriate activation
         self.kpt_preds = nn.ModuleList()
@@ -230,11 +267,13 @@ class TinyOBB(nn.Module):
         act: Activation function name ('silu' for standard, 'relu6' for quantized).
     """
 
-    def __init__(self, nc=80, in_channels=None, act='silu', k=5):
+    def __init__(self, nc=80, in_channels=None, act='silu', k=5,
+                 use_obj=False, box_mode='ltrb'):
         super().__init__()
         if in_channels is None:
             in_channels = [64, 64, 64]
-        self.detect = TinyDetect(nc=nc, in_channels=in_channels, act=act, k=k)
+        self.detect = TinyDetect(nc=nc, in_channels=in_channels, act=act, k=k,
+                                 use_obj=use_obj, box_mode=box_mode)
 
         # Angle prediction (1 value per anchor) — uses variant-appropriate activation
         self.angle_preds = nn.ModuleList()

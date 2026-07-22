@@ -103,6 +103,15 @@ def parse_args():
                         help='EMA decay rate (default: 0.9998)')
     parser.add_argument('--close-mosaic', type=int, default=None,
                         help='Epoch at which to disable mosaic augmentation (default: 90%% of epochs)')
+    parser.add_argument('--use-obj', action='store_true',
+                        help='Restore the legacy objectness branch and positives-only '
+                             'classification loss. Removed by default as of R2.')
+    parser.add_argument('--box-mode', choices=['ltrb', 'exp'], default='ltrb',
+                        help="Box parametrization: 'ltrb' edge distances (default) or "
+                             "'exp' legacy centre-offset + exp(wh)")
+    parser.add_argument('--center-radius', type=float, default=0.0,
+                        help='YOLOX-style centre-sampling radius in cells for the assigner. '
+                             '0 = disabled (correct for ltrb). Try 1.5 with --box-mode exp.')
     parser.add_argument('--no-sppf', action='store_true',
                         help='Disable the SPPF pyramid-pooling block after backbone stage4. '
                              'SPPF is ON by default as of R2; use this to reproduce the '
@@ -152,10 +161,18 @@ class TALAssigner:
         beta: IoU exponent in alignment metric.
     """
 
-    def __init__(self, topk=10, alpha=0.5, beta=6.0):
+    def __init__(self, topk=10, alpha=0.5, beta=6.0, center_radius=0.0):
         self.topk = topk
         self.alpha = alpha
         self.beta = beta
+        # Optional YOLOX-style centre sampling: a cell is only a candidate if its
+        # centre lies within `center_radius` cells of the GT centre, on top of the
+        # in-box test. Needed when box_mode='exp', whose centre reach is only
+        # (-0.5, +1.5) cells — without it the assigner hands edge cells of large
+        # objects a target they cannot represent, pinning the box loss. With
+        # box_mode='ltrb' any in-box cell can represent the box exactly, so this
+        # defaults to 0.0 (disabled) and exists for ablation.
+        self.center_radius = center_radius
 
     @staticmethod
     def _box_iou_batch(boxes1, boxes2, eps=1e-7):
@@ -232,7 +249,14 @@ class TALAssigner:
             x1, y1 = gx - gw / 2, gy - gh / 2
             x2, y2 = gx + gw / 2, gy + gh / 2
             cx, cy = grid_cells[:, 0], grid_cells[:, 1]
-            cell_in_gt[g] = (cx >= x1) & (cx <= x2) & (cy >= y1) & (cy <= y2)
+            in_box = (cx >= x1) & (cx <= x2) & (cy >= y1) & (cy <= y2)
+            if self.center_radius > 0:
+                # cell units -> normalized: one cell is 1/W wide, 1/H tall
+                rx = self.center_radius / W
+                ry = self.center_radius / H
+                near = ((cx - gx).abs() <= rx) & ((cy - gy).abs() <= ry)
+                in_box = in_box & near
+            cell_in_gt[g] = in_box
 
         # Step 2: Compute IoU between predictions and GTs
         iou_matrix = self._box_iou_batch(gt_bboxes, pred_bboxes)  # [n_gt, n_cells]
@@ -271,6 +295,24 @@ class TALAssigner:
                     assigned_gt[cell_idx] = g
                     assigned_metric[cell_idx] = metric_val
 
+        # --- Soft-target normalisation (YOLOv8 TAL) -------------------------
+        # Rescale each GT's alignment metrics so their maximum equals that GT's
+        # best achieved IoU. This turns the metric into a calibrated quality
+        # target in [0,1]: a cell that localises well AND classifies well gets a
+        # target near its IoU, everything else decays smoothly toward 0. Without
+        # this the raw metric (s^0.5 * u^6) is ~1e-5 at init and useless as a
+        # regression target for the classifier.
+        with torch.no_grad():
+            max_metric_per_gt = align_metric.max(dim=1, keepdim=True).values      # [n_gt,1]
+            max_iou_per_gt = (iou_matrix * cell_in_gt.float()).max(dim=1, keepdim=True).values
+            norm_metric = align_metric * max_iou_per_gt / (max_metric_per_gt + 1e-9)
+
+        soft_target = torch.zeros(n_cells, device=device)
+        valid_assigned = assigned_gt.clamp(min=0)
+        soft_target[pos_mask] = norm_metric[valid_assigned[pos_mask],
+                                            pos_mask.nonzero(as_tuple=True)[0]]
+        soft_target = soft_target.clamp(0.0, 1.0)
+
         # Gather outputs for positive cells
         pos_indices = pos_mask.nonzero(as_tuple=True)[0]
         gt_indices = assigned_gt[pos_indices]
@@ -280,7 +322,7 @@ class TALAssigner:
             gt_indices,
             gt_labels[gt_indices] if len(gt_indices) > 0 else torch.zeros(0, dtype=torch.long, device=device),
             gt_bboxes[gt_indices] if len(gt_indices) > 0 else torch.zeros(0, 4, device=device),
-            assigned_metric[pos_indices],
+            soft_target,
         )
 
 
@@ -840,9 +882,11 @@ class DetectionLoss(nn.Module):
     for tiny models where CIoU magnitude is ~0.8–1.0.
     """
 
-    def __init__(self, nc=80, topk=10):
+    def __init__(self, nc=80, topk=10, use_obj=False, box_mode='ltrb', center_radius=0.0):
         super().__init__()
         self.nc = nc
+        self.use_obj = use_obj
+        self.box_mode = box_mode
         self.bce = nn.BCEWithLogitsLoss(reduction='mean')
         # Objectness BCE needs pos_weight: positives are a small fraction of cells
         self.obj_bce = nn.BCEWithLogitsLoss(reduction='mean',
@@ -857,8 +901,8 @@ class DetectionLoss(nn.Module):
         # Mild positive emphasis (2.0) helps objectness climb off the init floor
         # faster; the dominant factor is total gradient-step count (dataset/batch).
         self.obj_pos_weight = 2.0
-        # Task-Aligned Assigner (R1.4: now actually wired into forward)
-        self.assigner = TALAssigner(topk=topk)
+        # Task-Aligned Assigner (R1.4: wired into forward; R2: soft targets)
+        self.assigner = TALAssigner(topk=topk, center_radius=center_radius)
 
     @staticmethod
     def _ciou(pred_box, target_box, eps=1e-7):
@@ -976,7 +1020,8 @@ class DetectionLoss(nn.Module):
         the shared grid-anchored codec so the loss and inference agree.
 
         Args:
-            predictions: list of [B, 5+nc, H, W] from model
+            predictions: list of [B, no, H, W] from model, where
+                no = 4+nc (R2, no objectness) or 5+nc (legacy, use_obj=True)
             targets: [B, max_objects, 5] (cls, cx, cy, w, h) normalized
         """
         device = predictions[0].device
@@ -987,17 +1032,24 @@ class DetectionLoss(nn.Module):
         total_cls = torch.tensor(0.0, device=device)
         total_obj = torch.tensor(0.0, device=device)
         total_pos = 0
+        # R2: normaliser is the summed soft target (YOLOv8-style), not the raw
+        # positive count — a low-quality positive should contribute less.
+        total_tgt = torch.tensor(0.0, device=device)
 
         n_levels = len(predictions)
         for si, pred in enumerate(predictions):
             B, C, H, W = pred.shape
             Ncell = H * W
             pred_box = pred[:, :4, :, :]     # [B, 4, H, W] raw
-            pred_obj = pred[:, 4:5, :, :]    # [B, 1, H, W]
-            pred_cls = pred[:, 5:, :, :]     # [B, nc, H, W]
+            if self.use_obj:
+                pred_obj = pred[:, 4:5, :, :]    # [B, 1, H, W]
+                pred_cls = pred[:, 5:, :, :]     # [B, nc, H, W]
+            else:
+                pred_obj = None
+                pred_cls = pred[:, 4:, :, :]     # [B, nc, H, W] — no objectness channel
 
             # Decode every cell once (grad path) + detached copy for assignment.
-            cx, cy, w, h = decode_grid(pred_box)                 # each [B, H, W], normalized
+            cx, cy, w, h = decode_grid(pred_box, mode=self.box_mode)   # each [B,H,W], normalized
             dec = torch.stack([cx, cy, w, h], dim=-1).reshape(B, Ncell, 4)   # grad
             dec_det = dec.detach()
             cls_flat = pred_cls.permute(0, 2, 3, 1).reshape(B, Ncell, self.nc)   # logits, grad
@@ -1009,7 +1061,12 @@ class DetectionLoss(nn.Module):
             gcy = ((gj_g + 0.5) / H).reshape(Ncell)
             grid_cells = torch.stack([gcx, gcy], dim=1)          # [Ncell, 2]
 
-            obj_target = torch.zeros(B, 1, H, W, device=device)
+            obj_target = torch.zeros(B, 1, H, W, device=device) if self.use_obj else None
+            # Dense soft classification target over EVERY cell. Cells with no
+            # assignment keep 0, which is what supervises the background — the
+            # step the old positives-only loss skipped entirely.
+            cls_target = (None if self.use_obj
+                          else torch.zeros(B, Ncell, self.nc, device=device))
 
             for b in range(B):
                 vm = valid_mask[b]
@@ -1025,7 +1082,7 @@ class DetectionLoss(nn.Module):
                 if gt_bboxes.shape[0] == 0:
                     continue
 
-                pos_mask, _, pos_labels, pos_bboxes, _ = self.assigner.assign(
+                pos_mask, _, pos_labels, pos_bboxes, soft_tgt = self.assigner.assign(
                     cls_sig[b], dec_det[b], gt_labels, gt_bboxes, grid_cells, H, W)
 
                 npos = int(pos_mask.sum().item())
@@ -1033,36 +1090,58 @@ class DetectionLoss(nn.Module):
                     continue
                 total_pos += npos
 
-                # Objectness target: 1 at positive cells (row-major matches grid_cells).
-                obj_target[b].view(Ncell)[pos_mask] = 1.0
-
                 pos_idx = pos_mask.nonzero(as_tuple=True)[0]
-
-                # Classification BCE at positive cells.
-                cls_pred_pos = cls_flat[b][pos_idx]              # [npos, nc] logits
-                cls_tgt = torch.zeros_like(cls_pred_pos)
                 valid_c = (pos_labels >= 0) & (pos_labels < self.nc)
-                if valid_c.any():
-                    cls_tgt[valid_c, pos_labels[valid_c]] = 1.0
-                # Sum (not mean) so the true-class logit gets full gradient,
-                # not 1/nc of it. Normalized by N_pos at the end.
+
+                if self.use_obj:
+                    # ---- Legacy path (objectness + hard, positives-only cls) ----
+                    obj_target[b].view(Ncell)[pos_mask] = 1.0
+                    cls_pred_pos = cls_flat[b][pos_idx]          # [npos, nc] logits
+                    cls_tgt = torch.zeros_like(cls_pred_pos)
+                    if valid_c.any():
+                        cls_tgt[valid_c, pos_labels[valid_c]] = 1.0
+                    total_cls += nn.functional.binary_cross_entropy_with_logits(
+                        cls_pred_pos, cls_tgt, reduction='sum')
+                    total_box += self._ciou_vec(dec[b][pos_idx], pos_bboxes).sum()
+                else:
+                    # ---- R2 path: quality-aware dense classification ----------
+                    # Target for the assigned class = normalised alignment metric
+                    # (~IoU of that cell). Every other cell/class stays 0, so the
+                    # class score becomes a joint quality-class confidence and can
+                    # rank detections on its own. This is what removes the need
+                    # for a separate objectness branch.
+                    w_pos = soft_tgt[pos_idx]                    # [npos] in [0,1]
+                    if valid_c.any():
+                        cls_target[b][pos_idx[valid_c], pos_labels[valid_c]] = w_pos[valid_c]
+                    # Box loss weighted by target quality: badly-aligned positives
+                    # should not drag the regressor as hard as well-aligned ones.
+                    total_box += (self._ciou_vec(dec[b][pos_idx], pos_bboxes) * w_pos).sum()
+                    total_tgt = total_tgt + w_pos.sum()
+
+            if self.use_obj:
+                # Objectness over ALL cells, summed (not mean) so sparse positives
+                # are not diluted; normalized by N_pos below (YOLOX-style).
+                total_obj += nn.functional.binary_cross_entropy_with_logits(
+                    pred_obj, obj_target,
+                    pos_weight=torch.tensor([self.obj_pos_weight], device=device),
+                    reduction='sum')
+            else:
+                # Dense BCE over every cell against the soft targets. Background
+                # cells (target 0) are supervised here — previously they were not
+                # supervised at all, so their class logits drifted high and the
+                # confidence signal collapsed onto objectness.
                 total_cls += nn.functional.binary_cross_entropy_with_logits(
-                    cls_pred_pos, cls_tgt, reduction='sum')
+                    cls_flat, cls_target, reduction='sum')
 
-                # CIoU box loss at positive cells (grad through decoded preds).
-                total_box += self._ciou_vec(dec[b][pos_idx], pos_bboxes).sum()
-
-            # Objectness over ALL cells, summed (not mean) so sparse positives
-            # are not diluted; normalized by N_pos below (YOLOX-style).
-            total_obj += nn.functional.binary_cross_entropy_with_logits(
-                pred_obj, obj_target,
-                pos_weight=torch.tensor([self.obj_pos_weight], device=device),
-                reduction='sum')
-
-        N = max(total_pos, 1)
-        total_box = total_box / N
-        total_cls = total_cls / N
-        total_obj = total_obj / N
+        if self.use_obj:
+            N = max(total_pos, 1)
+            total_box = total_box / N
+            total_cls = total_cls / N
+            total_obj = total_obj / N
+        else:
+            N = torch.clamp(total_tgt, min=1.0)
+            total_box = total_box / N
+            total_cls = total_cls / N
 
         total_loss = (self.box_weight * total_box +
                       self.cls_weight * total_cls +
@@ -1094,11 +1173,12 @@ class MultiTaskLoss(nn.Module):
     Unified loss wrapper for all TinyYOLO tasks.
     Jointly optimizes detection + sub-task (mask/kpt/angle).
     """
-    def __init__(self, task='det', nc=80):
+    def __init__(self, task='det', nc=80, use_obj=False, box_mode='ltrb', center_radius=0.0):
         super().__init__()
         self.task = task
         self.nc = nc
-        self.det_loss = DetectionLoss(nc=nc)
+        self.det_loss = DetectionLoss(nc=nc, use_obj=use_obj, box_mode=box_mode,
+                                      center_radius=center_radius)
         
         if task == 'cls':
             self.loss_fn = ClassificationLoss(nc=nc)
@@ -1253,12 +1333,15 @@ def train_single(args, imgsz, env):
     model, model_info = build_model(task=args.task, variant=args.variant, nc=nc,
                                      attention=getattr(args, 'attention', 'default'),
                                      use_sppf=not args.no_sppf,
-                                     neck_k=args.neck_k, head_k=args.head_k)
+                                     neck_k=args.neck_k, head_k=args.head_k,
+                                     use_obj=args.use_obj, box_mode=args.box_mode)
 
     params = count_parameters(model)
     print(f"  Parameters: {params['total_M']}M")
     print(f"  Arch:       SPPF={'on' if not args.no_sppf else 'off'}  "
           f"neck_k={args.neck_k}  head_k={args.head_k}")
+    print(f"  Head:       obj={'on (legacy)' if args.use_obj else 'off (cls-as-confidence)'}  "
+          f"box_mode={args.box_mode}  center_radius={args.center_radius}")
 
     try:
         flops = estimate_flops(model, imgsz, 'cpu')
@@ -1383,7 +1466,12 @@ def train_single(args, imgsz, env):
     scaler = torch.amp.GradScaler('cuda') if use_amp else None
 
     # Multi-task loss selection
-    loss_fn = MultiTaskLoss(task=args.task, nc=nc).to(device)
+    # Loss must agree with the head on channel layout and box parametrization.
+    _head = model.head.detect if hasattr(model.head, 'detect') else model.head
+    loss_fn = MultiTaskLoss(task=args.task, nc=nc,
+                            use_obj=getattr(_head, 'use_obj', False),
+                            box_mode=getattr(_head, 'box_mode', 'ltrb'),
+                            center_radius=args.center_radius).to(device)
 
     # EMA (Exponential Moving Average)
     ema_decay = getattr(args, 'ema_decay', 0.9998)
@@ -1545,7 +1633,8 @@ def train_single(args, imgsz, env):
                         val_outputs = val_outputs[0]
 
                     # Decode predictions → [N, 6] (x1,y1,x2,y2,conf,cls)
-                    pred_list = decode_predictions(val_outputs, imgsz, conf_thresh=args.val_conf, nc=nc)
+                    pred_list = decode_predictions(val_outputs, imgsz, conf_thresh=args.val_conf, nc=nc,
+                                                   box_mode=args.box_mode)
                     pred_list = non_max_suppression(pred_list, iou_thresh=0.45)
 
                     # Decode ground truth → [M, 5] (x1,y1,x2,y2,cls)
@@ -1639,7 +1728,8 @@ def train_single(args, imgsz, env):
                 if isinstance(val_outputs, tuple):
                     val_outputs = val_outputs[0]
 
-                pred_list = decode_predictions(val_outputs, imgsz, conf_thresh=args.val_conf, nc=nc)
+                pred_list = decode_predictions(val_outputs, imgsz, conf_thresh=args.val_conf, nc=nc,
+                                                   box_mode=args.box_mode)
                 pred_list = non_max_suppression(pred_list, iou_thresh=0.45)
                 gt_list = decode_targets(val_targets, imgsz)
                 final_metrics_calc.update(pred_list, gt_list)

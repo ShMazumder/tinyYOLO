@@ -44,6 +44,7 @@ def section(t):
 section("1. Build + forward, all tasks x variants")
 
 EXPECTED_EXTRA = {'det': 0, 'seg': 32, 'obb': 1}  # extra channels appended per scale
+BOX_CH = 4  # R2 head: 4 box + nc cls, no objectness channel
 
 for task in ('det', 'seg', 'pose', 'cls', 'obb'):
     for variant in ('standard', 'quantized'):
@@ -59,7 +60,7 @@ for task in ('det', 'seg', 'pose', 'cls', 'obb'):
                 check(f"{task}/{variant} forward", ok, f"out {tuple(out.shape)}")
             else:
                 dets = out[0] if isinstance(out, tuple) else out
-                exp_c = nc + 5 + EXPECTED_EXTRA.get(task, 0)
+                exp_c = nc + BOX_CH + EXPECTED_EXTRA.get(task, 0)
                 shapes = [tuple(d.shape) for d in dets]
                 ok = (len(dets) == 3
                       and all(d.shape[0] == 2 for d in dets)
@@ -125,10 +126,16 @@ old_model, _ = build_model(task='det', variant='quantized', nc=20,
                            use_sppf=False, neck_k=3, head_k=3)
 old_sd = old_model.state_dict()
 
+old_model_legacy, _ = build_model(task='det', variant='quantized', nc=20,
+                                  use_sppf=False, neck_k=3, head_k=3,
+                                  use_obj=True, box_mode='exp')
+old_sd = old_model_legacy.state_dict()
 arch = infer_arch_from_state_dict(old_sd)
 check("detects use_sppf=False", arch['use_sppf'] is False, str(arch))
 check("detects neck_k=3", arch['neck_k'] == 3, str(arch))
 check("detects head_k=3", arch['head_k'] == 3, str(arch))
+check("detects use_obj=True", arch['use_obj'] is True, str(arch))
+check("detects box_mode='exp'", arch['box_mode'] == 'exp', str(arch))
 
 rebuilt, _ = build_model(task='det', variant='quantized', nc=20, **arch)
 try:
@@ -150,22 +157,25 @@ except Exception:
 r2_model, _ = build_model(task='det', variant='quantized', nc=20)
 r2_arch = infer_arch_from_state_dict(r2_model.state_dict())
 check("detects R2 arch correctly",
-      r2_arch == {'use_sppf': True, 'neck_k': 5, 'head_k': 5}, str(r2_arch))
+      r2_arch == {'use_sppf': True, 'neck_k': 5, 'head_k': 5,
+                  'use_obj': False, 'box_mode': 'ltrb'}, str(r2_arch))
 
 # Wrapped heads (seg/pose/obb) nest the detect head one level deeper, so they take
 # the fallback lookup path. That branch is where the first version of this function
 # crashed on tensor truth-testing — exercise every task, not just 'det'.
 for task in ('det', 'seg', 'pose', 'obb'):
     nc_t = 1 if task == 'pose' else 20
-    for want in ({'use_sppf': True, 'neck_k': 5, 'head_k': 5},
-                 {'use_sppf': False, 'neck_k': 3, 'head_k': 3}):
+    for want in ({'use_sppf': True, 'neck_k': 5, 'head_k': 5,
+                  'use_obj': False, 'box_mode': 'ltrb'},
+                 {'use_sppf': False, 'neck_k': 3, 'head_k': 3,
+                  'use_obj': True, 'box_mode': 'exp'}):
         try:
             m, _ = build_model(task=task, variant='quantized', nc=nc_t, **want)
             got = infer_arch_from_state_dict(m.state_dict())
-            check(f"infer_arch round-trip {task} sppf={want['use_sppf']} k={want['neck_k']}",
+            check(f"infer_arch round-trip {task} obj={want['use_obj']} {want['box_mode']}",
                   got == want, f"got {got}")
         except Exception as e:
-            check(f"infer_arch round-trip {task} sppf={want['use_sppf']} k={want['neck_k']}",
+            check(f"infer_arch round-trip {task} obj={want['use_obj']} {want['box_mode']}",
                   False, f"{type(e).__name__}: {str(e)[:110]}")
 
 # Mixed config: the two kernel sizes are independent knobs and must be read back
@@ -174,7 +184,8 @@ m_mixed, _ = build_model(task='det', variant='quantized', nc=20,
                          use_sppf=True, neck_k=3, head_k=5)
 got_mixed = infer_arch_from_state_dict(m_mixed.state_dict())
 check("infer_arch reads neck_k and head_k independently",
-      got_mixed == {'use_sppf': True, 'neck_k': 3, 'head_k': 5}, str(got_mixed))
+      got_mixed == {'use_sppf': True, 'neck_k': 3, 'head_k': 5,
+                    'use_obj': False, 'box_mode': 'ltrb'}, str(got_mixed))
 
 # --------------------------------------------------------------------------
 section("5. Kernel sizes are physically 5x5")
@@ -188,6 +199,135 @@ check("head depthwise weight is 5x5", tuple(head_w.shape[-2:]) == (5, 5), str(tu
 down_w = sd['neck.bu_down3.dw.conv.weight']
 check("neck stride-2 downsample also 5x5", tuple(down_w.shape[-2:]) == (5, 5),
       str(tuple(down_w.shape)))
+
+# --------------------------------------------------------------------------
+section("6. ltrb codec — reach and round-trip")
+
+from tinyYOLO.utils.boxcodec import decode_boxes, make_grid  # noqa: E402
+
+# The bug ltrb exists to fix: under 'exp' a cell's centre reach is (-0.5,+1.5)
+# cells, so an edge cell of a large object cannot emit that object's centre.
+# Under 'ltrb' any in-box cell can represent the box exactly.
+W = H = 10                       # P5 grid at 320px
+gt = torch.tensor([0.50, 0.50, 0.50, 0.50])   # centred box spanning 5x5 cells
+gi = torch.tensor([2.0])                       # cell 2.5 cells left of GT centre
+gj = torch.tensor([5.0])
+
+def best_iou(mode, iters=400):
+    """Fit one cell's raw output to the GT and report the IoU it can reach."""
+    raw = torch.zeros(1, 4, requires_grad=True)
+    opt = torch.optim.Adam([raw], lr=0.1)
+    for _ in range(iters):
+        opt.zero_grad()
+        d = decode_boxes(raw, gi, gj, W, H, mode=mode)[0]
+        px1, py1 = d[0] - d[2] / 2, d[1] - d[3] / 2
+        px2, py2 = d[0] + d[2] / 2, d[1] + d[3] / 2
+        tx1, ty1 = gt[0] - gt[2] / 2, gt[1] - gt[3] / 2
+        tx2, ty2 = gt[0] + gt[2] / 2, gt[1] + gt[3] / 2
+        inter = ((torch.min(px2, tx2) - torch.max(px1, tx1)).clamp(min=0)
+                 * (torch.min(py2, ty2) - torch.max(py1, ty1)).clamp(min=0))
+        union = (px2 - px1).clamp(min=0) * (py2 - py1).clamp(min=0) + gt[2] * gt[3] - inter
+        loss = 1 - inter / (union + 1e-9)
+        loss.backward()
+        opt.step()
+    return float(1 - loss.item())
+
+iou_exp = best_iou('exp')
+iou_ltrb = best_iou('ltrb')
+print(f"    edge cell fitted to a 5x5-cell GT:  exp -> IoU {iou_exp:.3f}   "
+      f"ltrb -> IoU {iou_ltrb:.3f}")
+check("ltrb lets an edge cell reach the target (IoU > 0.95)", iou_ltrb > 0.95,
+      f"{iou_ltrb:.3f}")
+check("exp cannot (reproduces the observed loss floor)", iou_exp < 0.85,
+      f"{iou_exp:.3f}")
+
+# decode must be finite and positive-sized everywhere
+raw = torch.randn(2, 4, 10, 10) * 5
+from tinyYOLO.utils.boxcodec import decode_grid as _dg  # noqa: E402
+for mode in ('ltrb', 'exp'):
+    cx, cy, w, h = _dg(raw, mode=mode)
+    check(f"{mode} decode finite", bool(torch.isfinite(torch.stack([cx, cy, w, h])).all()))
+    check(f"{mode} decode positive w/h", bool((w > 0).all() and (h > 0).all()))
+
+# --------------------------------------------------------------------------
+section("7. Loss — dense soft targets, gradient flow, obj removal")
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import importlib.util  # noqa: E402
+spec = importlib.util.spec_from_file_location(
+    "tytrain", Path(__file__).resolve().parent / "train.py")
+tytrain = importlib.util.module_from_spec(spec)
+sys.modules["tytrain"] = tytrain
+spec.loader.exec_module(tytrain)
+
+NC = 4
+model_r2, _ = build_model(task='det', variant='quantized', nc=NC)
+loss_r2 = tytrain.MultiTaskLoss(task='det', nc=NC, use_obj=False, box_mode='ltrb')
+
+# two images, two objects each
+tgt = torch.zeros(2, 8, 5)
+tgt[0, 0] = torch.tensor([0.0, 0.50, 0.50, 0.40, 0.40])
+tgt[0, 1] = torch.tensor([1.0, 0.20, 0.25, 0.10, 0.10])
+tgt[1, 0] = torch.tensor([2.0, 0.70, 0.30, 0.25, 0.30])
+
+out = model_r2(torch.randn(2, 3, 320, 320))
+check("R2 head emits 4+nc channels", out[0].shape[1] == NC + 4, f"{out[0].shape[1]}")
+
+total, parts = loss_r2(out, tgt)
+print(f"    loss parts: {parts}")
+check("loss is finite", bool(torch.isfinite(total)))
+check("obj term is exactly zero when objectness removed", parts['obj'] == 0.0,
+      f"obj={parts['obj']}")
+check("cls term is non-zero", parts['cls'] > 0)
+check("box term is non-zero", parts['box'] > 0)
+
+total.backward()
+gz = {n: (p.grad is not None and bool(p.grad.abs().sum() > 0))
+      for n, p in model_r2.named_parameters()}
+check("cls_preds receive gradient", all(v for n, v in gz.items() if 'cls_preds' in n))
+check("reg_preds receive gradient", all(v for n, v in gz.items() if 'reg_preds' in n))
+check("backbone receives gradient", any(v for n, v in gz.items() if 'backbone' in n))
+check("sppf receives gradient", any(v for n, v in gz.items() if 'sppf' in n))
+
+# The decisive property of 2a: background cells must now be supervised. Under the
+# old positives-only loss, a cell with no assignment produced no cls gradient at
+# all, so its logits drifted upward and the confidence signal was worthless.
+bg_probe, _ = build_model(task='det', variant='quantized', nc=NC)
+o = bg_probe(torch.randn(1, 3, 320, 320))
+empty = torch.zeros(1, 8, 5)          # no objects at all -> every cell is background
+t_empty, parts_empty = tytrain.MultiTaskLoss(task='det', nc=NC)(o, empty)
+check("empty image still produces a cls loss (background supervised)",
+      parts_empty['cls'] > 0, f"cls={parts_empty['cls']:.4f}")
+check("empty image produces no box loss", parts_empty['box'] == 0.0,
+      f"box={parts_empty['box']}")
+
+# legacy path must still work
+model_lg, _ = build_model(task='det', variant='quantized', nc=NC,
+                          use_obj=True, box_mode='exp')
+loss_lg = tytrain.MultiTaskLoss(task='det', nc=NC, use_obj=True, box_mode='exp')
+out_lg = model_lg(torch.randn(2, 3, 320, 320))
+check("legacy head emits 5+nc channels", out_lg[0].shape[1] == NC + 5, f"{out_lg[0].shape[1]}")
+tl, pl = loss_lg(out_lg, tgt)
+check("legacy loss finite and has obj term", bool(torch.isfinite(tl)) and pl['obj'] > 0,
+      f"{pl}")
+
+# --------------------------------------------------------------------------
+section("8. Postprocess infers layout from channel count")
+
+from tinyYOLO.utils.postprocess import decode_predictions  # noqa: E402
+
+with torch.no_grad():
+    o_r2 = model_r2(torch.randn(2, 3, 320, 320))
+    o_lg = model_lg(torch.randn(2, 3, 320, 320))
+
+d_r2 = decode_predictions(o_r2, imgsz=320, conf_thresh=0.001, nc=NC, box_mode='ltrb')
+d_lg = decode_predictions(o_lg, imgsz=320, conf_thresh=0.001, nc=NC, box_mode='exp')
+check("decode_predictions handles no-obj head", len(d_r2) == 2 and d_r2[0].shape[1] == 6,
+      f"{[tuple(d.shape) for d in d_r2]}")
+check("decode_predictions handles legacy head", len(d_lg) == 2 and d_lg[0].shape[1] == 6,
+      f"{[tuple(d.shape) for d in d_lg]}")
+check("predicted class ids within range",
+      bool((d_r2[0][:, 5] < NC).all() and (d_r2[0][:, 5] >= 0).all()))
 
 # --------------------------------------------------------------------------
 section("Result")

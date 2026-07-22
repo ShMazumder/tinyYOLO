@@ -7,6 +7,7 @@ Assembles complete models from backbone + neck + head for any task/variant.
 import torch.nn as nn
 from tinyYOLO.modules.backbone import TinyBackbone
 from tinyYOLO.modules.neck import LitePAN
+from tinyYOLO.utils.boxcodec import BOX_MODE_NAMES
 from tinyYOLO.modules.heads import (
     TinyDetect, TinySegment, TinyPose, TinyClassify, TinyOBB,
 )
@@ -68,13 +69,17 @@ HEAD_MAP = {
     'obb': TinyOBB,
 }
 
+def _det_kw(nc, ch, act, k, use_obj, box_mode):
+    return {'nc': nc, 'in_channels': ch, 'act': act, 'k': k,
+            'use_obj': use_obj, 'box_mode': box_mode}
+
+
 HEAD_KWARGS = {
-    'det': lambda nc, ch, act, k: {'nc': nc, 'in_channels': ch, 'act': act, 'k': k},
-    'seg': lambda nc, ch, act, k: {'nc': nc, 'in_channels': ch, 'nm': 32, 'act': act, 'k': k},
-    'pose': lambda nc, ch, act, k: {'nc': 1, 'in_channels': ch, 'nk': 17, 'ndim': 3,
-                                    'act': act, 'k': k},
-    'cls': lambda nc, ch, act, k: {'in_channel': 160, 'nc': nc},
-    'obb': lambda nc, ch, act, k: {'nc': nc, 'in_channels': ch, 'act': act, 'k': k},
+    'det': lambda nc, ch, act, k, uo, bm: _det_kw(nc, ch, act, k, uo, bm),
+    'seg': lambda nc, ch, act, k, uo, bm: dict(_det_kw(nc, ch, act, k, uo, bm), nm=32),
+    'pose': lambda nc, ch, act, k, uo, bm: dict(_det_kw(1, ch, act, k, uo, bm), nk=17, ndim=3),
+    'cls': lambda nc, ch, act, k, uo, bm: {'in_channel': 160, 'nc': nc},
+    'obb': lambda nc, ch, act, k, uo, bm: _det_kw(nc, ch, act, k, uo, bm),
 }
 
 
@@ -110,15 +115,25 @@ def infer_arch_from_state_dict(state_dict):
     if head_w is None:
         head_w = _find('head.detect.cls_convs.0.0.dw.conv.weight')  # seg/pose/obb
 
+    # Objectness: presence of the prediction conv is definitive.
+    use_obj = any('obj_preds.0.weight' in k for k in keys)
+
+    # Box parametrization is a decode convention, not a weight shape, so it is
+    # persisted as a buffer. Pre-R2 checkpoints have no such buffer and are 'exp'.
+    mode_t = _find('box_mode_id')
+    box_mode = BOX_MODE_NAMES.get(int(mode_t.item()), 'ltrb') if mode_t is not None else 'exp'
+
     return {
         'use_sppf': use_sppf,
         'neck_k': int(neck_w.shape[-1]) if neck_w is not None else 3,
         'head_k': int(head_w.shape[-1]) if head_w is not None else 3,
+        'use_obj': use_obj,
+        'box_mode': box_mode,
     }
 
 
 def build_model(task='det', variant='standard', nc=80, width_mult=1.0, attention='default',
-                use_sppf=True, neck_k=5, head_k=5):
+                use_sppf=True, neck_k=5, head_k=5, use_obj=False, box_mode='ltrb'):
     """
     Build a complete TinyYOLO model.
 
@@ -132,6 +147,8 @@ def build_model(task='det', variant='standard', nc=80, width_mult=1.0, attention
         use_sppf: Insert SPPF after backbone stage4. R2 default: True.
         neck_k: Depthwise kernel size in LitePAN. R2 default: 5.
         head_k: Depthwise kernel size in the detection head. R2 default: 5.
+        use_obj: Emit a legacy objectness channel. R2 default: False.
+        box_mode: 'ltrb' (R2 default) or 'exp' (legacy).
 
     Note:
         The three R2 flags default to the new architecture. To rebuild a pre-R2
@@ -161,7 +178,7 @@ def build_model(task='det', variant='standard', nc=80, width_mult=1.0, attention
 
     # Build head — pass variant-appropriate activation
     head_cls = HEAD_MAP[task]
-    head_kwargs = HEAD_KWARGS[task](nc, neck_out, act, head_k)
+    head_kwargs = HEAD_KWARGS[task](nc, neck_out, act, head_k, use_obj, box_mode)
 
     # For classification, adjust input channel based on backbone
     if task == 'cls':
@@ -185,6 +202,8 @@ def build_model(task='det', variant='standard', nc=80, width_mult=1.0, attention
         'use_sppf': use_sppf,
         'neck_k': neck_k,
         'head_k': head_k,
+        'use_obj': use_obj,
+        'box_mode': box_mode,
         'total_params': total_params,
         'total_params_M': round(total_params / 1e6, 2),
     }
