@@ -31,7 +31,7 @@ import torch.nn as nn
 import torch.quantization as quant
 from torch.utils.data import DataLoader
 
-from tinyYOLO.models import build_model
+from tinyYOLO.models import build_model, infer_arch_from_state_dict
 from tinyYOLO.utils.env import detect_environment
 
 
@@ -131,6 +131,13 @@ def _load_model_and_weights(args):
                 k_clean = k_clean[len('model.'):]
             cleaned_state_dict[k_clean] = v
             
+        # Recover R2 architecture flags from tensor shapes (see export.py).
+        arch = infer_arch_from_state_dict(cleaned_state_dict)
+        if arch != {'use_sppf': True, 'neck_k': 5, 'head_k': 5}:
+            print(f"  [INFO] Checkpoint architecture detected: SPPF={arch['use_sppf']}, "
+                  f"neck_k={arch['neck_k']}, head_k={arch['head_k']} — rebuilding to match.")
+            model, info = build_model(task=args.task, variant=args.variant, nc=nc, **arch)
+
         try:
             model.load_state_dict(cleaned_state_dict)
             print(f"  Loaded weights: {args.weights}")
@@ -148,7 +155,7 @@ def _load_model_and_weights(args):
             if detected_variant:
                 print(f"  [INFO] Variant mismatch detected between CLI argument and checkpoint.")
                 print(f"         Auto-rebuilding model with variant='{detected_variant}' to match checkpoint perfectly.")
-                model, info = build_model(task=args.task, variant=detected_variant, nc=nc)
+                model, info = build_model(task=args.task, variant=detected_variant, nc=nc, **arch)
                 model.load_state_dict(cleaned_state_dict)
                 print(f"  Loaded weights successfully after auto-healing! ✓")
             else:

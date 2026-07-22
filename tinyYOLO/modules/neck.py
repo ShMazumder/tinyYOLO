@@ -23,13 +23,19 @@ class LitePAN(nn.Module):
         in_channels: List of 3 channel counts from backbone [P3, P4, P5].
         out_channel: Unified output channel count for all scales.
         act: Activation function ('silu' for standard, 'relu6' for quantized).
+        k: Depthwise kernel size for all fusion/downsample convs. Defaults to 5,
+           matching NanoDet-Plus (`kernel_size: 5`) and PicoDet. In a network whose
+           cost is dominated by 1x1 pointwise convs, going 3->5 on the depthwise
+           stage is nearly free (k^2*C*H*W, no channel term) while roughly doubling
+           receptive-field growth per layer. Set 3 to reproduce the pre-R2 neck.
     """
 
-    def __init__(self, in_channels=None, out_channel=64, act='silu'):
+    def __init__(self, in_channels=None, out_channel=64, act='silu', k=5):
         super().__init__()
         if in_channels is None:
             in_channels = [40, 80, 160]
         c3, c4, c5 = in_channels
+        self.k = k
 
         # --- Lateral convolutions (channel reduction) ---
         self.lat5 = ConvBNAct(c5, out_channel, 1, 1, act=act)
@@ -38,17 +44,17 @@ class LitePAN(nn.Module):
 
         # --- Top-down path (FPN: P5 → P4 → P3) ---
         self.td_merge4 = ConvBNAct(out_channel * 2, out_channel, 1, 1, act=act)
-        self.td_conv4 = DWConv(out_channel, out_channel, 3, 1, act=act)
+        self.td_conv4 = DWConv(out_channel, out_channel, k, 1, act=act)
         self.td_merge3 = ConvBNAct(out_channel * 2, out_channel, 1, 1, act=act)
-        self.td_conv3 = DWConv(out_channel, out_channel, 3, 1, act=act)
+        self.td_conv3 = DWConv(out_channel, out_channel, k, 1, act=act)
 
         # --- Bottom-up path (PAN: P3 → P4 → P5) ---
-        self.bu_down3 = DWConv(out_channel, out_channel, 3, 2, act=act)
+        self.bu_down3 = DWConv(out_channel, out_channel, k, 2, act=act)
         self.bu_merge4 = ConvBNAct(out_channel * 2, out_channel, 1, 1, act=act)
-        self.bu_conv4 = DWConv(out_channel, out_channel, 3, 1, act=act)
-        self.bu_down4 = DWConv(out_channel, out_channel, 3, 2, act=act)
+        self.bu_conv4 = DWConv(out_channel, out_channel, k, 1, act=act)
+        self.bu_down4 = DWConv(out_channel, out_channel, k, 2, act=act)
         self.bu_merge5 = ConvBNAct(out_channel * 2, out_channel, 1, 1, act=act)
-        self.bu_conv5 = DWConv(out_channel, out_channel, 3, 1, act=act)
+        self.bu_conv5 = DWConv(out_channel, out_channel, k, 1, act=act)
 
         # Store for head
         self.out_channels = [out_channel, out_channel, out_channel]

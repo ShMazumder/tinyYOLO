@@ -46,6 +46,11 @@ from tinyYOLO.utils.benchmark import count_parameters, estimate_flops
 from tinyYOLO.utils.boxcodec import decode_boxes, decode_grid, make_grid
 
 
+# Set from --single-cls in main(). Module-level because the dataset classes are
+# constructed in several places (train, val, mosaic wrapper) and all must agree.
+SINGLE_CLS = False
+
+
 TASK_DATA_MAP = {
     'det': 'coco128.yaml',
     'seg': 'coco128-seg.yaml',
@@ -98,6 +103,19 @@ def parse_args():
                         help='EMA decay rate (default: 0.9998)')
     parser.add_argument('--close-mosaic', type=int, default=None,
                         help='Epoch at which to disable mosaic augmentation (default: 90%% of epochs)')
+    parser.add_argument('--no-sppf', action='store_true',
+                        help='Disable the SPPF pyramid-pooling block after backbone stage4. '
+                             'SPPF is ON by default as of R2; use this to reproduce the '
+                             'pre-R2 architecture or to run the SPPF ablation.')
+    parser.add_argument('--neck-k', type=int, default=5,
+                        help='Depthwise kernel size in LitePAN (default 5, was 3 pre-R2)')
+    parser.add_argument('--head-k', type=int, default=5,
+                        help='Depthwise kernel size in the detection head (default 5, was 3 pre-R2)')
+    parser.add_argument('--single-cls', action='store_true',
+                        help='Collapse every label to class 0 and set nc=1. Isolates the '
+                             'box + objectness path from classification — use to gate the '
+                             'detector structurally on tiny sets where an 80-way class head '
+                             'has too few instances per class to be learnable.')
     parser.add_argument('--cache', action='store_true', help='Force cache images in RAM')
     parser.add_argument('--no-cache', action='store_true', help='Force disable image caching in RAM to save memory')
     return parser.parse_args()
@@ -654,7 +672,12 @@ class SimpleDetectionDataset(Dataset):
         return img
 
     def _load_labels_from_file(self, idx):
-        """Load YOLO-format labels from disk."""
+        """Load YOLO-format labels from disk.
+
+        Honours the SINGLE_CLS global: collapsing the class id here (rather than
+        downstream) means train, val and the mosaic wrapper all see nc=1 labels,
+        since mosaic composes from this same base loader.
+        """
         lp = self._label_cache.get(idx)
         labels = []
         if lp is not None:
@@ -662,7 +685,8 @@ class SimpleDetectionDataset(Dataset):
                 for line in f:
                     parts = line.strip().split()
                     if len(parts) >= 5:
-                        labels.append([int(parts[0])] + [float(x) for x in parts[1:5]])
+                        cid = 0 if SINGLE_CLS else int(parts[0])
+                        labels.append([cid] + [float(x) for x in parts[1:5]])
         return labels
 
     def _load_labels(self, idx):
@@ -1202,6 +1226,20 @@ def train_single(args, imgsz, env):
     val_dir = data_dict.get('val', '')
     nc = data_dict.get('nc', 80 if args.task not in ('pose',) else 1)
 
+    # --- Single-class mode -------------------------------------------------
+    # Collapse every label to class 0. The class head becomes trivial, so mAP
+    # then measures the box + objectness path alone. On a 128-image train==val
+    # set a correct detector should reach mAP50 > 0.4; if it does not, the bug
+    # is in assignment/loss/decode and no amount of class-head tuning will help.
+    global SINGLE_CLS
+    if args.single_cls:
+        SINGLE_CLS = True
+        nc = 1
+        data_dict['nc'] = 1
+        data_dict['names'] = {0: 'object'}
+        print("  [single-cls] all labels collapsed to class 0 (nc=1)")
+        print("  [single-cls] gate: mAP50 > 0.40 => box + objectness path is correct")
+
     # Validate that train and val directories are different (prevent data leakage)
     train_str = str(train_dir[0]) if isinstance(train_dir, (list, tuple)) else str(train_dir)
     val_str = str(val_dir[0]) if isinstance(val_dir, (list, tuple)) else str(val_dir)
@@ -1213,10 +1251,14 @@ def train_single(args, imgsz, env):
 
     # Build model with correct nc for this dataset
     model, model_info = build_model(task=args.task, variant=args.variant, nc=nc,
-                                     attention=getattr(args, 'attention', 'default'))
+                                     attention=getattr(args, 'attention', 'default'),
+                                     use_sppf=not args.no_sppf,
+                                     neck_k=args.neck_k, head_k=args.head_k)
 
     params = count_parameters(model)
     print(f"  Parameters: {params['total_M']}M")
+    print(f"  Arch:       SPPF={'on' if not args.no_sppf else 'off'}  "
+          f"neck_k={args.neck_k}  head_k={args.head_k}")
 
     try:
         flops = estimate_flops(model, imgsz, 'cpu')

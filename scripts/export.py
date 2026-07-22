@@ -14,7 +14,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from tinyYOLO.models import build_model
+from tinyYOLO.models import build_model, infer_arch_from_state_dict
 from tinyYOLO.utils.env import detect_environment
 
 
@@ -135,6 +135,14 @@ def main():
         checkpoint = torch.load(weights_path, map_location='cpu')
         state_dict = checkpoint['model'] if isinstance(checkpoint, dict) and 'model' in checkpoint else checkpoint
         state_dict = _clean_state_dict(state_dict)
+        # R2 architecture flags (SPPF / depthwise kernel size) are not stored in the
+        # checkpoint, so recover them from tensor shapes before the first load attempt.
+        arch = infer_arch_from_state_dict(state_dict)
+        if arch != {'use_sppf': True, 'neck_k': 5, 'head_k': 5}:
+            print(f"  [INFO] Checkpoint architecture detected: SPPF={arch['use_sppf']}, "
+                  f"neck_k={arch['neck_k']}, head_k={arch['head_k']} — rebuilding to match.")
+            model, info = build_model(task=args.task, variant=args.variant, nc=nc, **arch)
+
         try:
             model.load_state_dict(state_dict)
             print(f"  Loaded weights: {weights_path}")
@@ -152,7 +160,7 @@ def main():
             if detected_variant:
                 print(f"  [INFO] Variant mismatch detected between CLI argument and checkpoint.")
                 print(f"         Auto-rebuilding model with variant='{detected_variant}' to match checkpoint perfectly.")
-                model, info = build_model(task=args.task, variant=detected_variant, nc=nc)
+                model, info = build_model(task=args.task, variant=detected_variant, nc=nc, **arch)
                 model.load_state_dict(state_dict)
                 print(f"  Loaded weights successfully after auto-healing! ✓")
             else:

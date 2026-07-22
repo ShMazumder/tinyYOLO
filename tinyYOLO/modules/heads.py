@@ -31,9 +31,12 @@ class TinyDetect(nn.Module):
         in_channels: List of input channels from neck (one per scale).
         reg_max: Max regression range (0 = no DFL, direct regression).
         act: Activation function name ('silu' for standard, 'relu6' for quantized).
+        k: Depthwise kernel size for the cls/reg stacks. Defaults to 5, matching
+           NanoDet-Plus and PicoDet, which both use 5x5 depthwise in the head.
+           Set 3 to reproduce the pre-R2 head.
     """
 
-    def __init__(self, nc=80, in_channels=None, reg_max=0, act='silu'):
+    def __init__(self, nc=80, in_channels=None, reg_max=0, act='silu', k=5):
         super().__init__()
         if in_channels is None:
             in_channels = [64, 64, 64]
@@ -41,6 +44,7 @@ class TinyDetect(nn.Module):
         self.nc = nc
         self.nl = len(in_channels)  # Number of detection layers (scales)
         self.reg_max = reg_max
+        self.k = k
         self.no = nc + 5  # Outputs per anchor: 4 bbox + 1 obj + nc classes
 
         # Per-scale decoupled heads
@@ -53,16 +57,16 @@ class TinyDetect(nn.Module):
         for ch in in_channels:
             # Classification branch — uses variant-appropriate activation
             self.cls_convs.append(nn.Sequential(
-                DWConv(ch, ch, 3, 1, act=act),
-                DWConv(ch, ch, 3, 1, act=act),
+                DWConv(ch, ch, k, 1, act=act),
+                DWConv(ch, ch, k, 1, act=act),
             ))
             self.cls_preds.append(
                 nn.Conv2d(ch, nc, 1, bias=True)
             )
             # Regression branch — uses variant-appropriate activation
             self.reg_convs.append(nn.Sequential(
-                DWConv(ch, ch, 3, 1, act=act),
-                DWConv(ch, ch, 3, 1, act=act),
+                DWConv(ch, ch, k, 1, act=act),
+                DWConv(ch, ch, k, 1, act=act),
             ))
             self.reg_preds.append(
                 nn.Conv2d(ch, 4, 1, bias=True)
@@ -114,12 +118,12 @@ class TinySegment(nn.Module):
         act: Activation function name ('silu' for standard, 'relu6' for quantized).
     """
 
-    def __init__(self, nc=80, in_channels=None, nm=32, act='silu'):
+    def __init__(self, nc=80, in_channels=None, nm=32, act='silu', k=5):
         super().__init__()
         if in_channels is None:
             in_channels = [64, 64, 64]
         self.nm = nm
-        self.detect = TinyDetect(nc=nc, in_channels=in_channels, act=act)
+        self.detect = TinyDetect(nc=nc, in_channels=in_channels, act=act, k=k)
 
         # Mask coefficient prediction (appended to detection)
         self.mask_preds = nn.ModuleList()
@@ -162,19 +166,19 @@ class TinyPose(nn.Module):
         act: Activation function name ('silu' for standard, 'relu6' for quantized).
     """
 
-    def __init__(self, nc=1, in_channels=None, nk=17, ndim=3, act='silu'):
+    def __init__(self, nc=1, in_channels=None, nk=17, ndim=3, act='silu', k=5):
         super().__init__()
         if in_channels is None:
             in_channels = [64, 64, 64]
         self.nk = nk
         self.ndim = ndim
-        self.detect = TinyDetect(nc=nc, in_channels=in_channels, act=act)
+        self.detect = TinyDetect(nc=nc, in_channels=in_channels, act=act, k=k)
 
         # Keypoint prediction branch — uses variant-appropriate activation
         self.kpt_preds = nn.ModuleList()
         for ch in in_channels:
             self.kpt_preds.append(nn.Sequential(
-                DWConv(ch, ch, 3, 1, act=act),
+                DWConv(ch, ch, k, 1, act=act),
                 nn.Conv2d(ch, nk * ndim, 1, bias=True),
             ))
 
@@ -226,17 +230,17 @@ class TinyOBB(nn.Module):
         act: Activation function name ('silu' for standard, 'relu6' for quantized).
     """
 
-    def __init__(self, nc=80, in_channels=None, act='silu'):
+    def __init__(self, nc=80, in_channels=None, act='silu', k=5):
         super().__init__()
         if in_channels is None:
             in_channels = [64, 64, 64]
-        self.detect = TinyDetect(nc=nc, in_channels=in_channels, act=act)
+        self.detect = TinyDetect(nc=nc, in_channels=in_channels, act=act, k=k)
 
         # Angle prediction (1 value per anchor) — uses variant-appropriate activation
         self.angle_preds = nn.ModuleList()
         for ch in in_channels:
             self.angle_preds.append(nn.Sequential(
-                DWConv(ch, ch, 3, 1, act=act),
+                DWConv(ch, ch, k, 1, act=act),
                 nn.Conv2d(ch, 1, 1, bias=True),
             ))
 

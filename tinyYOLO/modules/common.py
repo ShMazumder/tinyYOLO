@@ -316,6 +316,65 @@ class C3Ghost(nn.Module):
 
 
 # ---------------------------------------------------------------------------
+# Spatial Pyramid Pooling — Fast
+# ---------------------------------------------------------------------------
+
+class SPPF(nn.Module):
+    """Spatial Pyramid Pooling - Fast (YOLOv5/v8 style).
+
+    Applies the same k x k maxpool `n` times in series and concatenates every
+    intermediate result. Serial pooling is mathematically equivalent to parallel
+    pooling with kernels k, 2k-1, 3k-2, ... but costs a fraction of the compute.
+
+    Why this matters here: TinyYOLO's backbone is built entirely from depthwise
+    convolutions, whose *effective* receptive field is far smaller than the
+    theoretical one. At 320px input P5 is only 10x10, and without a pooling
+    pyramid nothing in the network ever sees global context. This is the cheapest
+    receptive-field purchase available — see analysis/ARCHITECTURE_REDESIGN.md D1.
+
+    Args:
+        c1: Input channels.
+        c2: Output channels (normally == c1 so the neck is unaffected).
+        k: Maxpool kernel size (5 matches YOLOv5/v8).
+        n: Number of serial pooling steps (3 → receptive fields 5, 9, 13).
+        reduction: Internal channel divisor. YOLOv5 uses 2; this defaults to 4
+            because at c1=160 a divisor of 2 costs ~65k params (30% of the whole
+            model) versus ~32k at 4.
+        act: Activation name.
+
+    INT8 notes: MaxPool2d is quantization-safe (no arithmetic, preserves scale).
+    Concatenation routes through QFunctional like the rest of the codebase.
+    """
+
+    def __init__(self, c1, c2, k=5, n=3, reduction=4, act='silu'):
+        super().__init__()
+        c_ = max(8, c1 // reduction)
+        self.n = n
+        self.cv1 = ConvBNAct(c1, c_, 1, 1, act=act)
+        self.cv2 = ConvBNAct(c_ * (n + 1), c2, 1, 1, act=act)
+        self.m = nn.MaxPool2d(kernel_size=k, stride=1, padding=k // 2)
+
+        # Resilient quantized concatenation block
+        try:
+            import torch.ao.quantization as ao_quant
+            self.cat_op = ao_quant.QFunctional()
+        except (ImportError, AttributeError):
+            try:
+                import torch.nn.quantized as nn_quant
+                self.cat_op = nn_quant.FloatFunctional()
+            except (ImportError, AttributeError):
+                self.cat_op = None
+
+    def forward(self, x):
+        y = [self.cv1(x)]
+        for _ in range(self.n):
+            y.append(self.m(y[-1]))
+        if self.cat_op is not None and any(t.is_quantized for t in y):
+            return self.cv2(self.cat_op.cat(y, dim=1))
+        return self.cv2(torch.cat(y, dim=1))
+
+
+# ---------------------------------------------------------------------------
 # Utility: Concat (Ultralytics-compatible)
 # ---------------------------------------------------------------------------
 

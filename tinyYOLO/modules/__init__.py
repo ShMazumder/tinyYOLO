@@ -2,13 +2,13 @@
 
 from tinyYOLO.modules.common import (
     ConvBNAct, DWConv, GhostConv, GhostBottleneck,
-    SEBlock, ECABlock, LightSpatialAttn, C3Ghost,
+    SEBlock, ECABlock, LightSpatialAttn, C3Ghost, SPPF,
 )
 from tinyYOLO.modules.backbone import TinyBackbone
 from tinyYOLO.modules.neck import LitePAN
 
 __all__ = [
     "ConvBNAct", "DWConv", "GhostConv", "GhostBottleneck",
-    "SEBlock", "ECABlock", "LightSpatialAttn", "C3Ghost",
+    "SEBlock", "ECABlock", "LightSpatialAttn", "C3Ghost", "SPPF",
     "TinyBackbone", "LitePAN",
 ]
