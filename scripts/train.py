@@ -891,9 +891,24 @@ class DetectionLoss(nn.Module):
         # Objectness BCE needs pos_weight: positives are a small fraction of cells
         self.obj_bce = nn.BCEWithLogitsLoss(reduction='mean',
                                              pos_weight=torch.tensor([4.0]))
-        # Loss weights tuned for tiny models (CIoU starts ~1.0 for small models)
-        self.box_weight = 2.0
-        self.cls_weight = 1.0
+        # Loss weights.
+        #
+        # These MUST differ between the two paths because the two formulations
+        # produce losses of completely different magnitude:
+        #   legacy  — cls is BCE at positive cells only, normalised by N_pos
+        #             -> magnitude ~4 (ln(nc)-ish). box ~1. Ratio is fine at 2:1.
+        #   R2      — cls is dense BCE over EVERY cell, normalised by the summed
+        #             soft target (small: ~1.6 for 3 objects) -> magnitude ~100.
+        #             With the old 2.0/1.0 weights cls would outweigh box ~63:1
+        #             and the regressor would be starved from step one.
+        # The R2 numbers are YOLOv8's (box 7.5 / cls 0.5), which were tuned for
+        # exactly this dense-soft-target formulation.
+        if use_obj:
+            self.box_weight = 2.0
+            self.cls_weight = 1.0
+        else:
+            self.box_weight = 7.5
+            self.cls_weight = 0.5
         self.obj_weight = 1.0
         # Objectness positive weight. cls/obj are summed and normalized by N_pos
         # (YOLOX-style), NOT mean-reduced — mean dilutes the <1% positive signal

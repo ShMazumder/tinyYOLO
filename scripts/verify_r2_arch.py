@@ -265,10 +265,16 @@ model_r2, _ = build_model(task='det', variant='quantized', nc=NC)
 loss_r2 = tytrain.MultiTaskLoss(task='det', nc=NC, use_obj=False, box_mode='ltrb')
 
 # two images, two objects each
+# Sizes must span all three FPN levels. _select_level_gts routes each GT to ONE
+# level by sqrt(w*h) against thresholds 0.08 / 0.24, so a test whose objects are
+# all medium/large leaves P3 with zero positives and no reg gradient — which is
+# correct behaviour, not a bug. Cover every level explicitly.
 tgt = torch.zeros(2, 8, 5)
-tgt[0, 0] = torch.tensor([0.0, 0.50, 0.50, 0.40, 0.40])
-tgt[0, 1] = torch.tensor([1.0, 0.20, 0.25, 0.10, 0.10])
-tgt[1, 0] = torch.tensor([2.0, 0.70, 0.30, 0.25, 0.30])
+tgt[0, 0] = torch.tensor([0.0, 0.50, 0.50, 0.40, 0.40])   # size 0.40 -> P5
+tgt[0, 1] = torch.tensor([1.0, 0.20, 0.25, 0.15, 0.15])   # size 0.15 -> P4
+tgt[0, 2] = torch.tensor([2.0, 0.75, 0.75, 0.05, 0.05])   # size 0.05 -> P3
+tgt[1, 0] = torch.tensor([2.0, 0.70, 0.30, 0.25, 0.30])   # size 0.27 -> P5
+tgt[1, 1] = torch.tensor([3.0, 0.30, 0.70, 0.06, 0.06])   # size 0.06 -> P3
 
 out = model_r2(torch.randn(2, 3, 320, 320))
 check("R2 head emits 4+nc channels", out[0].shape[1] == NC + 4, f"{out[0].shape[1]}")
@@ -281,11 +287,23 @@ check("obj term is exactly zero when objectness removed", parts['obj'] == 0.0,
 check("cls term is non-zero", parts['cls'] > 0)
 check("box term is non-zero", parts['box'] > 0)
 
+# Weighted contributions must be within ~1 order of magnitude, else one term
+# dominates the gradient and the other never trains. This is what caught the
+# stale 2.0/1.0 weights after cls switched to dense soft targets.
+bw, cw = loss_r2.det_loss.box_weight, loss_r2.det_loss.cls_weight
+contrib_box, contrib_cls = bw * parts['box'], cw * parts['cls']
+ratio = max(contrib_box, contrib_cls) / max(min(contrib_box, contrib_cls), 1e-9)
+print(f"    weighted: box {contrib_box:.2f} (x{bw})  cls {contrib_cls:.2f} (x{cw})"
+      f"  ratio {ratio:.1f}:1")
+check("box and cls contributions are balanced within 20:1", ratio < 20, f"{ratio:.1f}:1")
+
 total.backward()
 gz = {n: (p.grad is not None and bool(p.grad.abs().sum() > 0))
       for n, p in model_r2.named_parameters()}
-check("cls_preds receive gradient", all(v for n, v in gz.items() if 'cls_preds' in n))
-check("reg_preds receive gradient", all(v for n, v in gz.items() if 'reg_preds' in n))
+no_grad_cls = [n for n, v in gz.items() if 'cls_preds' in n and not v]
+no_grad_reg = [n for n, v in gz.items() if 'reg_preds' in n and not v]
+check("cls_preds receive gradient (all scales)", not no_grad_cls, str(no_grad_cls))
+check("reg_preds receive gradient (all scales)", not no_grad_reg, str(no_grad_reg))
 check("backbone receives gradient", any(v for n, v in gz.items() if 'backbone' in n))
 check("sppf receives gradient", any(v for n, v in gz.items() if 'sppf' in n))
 
