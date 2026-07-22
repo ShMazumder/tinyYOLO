@@ -1,5 +1,12 @@
 # Code-Level Fixes, New Experiments, and Publication Readiness
 
+> **⚠️ SUPERSEDED BY R2 where they conflict.** Fixes below describe the R1/R1.4 objectness-based
+> detection path. R2 later **removed the objectness head** (F4 → cls-as-confidence), replaced the
+> `exp`/grid box codec with **`ltrb` distance regression** (P1b), added **SPPF**, and re-weighted the
+> loss to **box 7.5 / cls 0.5**. The `nc=1` structural gate then passed (mAP50 0.78). Current
+> architecture authority: `analysis/ARCHITECTURE_REDESIGN.md`; change log: `CHANGELOG.md` (R2).
+
+
 ---
 
 ## Part A: Code-Level Fixes

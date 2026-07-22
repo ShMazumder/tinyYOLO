@@ -211,7 +211,7 @@ tinyYOLO/
 
 | Model | Task | Std Params | Q Params | Output (@320) |
 |-------|------|-----------|---------|--------------|
-| **tinyYOLO-det** | Object Detection | 0.23M | 0.22M | 3 scales: `[85,H,W]` (4bbox+1obj+80cls) |
+| **tinyYOLO-det** | Object Detection | 0.26M | 0.26M | 3 scales: `[84,H,W]` (4 ltrb + 80cls; no obj) |
 | **tinyYOLO-seg** | Instance Segmentation | 0.29M | 0.28M | 3 scales + proto `[32,160,160]` |
 | **tinyYOLO-pose** | Pose Estimation | 0.27M | 0.26M | 3 scales + keypoints `[51,H,W]` |
 | **tinyYOLO-cls** | Classification | 0.24M | 0.22M | logits `[1000]` |
@@ -246,7 +246,7 @@ Input (160/224/320/416/640)
   │   └─ Bottom-up: P3→P4→P5 (PAN with DWConv)
   │
   └─ Head: Task-specific (~0.05–0.15M params)
-      ├─ det:  Decoupled cls + bbox (no DFL, NMS-free capable)
+      ├─ det:  Decoupled cls + ltrb reg (no DFL, no obj — cls-as-confidence)
       ├─ seg:  det + proto-mask branch (32 prototypes)
       ├─ pose: det + 17-keypoint regression (×3 dims)
       ├─ cls:  Global avg pool → dropout → FC
@@ -267,8 +267,8 @@ Full training pipeline with COCO128 auto-download, vectorized CIoU loss, AMP, EM
 3. **Dynamic RAM Auto-Caching**: Automatically caches small datasets (<1.5 GB) and large datasets on high-memory platforms (Kaggle, RunPod, local), while safely disabling RAM caching on low-memory platforms (Colab free tier) to prevent OOM restarts.
 4. Builds model, applies YOLO-standard BatchNorm (`eps=1e-3, momentum=0.03`)
 5. Trains with AdamW (separate weight decay groups) + cosine LR + AMP + gradient clipping
-6. Uses **vectorized CIoU box loss** + BCE classification + BCE objectness with `pos_weight=4.0` (weighted 2.0 / 1.0 / 1.0)
-7. Box decode uses a shared **grid-anchored anchor-free codec** (`tinyYOLO/utils/boxcodec.py`): `cx = (gi + 2σ(tx) − 0.5)/W`, `w = exp(tw)/W` (same for y/h), identical in training loss and inference so the two never diverge
+6. Uses **vectorized CIoU box loss** (on `ltrb` distances) + dense soft-target classification BCE — **no objectness term**. Weights **box 7.5 / cls 0.5** (YOLOv8, R2)
+7. Box regression is **`ltrb` distance** (FCOS/YOLOX/v8 style — four positive distances to box edges from each cell centre, decoded with the level stride) paired with CIoU. **No objectness head**: confidence = `sigmoid(cls)` with dense soft TAL targets (R2). See `analysis/ARCHITECTURE_REDESIGN.md`.
 8. Computes **P/R/F1/mAP@50/mAP@50-95** at regular intervals via NMS + IoU matching
 9. Displays **tqdm progress bars** (single-line updates per epoch)
 10. Saves best checkpoint by **mAP@50** (not just loss)
@@ -598,7 +598,7 @@ The training script (`scripts/train.py`) computes all of the following during an
 | **Box Loss** | CIoU (Complete IoU — includes center distance + aspect ratio) | Every epoch |
 | **Cls Loss** | Classification loss (BCE) | Every epoch |
 | **Obj Loss** | Objectness loss (BCE) | Every epoch |
-| **Total Loss** | `2.0×CIoU + 1.0×Cls + 1.0×Obj` | Every epoch |
+| **Total Loss** | `7.5×CIoU + 0.5×Cls` (no obj term, R2) | Every epoch |
 | **Precision** | TP / (TP + FP) at IoU=0.5 | Every eval epoch |
 | **Recall** | TP / (TP + FN) at IoU=0.5 | Every eval epoch |
 | **F1 Score** | 2·P·R / (P + R) | Every eval epoch |
@@ -611,8 +611,8 @@ The training script (`scripts/train.py`) computes all of the following during an
 
 | Component | Setting | Reference |
 |-----------|---------|----------|
-| **Loss** | CIoU + BCE (weighted 2.0 / 1.0 / 1.0) | Tuned for sub-1M models |
-| **Objectness** | Dedicated head (replaces max-class proxy) | R1 fix — gain TBD |
+| **Loss** | CIoU (ltrb) + soft-target cls BCE, weights 7.5 / 0.5 (R2) | YOLOv8 formulation |
+| **Confidence** | cls-as-confidence (objectness head removed, R2) | `sigmoid(cls)`, dense soft TAL targets |
 | **Assignment** | Task-Aligned Learning (TAL, k=10) | Wired in R1.4 — gain TBD (ablation A2) |
 | **BatchNorm** | `eps=1e-3, momentum=0.03` | All official YOLO models |
 | **Optimizer** | AdamW, separate weight decay groups | Weights: 1e-4, biases/BN: 0.0 |

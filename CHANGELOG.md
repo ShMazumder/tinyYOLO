@@ -17,6 +17,42 @@ change record going forward — update it in the same commit as any code/doc cha
 
 ---
 
+## [R2] — Architecture redesign (supersedes R1.4 detection-head/loss internals)
+
+Full rationale + measurements in `analysis/ARCHITECTURE_REDESIGN.md`, competitive framing
+in `analysis/COMPETITIVE_ARCHITECTURE_COMPARISON.md`, structural gate in
+`scripts/verify_r2_arch.py`. R2 replaces the objectness-based detection path from R1.4.
+
+### Changed (as-built and validated)
+- **Objectness head REMOVED → cls-as-confidence.** Confidence is now `sigmoid(cls)`;
+  classification is supervised over ALL anchors with soft targets = normalized TAL
+  alignment (YOLOv8 / YOLO26 formulation). This supersedes R1.4's dedicated objectness
+  head + `sum/N_pos` reweighting — the `nc=1` structural gate showed the `obj×cls` score
+  structure (not loss reduction) was the binding defect (D3).
+- **Box regression `exp(w,h)` → `ltrb` distance** (FCOS/YOLOX/v8 style), paired with CIoU.
+  Measured: a fixed edge cell fitting a 5×5-cell GT caps at IoU 0.614 under `exp`, reaches
+  0.995 under `ltrb` (`verify_r2_arch.py` §6). Supersedes R1.4's grid-anchored `exp/W` codec (D9).
+- **SPPF added to backbone** (global context; ~0.22M→0.26M params) (D1).
+- **Assignment: TAL top-k=10 PER LEVEL (hard level routing) is the default** — measured to
+  beat global TAL at this data scale (level 0.69 vs global 0.50 mAP50 @150ep on the nc=1
+  gate). This confirms R1.4's scale-aware routing was the right call.
+- **Loss weights → box 7.5 / cls 0.5** (YOLOv8), required by the dense soft-target cls
+  formulation (previously box 2.0 / cls 1.0 left cls outweighing box ~63:1).
+- Assigner vectorized (removed per-assignment `.item()` GPU↔CPU syncs) (D11).
+
+### Verified
+- **`nc=1` structural gate PASSED**: mAP50 **0.779**, mAP50-95 **0.595** at 300 epochs
+  (coco128, box+confidence path in isolation). Box loss 0.146.
+- **VOC training underway** (quantized, 320px, 300 epochs): mAP50 **0.0825 at epoch 30**
+  and climbing — first real non-zero detection result. Full VOC/COCO numbers still `TBD`.
+
+### Superseded from R1.4
+- The dedicated objectness head, `sum/N_pos` cls+obj normalization, `obj_pos_weight`, and the
+  grid-anchored `exp/W` codec are no longer in the training path. R1.4 entries below are kept
+  as history; where they conflict with R2, **R2 is authoritative**.
+
+---
+
 ## [Unreleased]
 
 ### Docs — repo-wide consistency & integrity pass (R1.4)

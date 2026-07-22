@@ -203,7 +203,11 @@ flowchart TD
 
 **Attention:** Standard uses LightSpatialAttn (P4) + SE (P5). Quantized uses ECA (P4) + ECA (P5).
 
-**Backbone Parameters:** ~80K (standard), ~73K (quantized)
+**SPPF (R2 change):** An SPP-Fast module (k=5, 3 pooling stages) is applied at P5 for global
+context — the single highest value-per-parameter change in the R2 redesign (~25K params,
+negligible FLOPs). Every YOLO since v4 has an SPP-family module; through R1 the network had none.
+
+**Backbone Parameters:** ~0.09M with SPPF (total model ~0.26M, up from 0.22M).
 
 **Figure 2: Architectural Details of GhostConv and GhostBottleneck Blocks**
 
@@ -273,15 +277,25 @@ flowchart TD
     style N5 fill:#dfd,stroke:#333,stroke-width:1px
 ```
 
-### 3.4 Detection Head: Decoupled Anchor-Free (R1 Fix)
+### 3.4 Detection Head: Decoupled Anchor-Free (R2)
 
-**Critical R1 Fix:** All DWConv layers now accept configurable `act` parameter instead of hardcoding `'silu'`.
+**Configurable activation:** All DWConv layers accept a variant `act` parameter (SiLU / ReLU6).
 
-**New Dedicated Objectness Head:** Replaces max-class-logit proxy with proper `obj_preds` branch.
+**No objectness head (R2 change).** The dedicated objectness branch used through R1.4 was
+removed. Confidence is now the class score itself — `sigmoid(cls)` — following YOLOv8 / YOLO26.
+The classifier is supervised over *all* anchors with soft targets (normalized TAL alignment at
+positives, 0 elsewhere). The `nc=1` structural gate showed the old `obj×cls` score structure,
+not the classification loss reduction, was the binding defect (see `analysis/ARCHITECTURE_REDESIGN.md`, D3).
 
-Output per grid cell: `[4 bbox, 1 obj, nc cls]` = 85 channels for COCO-80.
+**Box regression is `ltrb` distance (R2 change).** The reg branch predicts four positive
+distances (left, top, right, bottom) from each cell centre — FCOS/YOLOX/v8 style — decoded with
+the level stride and paired with CIoU. This replaces the R1.4 `exp(w,h)` parametrization, whose
+translation-equivariance cap limited a fixed edge cell to IoU 0.614 vs 0.995 for `ltrb`
+(`verify_r2_arch.py` §6).
 
-**Figure 4: Decoupled Anchor-Free Detection Head Structure (Configurable Activation and Dedicated Objectness)**
+Output per grid cell: `[4 ltrb, nc cls]` = 84 channels for COCO-80 (no objectness channel).
+
+**Figure 4: Decoupled Anchor-Free Detection Head (cls-as-confidence, `ltrb` regression)**
 
 ```mermaid
 flowchart TD
@@ -289,23 +303,19 @@ flowchart TD
     InFeat --> DecoupledReg["Regression Branch (64 ch)"]
 
     DecoupledCls --> ClsDW1["DWConv (3x3, act=variant)"] --> ClsDW2["DWConv (3x3, act=variant)"]
-    ClsDW2 --> ClsOut["1x1 Conv (Class Preds)<br/>[nc channels]"]
+    ClsDW2 --> ClsOut["1x1 Conv (Class Preds)<br/>[nc channels] — confidence = sigmoid(cls)"]
 
     DecoupledReg --> RegDW1["DWConv (3x3, act=variant)"] --> RegDW2["DWConv (3x3, act=variant)"]
-    RegDW2 --> RegOut["1x1 Conv (Bounding Box)<br/>[4 channels]"]
-    
-    InFeat --> DedicatedObj["Dedicated Objectness Branch"] --> ObjOut["1x1 Conv (Objectness)<br/>[1 channel]"]
+    RegDW2 --> RegOut["1x1 Conv (ltrb distances)<br/>[4 channels: l,t,r,b]"]
 
-    ClsOut --> ConcatHead["Concatenation<br/>[4 bbox + 1 obj + nc cls]"]
+    ClsOut --> ConcatHead["Concatenation<br/>[4 ltrb + nc cls]"]
     RegOut --> ConcatHead
-    ObjOut --> ConcatHead
-    ConcatHead --> FinalOutput["Final Scale Output<br/>(85 channels for COCO)"]
+    ConcatHead --> FinalOutput["Final Scale Output<br/>(84 channels for COCO)"]
 
     style ClsDW1 fill:#fff5e6,stroke:#ff9800,stroke-width:1px
     style ClsDW2 fill:#fff5e6,stroke:#ff9800,stroke-width:1px
     style RegDW1 fill:#fff5e6,stroke:#ff9800,stroke-width:1px
     style RegDW2 fill:#fff5e6,stroke:#ff9800,stroke-width:1px
-    style DedicatedObj fill:#e6f7ff,stroke:#1890ff,stroke-width:1px
 ```
 
 ### 3.5 Multi-Task Heads
@@ -322,21 +332,26 @@ flowchart TD
 
 ## 4. Training Methodology
 
-### 4.1 Task-Aligned Label Assignment (TAL) — NEW in R1
+### 4.1 Task-Aligned Label Assignment (TAL)
 
-Replaces naive single-cell assignment. Alignment metric: $t = s^{0.5} \cdot u^{6.0}$. Top-k=10 positives per GT. Wired into the loss in R1.4 (was previously dead code). mAP improvement over single-cell is `TBD` (ablation A2; the earlier "+7.8%" is retracted).
+Alignment metric: $t = s^{0.5} \cdot u^{6.0}$, top-k=10 positives per GT. R2 uses **hard
+per-level routing** (each GT assigned within the FPN level matching its size), which was
+*measured* to beat global cross-level TAL at this data scale (mAP50 0.69 vs 0.50 @150ep on the
+`nc=1` gate — see `analysis/ARCHITECTURE_REDESIGN.md`). Classification soft targets are the
+normalized alignment metric at positives, 0 elsewhere (dense supervision over all anchors).
 
 ### 4.2 Loss Function
 
-$$\mathcal{L} = 2.0 \cdot \mathcal{L}_{\text{CIoU}} + 1.0 \cdot \mathcal{L}_{\text{BCE-cls}} + 1.0 \cdot \mathcal{L}_{\text{BCE-obj}}$$
+$$\mathcal{L} = 7.5 \cdot \mathcal{L}_{\text{CIoU}} + 0.5 \cdot \mathcal{L}_{\text{BCE-cls}}$$
 
-Loss normalization: single $N_{\text{pos}}$ across all scales (R1 fix — was inflated per-scale). Loss computation is fully vectorized using `torch.where()` and batched CIoU — no Python for-loops over batch/targets.
+**No objectness term (R2).** Confidence is `sigmoid(cls)`; the classifier is trained with dense
+soft TAL targets. The YOLOv8 weights **box 7.5 / cls 0.5** are required by this formulation:
+switching cls from positives-only to dense soft targets changed its magnitude ~100×, so the old
+`box 2.0 / cls 1.0` left cls outweighing box ~63:1. `verify_r2_arch.py` asserts the two weighted
+contributions stay within 20:1.
 
-**Objectness BCE:** Uses `pos_weight=4.0` to counteract extreme class imbalance (~0.1% positive cells per feature map). Without this, the model learns to suppress all objectness predictions.
-
-**Box decode consistency (R1.4 fix):** Training and inference share a single grid-anchored, anchor-free codec (`tinyYOLO/utils/boxcodec.py`). Each cell's prediction is decoded relative to its grid index `(gi, gj)`:
-
-$$c_x = \frac{g_i + 2\sigma(t_x) - 0.5}{W},\quad c_y = \frac{g_j + 2\sigma(t_y) - 0.5}{H},\quad w = \frac{e^{\,t_w}}{W},\quad h = \frac{e^{\,t_h}}{H}$$
+**Box regression:** `ltrb` distances decoded with the level stride, supervised by CIoU. Loss is
+vectorized (no per-assignment Python `.item()` GPU↔CPU syncs).
 
 All outputs are in normalized [0,1] image fraction (multiply by `imgsz` for pixels). The earlier `cx = σ(pred) × imgsz` decode omitted the cell index; because a convolutional head is translation-equivariant it cannot regress an absolute image-space center from identical local features, so localization was impossible and mAP collapsed to ≈0. Anchoring the center to `(gi, gj)` is what makes the head learnable.
 

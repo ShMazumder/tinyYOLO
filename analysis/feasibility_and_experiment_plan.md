@@ -1,7 +1,14 @@
 # TinyYOLO — Feasibility Assessment & Experiment Plan
 
 **Date:** 2026-07-22
-**Context:** Written after the R1.4 box-decode fix. The prior real training run (`voc-q-320-seed42`) stalled at mAP@50 ≈ 0.0011 because the box head was decoded with `σ(pred) × imgsz` (no grid-cell anchoring). That is now fixed with a shared grid-anchored codec (`tinyYOLO/utils/boxcodec.py`). This document asks two questions: (1) is the core idea actually feasible, and (2) what experiments would establish it honestly.
+**Context:** Written after the R1.4 box-decode fix. The prior real training run (`voc-q-320-seed42`) stalled at mAP@50 ≈ 0.0011 because the box head was decoded with `σ(pred) × imgsz` (no grid-cell anchoring). This document asks two questions: (1) is the core idea actually feasible, and (2) what experiments would establish it honestly.
+
+> **⚠️ SUPERSEDED IN PART BY R2.** Since this was written, the detection path was redesigned
+> (R2): the R1.4 objectness head + grid-anchored `exp` codec were replaced with **cls-as-confidence
+> + `ltrb` regression + SPPF + per-level TAL**, and the `nc=1` structural gate passed (mAP50 0.78).
+> The current architecture rationale and staged migration plan live in
+> `analysis/ARCHITECTURE_REDESIGN.md` (that is authoritative for the model). The feasibility ceiling
+> and experiment *staging* below still hold; treat R1.4-specific fix references as history.
 
 ---
 
@@ -43,7 +50,10 @@ The paper's headline numbers (VOC 41.2%, COCO 19.7% mAP@50, 0.7% INT8 drop, all 
 ### 1.4 Principal risks
 
 1. **Capacity ceiling.** 0.22M params is a genuine wall. The idea is only competitive inside the *sub-0.3M niche* (vs YOLO-Fastest), not against NanoDet/PicoDet (~1M) or YOLOv8n (3.2M). Frame the contribution as niche + INT8 + multi-task, never as general SOTA.
-2. **Assignment.** `TALAssigner` was defined but **never called** through R1.3 — the loss used single-cell assignment. **Fixed in R1.4:** TAL is now wired into `DetectionLoss.forward` (top-k=10, shared codec). The paper's "+7.8% mAP" is still an untested hypothesis to be measured by ablation A2 (TAL vs single-cell).
+2. **Assignment.** `TALAssigner` was dead code through R1.3, wired in R1.4, and in **R2** is the
+default with **hard per-level routing** — measured to beat global cross-level TAL at this data
+scale (mAP50 0.69 vs 0.50). The paper's "+7.8% mAP" for TAL-vs-single-cell remains an untested
+hypothesis (ablation A2).
 3. **Small-object AP.** Structural; expect ~2%. Don't over-promise AP_S.
 4. **Reproducibility / integrity.** Every result table must be regenerated from actual runs with saved `config.json` + `metrics.json`. No number enters the manuscript without a matching artifact.
 5. **Multi-scale assignment.** Each GT is currently assigned to its cell at *all three* scales identically. Scale-aware assignment (size→level) is a likely accuracy lever.

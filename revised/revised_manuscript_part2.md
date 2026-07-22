@@ -250,18 +250,24 @@ class TinyDetect(nn.Module):
             ))
 ```
 
-**Dedicated Objectness Head.** The original implementation used $\max(\text{cls\_logits})$ as an objectness proxy, coupling classification and localization in a way that suppresses correctly-localized but low-confidence predictions. The revised architecture includes a dedicated objectness branch:
+**No Objectness Head — cls-as-confidence (R2).** R1 added a dedicated objectness branch; R2
+**removes it**, following YOLOv8 / YOLO10 / YOLO26. Confidence is the class score itself,
+`sigmoid(cls)`, and the classifier is supervised over *all* anchors with dense soft targets
+(normalized TAL alignment at positives, 0 elsewhere). A structural `nc=1` gate isolated the
+box+confidence path and showed that the `obj × cls` score — not the classification-loss
+reduction — was the binding defect: with classification trivially solved, mAP50 still sat at
+0.011 because the score collapsed to objectness ranking ~41 negatives per positive. Removing
+objectness resolves this (see `analysis/ARCHITECTURE_REDESIGN.md`, D3).
 
-```python
-# NEW: dedicated objectness prediction
-self.obj_preds = nn.ModuleList()
-for ch in in_channels:
-    self.obj_preds.append(nn.Conv2d(ch, 1, 1, bias=True))
-```
+**`ltrb` box regression (R2).** The regression branch predicts four positive distances
+(left, top, right, bottom) from each cell centre, decoded with the level stride and supervised
+by CIoU. This replaces R1's `exp(w,h)` parametrization, which — because a convolutional head is
+translation-equivariant — capped a fixed edge cell fitting a large GT at IoU 0.614, versus 0.995
+for `ltrb` (`verify_r2_arch.py` §6).
 
-The objectness output is concatenated with bbox and class predictions: output = [4 bbox, 1 obj, nc cls] per grid cell, yielding $4 + 1 + nc$ channels per anchor.
+Output per grid cell: `[4 ltrb, nc cls]`, i.e. $4 + nc$ channels per anchor (no objectness channel).
 
-**Figure 4: Decoupled Anchor-Free Detection Head Structure (Configurable Activation and Dedicated Objectness)**
+**Figure 4: Decoupled Anchor-Free Detection Head (cls-as-confidence, `ltrb` regression)**
 
 ```mermaid
 flowchart TD
@@ -269,23 +275,19 @@ flowchart TD
     InFeat --> DecoupledReg["Regression Branch (64 ch)"]
 
     DecoupledCls --> ClsDW1["DWConv (3x3, act=variant)"] --> ClsDW2["DWConv (3x3, act=variant)"]
-    ClsDW2 --> ClsOut["1x1 Conv (Class Preds)<br/>[nc channels]"]
+    ClsDW2 --> ClsOut["1x1 Conv (Class Preds)<br/>[nc] — confidence = sigmoid(cls)"]
 
     DecoupledReg --> RegDW1["DWConv (3x3, act=variant)"] --> RegDW2["DWConv (3x3, act=variant)"]
-    RegDW2 --> RegOut["1x1 Conv (Bounding Box)<br/>[4 channels]"]
-    
-    InFeat --> DedicatedObj["Dedicated Objectness Branch"] --> ObjOut["1x1 Conv (Objectness)<br/>[1 channel]"]
+    RegDW2 --> RegOut["1x1 Conv (ltrb distances)<br/>[4: l,t,r,b]"]
 
-    ClsOut --> ConcatHead["Concatenation<br/>[4 bbox + 1 obj + nc cls]"]
+    ClsOut --> ConcatHead["Concatenation<br/>[4 ltrb + nc cls]"]
     RegOut --> ConcatHead
-    ObjOut --> ConcatHead
-    ConcatHead --> FinalOutput["Final Scale Output<br/>(85 channels for COCO)"]
+    ConcatHead --> FinalOutput["Final Scale Output<br/>(84 channels for COCO)"]
 
     style ClsDW1 fill:#fff5e6,stroke:#ff9800,stroke-width:1px
     style ClsDW2 fill:#fff5e6,stroke:#ff9800,stroke-width:1px
     style RegDW1 fill:#fff5e6,stroke:#ff9800,stroke-width:1px
     style RegDW2 fill:#fff5e6,stroke:#ff9800,stroke-width:1px
-    style DedicatedObj fill:#e6f7ff,stroke:#1890ff,stroke-width:1px
 ```
 
 **Per-Scale Output:**
@@ -297,7 +299,7 @@ flowchart TD
 | P5 | 13×13 | 169 | Large objects |
 | **Total** | | **3,549** | → NMS → 10–50 final |
 
-**Bias Initialization.** Classification biases are initialized to $-\log((1-\pi)/\pi)$ where $\pi = 0.01$, following the focal loss prior [43]. Objectness biases are initialized similarly to ensure early-training stability.
+**Bias Initialization.** Classification biases are initialized to $-\log((1-\pi)/\pi)$ where $\pi = 0.01$, following the focal loss prior [43]. (No objectness branch exists in R2.)
 
 **Parameter Budget:** ~90K parameters (39% of total).
 
@@ -335,15 +337,24 @@ where $s$ is the predicted classification score for the target class, $u$ is the
 
 2. **Quality-aware assignment:** TAL preferentially assigns cells that are already producing good predictions, creating a virtuous cycle where well-initialized regions receive stronger learning signals.
 
-3. **Convergence acceleration:** TAL is expected to reach a given mAP@50 in fewer epochs than single-cell assignment; the exact speedup is `TBD` (ablation A2, rerun under R1.4 — the earlier "~40%" figure is retracted). Note: TAL was only *wired into the loss* in R1.4; through R1.3 the assigner existed but was not called.
+3. **Per-level routing (R2 default).** R2 restricts TAL to assign each GT within the FPN level
+matching its size (hard level routing), rather than globally across levels. This was *measured*
+to beat global cross-level TAL at this data scale (mAP50 0.69 vs 0.50 @150ep on the `nc=1` gate):
+global assignment must discover the size→level mapping from noisy early predictions, whereas hard
+routing supplies it as a prior — a discovery cost that never pays for itself at ~5k steps on small
+data. Worth re-testing at full COCO scale (`analysis/ARCHITECTURE_REDESIGN.md`). Convergence-speed
+figures vs single-cell are `TBD` (ablation A2).
 
 ### 4.2 Loss Function
 
-The total loss comprises three components with empirically tuned weights:
+The total loss (R2) has **two** components — there is no objectness term:
 
-$$\mathcal{L}_{\text{total}} = \lambda_{\text{box}} \cdot \mathcal{L}_{\text{CIoU}} + \lambda_{\text{cls}} \cdot \mathcal{L}_{\text{BCE-cls}} + \lambda_{\text{obj}} \cdot \mathcal{L}_{\text{BCE-obj}}$$
+$$\mathcal{L}_{\text{total}} = \lambda_{\text{box}} \cdot \mathcal{L}_{\text{CIoU}} + \lambda_{\text{cls}} \cdot \mathcal{L}_{\text{BCE-cls}}$$
 
-where $\lambda_{\text{box}} = 2.0$, $\lambda_{\text{cls}} = 1.0$, $\lambda_{\text{obj}} = 1.0$.
+where $\lambda_{\text{box}} = 7.5$, $\lambda_{\text{cls}} = 0.5$ (YOLOv8 weights). These are required by
+the dense soft-target formulation: moving classification from positives-only to dense soft
+targets rescales its magnitude ~100×, so the R1 weights ($\lambda_{\text{box}}=2.0,\lambda_{\text{cls}}=1.0$)
+left classification outweighing box regression ~63:1.
 
 **CIoU Loss [44].** For bounding box regression, we employ Complete IoU loss:
 
@@ -356,17 +367,21 @@ where:
 - $v = \frac{4}{\pi^2}\left(\arctan\frac{w^{gt}}{h^{gt}} - \arctan\frac{w}{h}\right)^2$ is the aspect ratio consistency term
 - $\alpha = \frac{v}{(1 - \text{IoU}) + v}$ balances the aspect ratio penalty
 
-**Classification Loss.** Binary cross-entropy with logits, applied independently per class:
+**Classification Loss (dense soft targets, R2).** Binary cross-entropy with logits computed over
+**all** anchors, not just positives. The target for a positive anchor is its normalized TAL
+alignment score (a soft value in $[0,1]$), and 0 for negatives — the confidence signal that
+replaces the removed objectness head:
 
-$$\mathcal{L}_{\text{BCE-cls}} = -\frac{1}{N_{\text{pos}}} \sum_{i \in \text{pos}} \sum_{c=1}^{C} \left[ y_{ic} \log(\sigma(p_{ic})) + (1-y_{ic}) \log(1 - \sigma(p_{ic})) \right]$$
+$$\mathcal{L}_{\text{BCE-cls}} = -\frac{1}{N_{\text{norm}}} \sum_{i \in \text{all}} \sum_{c=1}^{C} \left[ \hat{t}_{ic} \log(\sigma(p_{ic})) + (1-\hat{t}_{ic}) \log(1 - \sigma(p_{ic})) \right]$$
 
-**Objectness Loss.** Binary cross-entropy on the dedicated objectness head output, computed over all grid cells:
+where $\hat{t}_{ic}$ is the soft alignment target and $N_{\text{norm}}$ is the summed positive
+soft-target mass (YOLOv8 normalizer).
 
-$$\mathcal{L}_{\text{BCE-obj}} = \text{BCE}(\hat{o}, o^*)$$
+**Objectness Loss.** None — removed in R2 (cls-as-confidence).
 
-where $o^* = 1$ for cells assigned as positive by TAL and $o^* = 0$ otherwise.
-
-**Loss Normalization.** Box and classification losses are normalized by the number of positive targets across all scales ($N_{\text{pos}}$), not accumulated per-scale. This corrects an issue in the initial implementation where `n_targets_total` was inflated by counting each target once per scale (since every target is assigned at every scale), diluting the effective learning rate for box regression.
+**Box loss normalization.** CIoU is summed over positive anchors and normalized by $N_{\text{norm}}$,
+consistent with the classification normalizer. The assigner is vectorized (no per-assignment
+`.item()` GPU↔CPU syncs).
 
 ### 4.3 Training Recipe
 
