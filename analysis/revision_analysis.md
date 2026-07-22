@@ -1,6 +1,11 @@
 # TinyYOLO R1 Revision Analysis
 
 > Gap analysis and implementation status for the R1 revision addressing peer review feedback.
+>
+> **⚠️ SUPERSEDED BY R2.** This file documents the R1/R1.4 state (objectness head, `exp`/grid
+> decode, `pos_weight`). R2 replaced that path with **cls-as-confidence + `ltrb` + SPPF + per-level
+> TAL, loss box 7.5 / cls 0.5**. Authoritative model spec: `analysis/ARCHITECTURE_REDESIGN.md`;
+> change log: `CHANGELOG.md` (R2). Read the block below as history.
 
 ---
 
@@ -77,13 +82,13 @@ Seed:       non-deterministic
 
 ### After R1
 ```
-Head output: [B, 5+nc, H, W]   (85 channels for COCO-80)
-Objectness: dedicated head      (obj_preds branch with proper init)
+Head output: [B, 4+nc, H, W]   (84 channels for COCO-80 — R2, no obj)
+Confidence: cls-as-confidence   (R2: objectness head removed; sigmoid(cls))
 Activation: act=configurable    ('silu' for standard, 'relu6' for quantized)
-Assignment: TAL                 (k=10 positives per GT, alignment metric)
-Loss:       vectorized          (torch.where + batched CIoU, zero Python loops)
-Obj BCE:    pos_weight=4.0      (counteracts 99.9% negative cell imbalance)
-Box decode: grid-anchored (R1.4)  cx=(gi+2σ(tx)−0.5)/W, w=exp(tw)/W  [shared loss+inference codec; the old sigmoid*imgsz had no grid offset and broke localization]
+Assignment: TAL, per-level      (k=10 per GT, hard level routing — R2 default)
+Loss:       7.5·CIoU + 0.5·cls  (R2; dense soft TAL targets; no obj term)
+Box:        ltrb distance (R2)   (l,t,r,b from cell centre, decoded by stride; CIoU)
+Context:    SPPF at P5 (R2)      (global context; ~0.26M total params)
 Augment:    OpenCV-native       (HSV jitter, HFlip, Grayscale — no PIL)
 Caching:    Dynamic Auto-Cacher (safely caches based on available RAM limits)
 Metrics:    Per-Image Matching  (isolates boundaries, fixes coordinate leakage + AP averaging)

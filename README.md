@@ -215,7 +215,7 @@ tinyYOLO/
 | **tinyYOLO-seg** | Instance Segmentation | 0.29M | 0.28M | 3 scales + proto `[32,160,160]` |
 | **tinyYOLO-pose** | Pose Estimation | 0.27M | 0.26M | 3 scales + keypoints `[51,H,W]` |
 | **tinyYOLO-cls** | Classification | 0.24M | 0.22M | logits `[1000]` |
-| **tinyYOLO-obb** | Oriented BBox | 0.25M | 0.23M | 3 scales: `[86,H,W]` (incl. obj+angle) |
+| **tinyYOLO-obb** | Oriented BBox | 0.28M | 0.28M | 3 scales: `[85,H,W]` (4 ltrb + nc cls + 1 angle; no obj) |
 
 ### Standard vs Quantized
 

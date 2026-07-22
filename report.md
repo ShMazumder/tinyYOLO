@@ -147,7 +147,7 @@ flowchart TD
     end
 
     subgraph Head ["Heads: Modular Decoupled Task Branches (~90K-150K Params)"]
-        TinyDetect["TinyDetect (Object Detection)<br/>[4 bbox + 1 obj + nc cls]"]
+        TinyDetect["TinyDetect (Object Detection)<br/>[4 ltrb + nc cls]"]
         TinySegment["TinySegment (Instance Segmentation)<br/>[bbox + obj + cls + 32 proto-coefficients]"]
         TinyPose["TinyPose (Pose Estimation)<br/>[bbox + obj + cls + 17 keypoints x 3]"]
         TinyClassify["TinyClassify (Classification)<br/>[GlobalPool + FC]"]

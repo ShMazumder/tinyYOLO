@@ -343,7 +343,7 @@ Mosaic augmentation contributes 4.3% mAP@50, the single largest training recipe 
 | **Dedicated head (revised)** | **37.4 ± 0.7** | **412 avg** | **Low** |
 | Centerness-based | 36.9 ± 0.8 | 387 avg | Low |
 
-The dedicated objectness head improves mAP by 2.6% over the max-class proxy while reducing false positive predictions by 62%. The max-class proxy's coupling between classification and localization suppressed correctly-localized but low-confidence detections.
+_(Superseded by R2.)_ R1 replaced the max-class objectness proxy with a dedicated objectness head; **R2 removed objectness entirely** in favor of cls-as-confidence with dense soft TAL targets — the `nc=1` structural gate showed the `obj×cls` score, not the class head, was the binding defect. Any "+2.6% objectness head" figure is retracted; the relevant ablation is now cls-as-confidence vs objectness (`analysis/ARCHITECTURE_REDESIGN.md`, D3).
 
 ---
 
