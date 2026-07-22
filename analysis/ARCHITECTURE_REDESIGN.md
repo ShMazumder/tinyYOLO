@@ -58,7 +58,12 @@ measured in isolation.
 |---|---:|---:|---:|
 | original (obj + `exp` + mosaic) | 0.627 **pinned** | 0.0112 | — |
 | + 2a/2b (obj removed, `ltrb`) | 0.494 | 0.0098 | — |
-| **+ mosaic off** | **0.290, still falling** | **0.3349** | **0.1623** |
+| + mosaic off (150 ep) | 0.290, still falling | 0.3349 | 0.1623 |
+| **+ step 3, 300 ep (`--assign-mode level`)** | **0.146** | **0.7793** | **0.5951** |
+
+**The nc=1 structural gate passes** (bar was mAP50 > 0.40). Box + confidence path
+is correct. Predictions at `conf 0.001` fell from 32261 to 6671 and precision rose
+0.018 -> 0.110, i.e. the model became genuinely selective rather than spraying.
 
 Three defects, each confirmed by the metric moving when it was fixed:
 
@@ -87,11 +92,26 @@ Three defects, each confirmed by the metric moving when it was fixed:
   not what produced mAP 0.001.
 - D12 (add a P2/stride-4 level) was walked back after the competitive analysis —
   both sub-1M leaders added stride **64**, not stride 4.
-- The staged plan put the backbone rewrite (step 4) ahead of anything about box
-  *quality*. The final numbers argue otherwise: mAP50 0.3349 against mAP50-95
-  0.1623 is a ratio of **0.48**, versus 0.65 for NanoDet-Plus and 0.71 for
-  YOLOv8n. Boxes are roughly right but not tight. **Light DFL (`reg_max=7`) should
-  be pulled forward**, ahead of the backbone work.
+- ~~mAP50-95/mAP50 of 0.48 means boxes are loose; pull DFL forward.~~ **Retracted.**
+  That ratio was measured on a 150-epoch run that had not converged. At 300 epochs
+  it is **0.76** (0.5951/0.7793) — better than YOLOv8n's 0.71 and NanoDet-Plus's
+  0.65. Box tightness is not a defect; DFL returns to the "open ablation" pile.
+- ~~Step 3: hard level routing (D10) is a band-aid and should be removed in favour
+  of YOLOv8-style global assignment.~~ **Retracted — measured backwards.**
+
+  | epoch | `--assign-mode level` | `--assign-mode global` |
+  |---|---:|---:|
+  | 90 | **0.2513** | 0.1614 |
+  | 120 | **0.5575** | 0.3485 |
+  | 150 | **0.6901** | 0.4998 |
+
+  `level` also had lower box and cls loss throughout. TAL ranks candidate cells by
+  the IoU of the model's *current* predictions, which are random at init; global
+  assignment must discover the size->level mapping from that noisy signal, while
+  hard routing supplies it as a prior. YOLOv8 and NanoDet absorb that discovery
+  cost across 118k images / ~370k steps; at 4800 steps on 128 images it never pays
+  for itself. **`level` is now the default.** Worth re-testing at VOC/COCO scale —
+  this may invert with more data.
 
 ### Loss-weight rescaling (easy to miss)
 
@@ -170,8 +190,8 @@ Severity: **S1** blocks accuracy fundamentally · **S2** significant · **S3** p
 | D7 | **No re-parameterization.** RepVGG-style train-time branches fuse to a single conv at export — free accuracy for an edge model, which is this repo's entire premise. | S2 | all |
 | D8 | **P3 is only 40 ch.** Small objects are where tiny detectors lose the most mAP, and they live on P3. The neck then *expands* it to 64 — a lateral conv doing upsizing is wasted compute. | S2 | `backbone.py` |
 | D9 ✅ FIXED | **`exp()` w/h regression.** High-variance, needs `clamp(max=4)` to not blow up. `ltrb` distance regression (FCOS/YOLOX/v8) is bounded, positive, stable, and pairs directly with CIoU. | S2 | `boxcodec.py` |
-| D10 ⏳ STEP 3 | **Hard GT→level routing** (`_select_level_gts`, size thresholds 0.08/0.24) sends each GT to exactly one FPN level. Standard TAL assigns across all levels and lets the alignment metric decide. This band-aid exists to contain the objectness blow-up and becomes unnecessary once D3 is fixed. | S2 | `train.py:~935` |
-| D11 ⏳ STEP 3 | **Assigner does a Python loop with `.item()` per assignment** — ~1000 GPU→CPU syncs per step. Correctness-neutral, throughput-fatal. | S2 | `train.py:~245` |
+| D10 ❌ NOT A DEFECT | **Hard GT→level routing** (`_select_level_gts`, size thresholds 0.08/0.24) sends each GT to exactly one FPN level. Standard TAL assigns across all levels and lets the alignment metric decide. This band-aid exists to contain the objectness blow-up and becomes unnecessary once D3 is fixed. | S2 | `train.py:~935` |
+| D11 ✅ FIXED | **Assigner does a Python loop with `.item()` per assignment** — ~1000 GPU→CPU syncs per step. Correctness-neutral, throughput-fatal. | S2 | `train.py:~245` |
 | D12 | No P2 (/4) level and no option for one. | S3 | `backbone.py` |
 | D13 | `SEBlock` uses `nn.Linear` on pooled features and `ECABlock` uses `Conv1d`; both break on several edge NPU compilers. 1×1 `Conv2d` is the portable form. | S3 | `common.py` |
 | D14 | Attention only on P4/P5, none in the neck, and `attn3` is applied to `p4` (confusing off-by-one naming). | S3 | `backbone.py` |

@@ -103,10 +103,12 @@ def parse_args():
                         help='EMA decay rate (default: 0.9998)')
     parser.add_argument('--close-mosaic', type=int, default=None,
                         help='Epoch at which to disable mosaic augmentation (default: 90%% of epochs)')
-    parser.add_argument('--assign-mode', choices=['global', 'level'], default='global',
-                        help="TAL assignment scope. 'global' (default) concatenates all "
-                             "FPN levels so topk is a pyramid-wide budget; 'level' is the "
-                             "pre-R2 per-level assignment with hard size-based GT routing.")
+    parser.add_argument('--assign-mode', choices=['level', 'global'], default='level',
+                        help="TAL assignment scope. 'level' (default) assigns per FPN level "
+                             "with hard size-based GT routing; 'global' concatenates all "
+                             "levels so topk is a pyramid-wide budget (YOLOv8 behaviour). "
+                             "MEASURED: level beat global at every checkpoint on coco128 "
+                             "nc=1 (ep150: 0.690 vs 0.500) — see analysis doc S3.")
     parser.add_argument('--topk', type=int, default=10,
                         help='TAL positives per GT (default 10, pyramid-wide under global)')
     parser.add_argument('--use-obj', action='store_true',
@@ -895,14 +897,21 @@ class DetectionLoss(nn.Module):
     """
 
     def __init__(self, nc=80, topk=10, use_obj=False, box_mode='ltrb', center_radius=0.0,
-                 assign_mode='global'):
+                 assign_mode='level'):
         super().__init__()
         self.nc = nc
         self.use_obj = use_obj
         self.box_mode = box_mode
-        # 'global' concatenates all FPN levels before assignment (YOLOv8/NanoDet
-        # behaviour, R2 default). 'level' assigns per level with hard size-based
-        # GT routing (pre-R2), kept for A/B.
+        # 'level' assigns per FPN level with hard size-based GT routing.
+        # 'global' concatenates all levels first (YOLOv8/NanoDet behaviour).
+        #
+        # 'level' is the default because it MEASURED BETTER here, contradicting the
+        # design doc's expectation. TAL ranks cells by the IoU of the model's
+        # *current* predictions, which are random at init; global assignment must
+        # discover the size->level mapping from that noisy signal, whereas hard
+        # routing supplies it as a prior. YOLOv8/NanoDet can absorb the discovery
+        # cost over 118k images and ~370k steps. At 4800 steps on 128 images it
+        # never pays for itself. Revisit on VOC/COCO scale.
         if assign_mode not in ('global', 'level'):
             raise ValueError(f"assign_mode must be 'global' or 'level', got {assign_mode!r}")
         self.assign_mode = assign_mode
@@ -1221,7 +1230,7 @@ class MultiTaskLoss(nn.Module):
     Jointly optimizes detection + sub-task (mask/kpt/angle).
     """
     def __init__(self, task='det', nc=80, use_obj=False, box_mode='ltrb', center_radius=0.0,
-                 assign_mode='global', topk=10):
+                 assign_mode='level', topk=10):
         super().__init__()
         self.task = task
         self.nc = nc
