@@ -103,6 +103,12 @@ def parse_args():
                         help='EMA decay rate (default: 0.9998)')
     parser.add_argument('--close-mosaic', type=int, default=None,
                         help='Epoch at which to disable mosaic augmentation (default: 90%% of epochs)')
+    parser.add_argument('--assign-mode', choices=['global', 'level'], default='global',
+                        help="TAL assignment scope. 'global' (default) concatenates all "
+                             "FPN levels so topk is a pyramid-wide budget; 'level' is the "
+                             "pre-R2 per-level assignment with hard size-based GT routing.")
+    parser.add_argument('--topk', type=int, default=10,
+                        help='TAL positives per GT (default 10, pyramid-wide under global)')
     parser.add_argument('--use-obj', action='store_true',
                         help='Restore the legacy objectness branch and positives-only '
                              'classification loss. Removed by default as of R2.')
@@ -209,7 +215,7 @@ class TALAssigner:
         union = area1 + area2.T - inter + eps
         return inter / union
 
-    def assign(self, pred_scores, pred_bboxes, gt_labels, gt_bboxes, grid_cells, H, W):
+    def assign(self, pred_scores, pred_bboxes, gt_labels, gt_bboxes, grid_cells, cell_size):
         """Perform task-aligned assignment for a single image at one scale.
 
         Args:
@@ -218,7 +224,8 @@ class TALAssigner:
             gt_labels: [N_gt] integer class labels.
             gt_bboxes: [N_gt, 4] GT boxes (cx, cy, w, h) normalized.
             grid_cells: [N_cells, 2] grid cell center coordinates (normalized).
-            H, W: grid height and width.
+            cell_size: [N_cells, 2] per-anchor (1/W, 1/H). Per-anchor rather than
+                scalar H/W because anchors from all FPN levels are concatenated.
 
         Returns:
             pos_mask: [N_cells] boolean mask of positive cells.
@@ -251,9 +258,8 @@ class TALAssigner:
             cx, cy = grid_cells[:, 0], grid_cells[:, 1]
             in_box = (cx >= x1) & (cx <= x2) & (cy >= y1) & (cy <= y2)
             if self.center_radius > 0:
-                # cell units -> normalized: one cell is 1/W wide, 1/H tall
-                rx = self.center_radius / W
-                ry = self.center_radius / H
+                rx = self.center_radius * cell_size[:, 0]
+                ry = self.center_radius * cell_size[:, 1]
                 near = ((cx - gx).abs() <= rx) & ((cy - gy).abs() <= ry)
                 in_box = in_box & near
             cell_in_gt[g] = in_box
@@ -283,17 +289,23 @@ class TALAssigner:
         assigned_gt = torch.full((n_cells,), -1, dtype=torch.long, device=device)
         assigned_metric = torch.zeros(n_cells, device=device)
 
-        for g in range(n_gt):
-            for k in range(topk):
-                cell_idx = topk_indices[g, k].item()
-                metric_val = topk_metrics[g, k].item()
-                if metric_val <= 0:
-                    continue
-                # Resolve conflicts: if cell already assigned, keep higher metric
-                if not pos_mask[cell_idx] or metric_val > assigned_metric[cell_idx]:
-                    pos_mask[cell_idx] = True
-                    assigned_gt[cell_idx] = g
-                    assigned_metric[cell_idx] = metric_val
+        # Vectorised conflict resolution. The previous nested Python loop called
+        # .item() once per (gt, k) pair — ~1000 GPU->CPU syncs per step, which
+        # dominated step time. scatter_reduce(amax) picks the winning metric per
+        # cell, then a single equality test recovers which GT won it.
+        flat_cells = topk_indices.reshape(-1)                       # [n_gt*topk]
+        flat_metric = topk_metrics.reshape(-1)
+        flat_gt = (torch.arange(n_gt, device=device)
+                   .unsqueeze(1).expand(n_gt, topk).reshape(-1))
+        keep = flat_metric > 0
+        if keep.any():
+            fc, fm, fg = flat_cells[keep], flat_metric[keep], flat_gt[keep]
+            assigned_metric.scatter_reduce_(0, fc, fm, reduce='amax',
+                                            include_self=False)
+            pos_mask.scatter_(0, fc, True)
+            # winner-takes-all: rows whose metric equals the cell's max
+            is_winner = fm >= assigned_metric[fc]
+            assigned_gt.scatter_(0, fc[is_winner], fg[is_winner])
 
         # --- Soft-target normalisation (YOLOv8 TAL) -------------------------
         # Rescale each GT's alignment metrics so their maximum equals that GT's
@@ -882,11 +894,18 @@ class DetectionLoss(nn.Module):
     for tiny models where CIoU magnitude is ~0.8–1.0.
     """
 
-    def __init__(self, nc=80, topk=10, use_obj=False, box_mode='ltrb', center_radius=0.0):
+    def __init__(self, nc=80, topk=10, use_obj=False, box_mode='ltrb', center_radius=0.0,
+                 assign_mode='global'):
         super().__init__()
         self.nc = nc
         self.use_obj = use_obj
         self.box_mode = box_mode
+        # 'global' concatenates all FPN levels before assignment (YOLOv8/NanoDet
+        # behaviour, R2 default). 'level' assigns per level with hard size-based
+        # GT routing (pre-R2), kept for A/B.
+        if assign_mode not in ('global', 'level'):
+            raise ValueError(f"assign_mode must be 'global' or 'level', got {assign_mode!r}")
+        self.assign_mode = assign_mode
         self.bce = nn.BCEWithLogitsLoss(reduction='mean')
         # Objectness BCE needs pos_weight: positives are a small fraction of cells
         self.obj_bce = nn.BCEWithLogitsLoss(reduction='mean',
@@ -1029,10 +1048,25 @@ class DetectionLoss(nn.Module):
         """
         Task-Aligned (TAL) detection loss.
 
-        For every scale and image, TALAssigner selects the top-k positive cells
-        per GT from the alignment metric t = s^alpha * u^beta (dense supervision),
-        instead of the old naive single-cell assignment. Boxes are decoded with
-        the shared grid-anchored codec so the loss and inference agree.
+        R2 assignment (`assign_mode='global'`, default)
+        ----------------------------------------------
+        All FPN levels are flattened and CONCATENATED into a single anchor array
+        before assignment, so each GT receives `topk` positives across the whole
+        pyramid — which is what YOLOv8, NanoDet and PicoDet do. The previous code
+        assigned per level, which had two consequences:
+
+          * `topk=10` was applied *at every level independently*. On P5 (10x10 =
+            100 cells at 320px) one GT therefore claimed 10% of the entire level
+            as positive, which objectness/classification cannot sharpen against.
+          * it required `_select_level_gts` to hard-route each GT to exactly one
+            level by size (thresholds 0.08 / 0.24), or every GT would supervise
+            every scale. That routing meant P3's regression branch only ever saw
+            objects below 0.08 normalised (<26px at 320) — verified by a gradient
+            probe in scripts/verify_r2_arch.py.
+
+        Concatenating removes both problems at once: the alignment metric picks
+        the level, so no hard routing is needed, and `topk` is a true global
+        budget. `assign_mode='level'` preserves the old behaviour for A/B.
 
         Args:
             predictions: list of [B, no, H, W] from model, where
@@ -1042,118 +1076,115 @@ class DetectionLoss(nn.Module):
         device = predictions[0].device
         targets = targets.to(device)
         valid_mask = targets[:, :, 2] > 0  # [B, max_objects]
+        B = predictions[0].shape[0]
+        n_levels = len(predictions)
+
+        # ---- Flatten every level into one anchor array -----------------------
+        dec_l, cls_l, cell_l, csize_l, spans = [], [], [], [], []
+        cursor = 0
+        for pred in predictions:
+            _, C, H, W = pred.shape
+            Ncell = H * W
+            pred_box = pred[:, :4, :, :]
+            pred_cls = pred[:, 5:, :, :] if self.use_obj else pred[:, 4:, :, :]
+
+            cx, cy, w, h = decode_grid(pred_box, mode=self.box_mode)
+            dec_l.append(torch.stack([cx, cy, w, h], dim=-1).reshape(B, Ncell, 4))
+            cls_l.append(pred_cls.permute(0, 2, 3, 1).reshape(B, Ncell, self.nc))
+
+            gi_g, gj_g = make_grid(W, H, device)
+            cell_l.append(torch.stack([((gi_g + 0.5) / W).reshape(Ncell),
+                                       ((gj_g + 0.5) / H).reshape(Ncell)], dim=1))
+            # per-anchor cell size, needed if centre-radius sampling is enabled
+            csize_l.append(torch.stack([torch.full((Ncell,), 1.0 / W, device=device),
+                                        torch.full((Ncell,), 1.0 / H, device=device)], dim=1))
+            spans.append((cursor, cursor + Ncell))
+            cursor += Ncell
+
+        dec = torch.cat(dec_l, dim=1)                 # [B, A, 4]  (grad)
+        dec_det = dec.detach()
+        cls_flat = torch.cat(cls_l, dim=1)            # [B, A, nc] logits (grad)
+        cls_sig = torch.sigmoid(cls_flat).detach()
+        grid_cells = torch.cat(cell_l, dim=0)         # [A, 2]
+        cell_size = torch.cat(csize_l, dim=0)         # [A, 2]
+        A = dec.shape[1]
 
         total_box = torch.tensor(0.0, device=device)
         total_cls = torch.tensor(0.0, device=device)
         total_obj = torch.tensor(0.0, device=device)
         total_pos = 0
-        # R2: normaliser is the summed soft target (YOLOv8-style), not the raw
-        # positive count — a low-quality positive should contribute less.
         total_tgt = torch.tensor(0.0, device=device)
 
-        n_levels = len(predictions)
-        for si, pred in enumerate(predictions):
-            B, C, H, W = pred.shape
-            Ncell = H * W
-            pred_box = pred[:, :4, :, :]     # [B, 4, H, W] raw
-            if self.use_obj:
-                pred_obj = pred[:, 4:5, :, :]    # [B, 1, H, W]
-                pred_cls = pred[:, 5:, :, :]     # [B, nc, H, W]
+        cls_target = None if self.use_obj else torch.zeros(B, A, self.nc, device=device)
+        obj_target = torch.zeros(B, A, 1, device=device) if self.use_obj else None
+
+        for b in range(B):
+            vm = valid_mask[b]
+            if vm.sum() == 0:
+                continue
+            gt_b = targets[b][vm]
+            gt_labels_all = gt_b[:, 0].long()
+            gt_bboxes_all = gt_b[:, 1:5]
+
+            # Collect (pos_mask, labels, boxes, soft target) over the full anchor
+            # array, from whichever assignment strategy is selected.
+            if self.assign_mode == 'global':
+                calls = [(slice(0, A), gt_labels_all, gt_bboxes_all)]
             else:
-                pred_obj = None
-                pred_cls = pred[:, 4:, :, :]     # [B, nc, H, W] — no objectness channel
+                calls = []
+                for si, (s0, s1) in enumerate(spans):
+                    gl, gb = self._select_level_gts(gt_labels_all, gt_bboxes_all,
+                                                    si, n_levels)
+                    if gb.shape[0] > 0:
+                        calls.append((slice(s0, s1), gl, gb))
 
-            # Decode every cell once (grad path) + detached copy for assignment.
-            cx, cy, w, h = decode_grid(pred_box, mode=self.box_mode)   # each [B,H,W], normalized
-            dec = torch.stack([cx, cy, w, h], dim=-1).reshape(B, Ncell, 4)   # grad
-            dec_det = dec.detach()
-            cls_flat = pred_cls.permute(0, 2, 3, 1).reshape(B, Ncell, self.nc)   # logits, grad
-            cls_sig = torch.sigmoid(cls_flat).detach()           # scores for assigner
+            for sl, gl, gb in calls:
+                pos_m, _, pos_labels, pos_bboxes, soft_t = self.assigner.assign(
+                    cls_sig[b][sl], dec_det[b][sl], gl, gb,
+                    grid_cells[sl], cell_size[sl])
 
-            # Grid cell centers (normalized), row-major index j*W + i.
-            gi_g, gj_g = make_grid(W, H, device)                 # [H, W]
-            gcx = ((gi_g + 0.5) / W).reshape(Ncell)
-            gcy = ((gj_g + 0.5) / H).reshape(Ncell)
-            grid_cells = torch.stack([gcx, gcy], dim=1)          # [Ncell, 2]
-
-            obj_target = torch.zeros(B, 1, H, W, device=device) if self.use_obj else None
-            # Dense soft classification target over EVERY cell. Cells with no
-            # assignment keep 0, which is what supervises the background — the
-            # step the old positives-only loss skipped entirely.
-            cls_target = (None if self.use_obj
-                          else torch.zeros(B, Ncell, self.nc, device=device))
-
-            for b in range(B):
-                vm = valid_mask[b]
-                if vm.sum() == 0:
-                    continue
-                gt_b = targets[b][vm]
-                gt_labels_all = gt_b[:, 0].long()
-                gt_bboxes_all = gt_b[:, 1:5]
-
-                # Scale-aware: only GTs sized for this level supervise it.
-                gt_labels, gt_bboxes = self._select_level_gts(
-                    gt_labels_all, gt_bboxes_all, si, n_levels)
-                if gt_bboxes.shape[0] == 0:
-                    continue
-
-                pos_mask, _, pos_labels, pos_bboxes, soft_tgt = self.assigner.assign(
-                    cls_sig[b], dec_det[b], gt_labels, gt_bboxes, grid_cells, H, W)
-
-                npos = int(pos_mask.sum().item())
+                npos = int(pos_m.sum().item())
                 if npos == 0:
                     continue
                 total_pos += npos
 
-                pos_idx = pos_mask.nonzero(as_tuple=True)[0]
+                local_idx = pos_m.nonzero(as_tuple=True)[0]
+                glob_idx = local_idx + sl.start
                 valid_c = (pos_labels >= 0) & (pos_labels < self.nc)
 
                 if self.use_obj:
-                    # ---- Legacy path (objectness + hard, positives-only cls) ----
-                    obj_target[b].view(Ncell)[pos_mask] = 1.0
-                    cls_pred_pos = cls_flat[b][pos_idx]          # [npos, nc] logits
+                    obj_target[b, glob_idx, 0] = 1.0
+                    cls_pred_pos = cls_flat[b][glob_idx]
                     cls_tgt = torch.zeros_like(cls_pred_pos)
                     if valid_c.any():
                         cls_tgt[valid_c, pos_labels[valid_c]] = 1.0
                     total_cls += nn.functional.binary_cross_entropy_with_logits(
                         cls_pred_pos, cls_tgt, reduction='sum')
-                    total_box += self._ciou_vec(dec[b][pos_idx], pos_bboxes).sum()
+                    total_box += self._ciou_vec(dec[b][glob_idx], pos_bboxes).sum()
                 else:
-                    # ---- R2 path: quality-aware dense classification ----------
-                    # Target for the assigned class = normalised alignment metric
-                    # (~IoU of that cell). Every other cell/class stays 0, so the
-                    # class score becomes a joint quality-class confidence and can
-                    # rank detections on its own. This is what removes the need
-                    # for a separate objectness branch.
-                    w_pos = soft_tgt[pos_idx]                    # [npos] in [0,1]
+                    w_pos = soft_t[local_idx]
                     if valid_c.any():
-                        cls_target[b][pos_idx[valid_c], pos_labels[valid_c]] = w_pos[valid_c]
-                    # Box loss weighted by target quality: badly-aligned positives
-                    # should not drag the regressor as hard as well-aligned ones.
-                    total_box += (self._ciou_vec(dec[b][pos_idx], pos_bboxes) * w_pos).sum()
+                        cls_target[b, glob_idx[valid_c], pos_labels[valid_c]] = w_pos[valid_c]
+                    total_box += (self._ciou_vec(dec[b][glob_idx], pos_bboxes) * w_pos).sum()
                     total_tgt = total_tgt + w_pos.sum()
 
-            if self.use_obj:
-                # Objectness over ALL cells, summed (not mean) so sparse positives
-                # are not diluted; normalized by N_pos below (YOLOX-style).
-                total_obj += nn.functional.binary_cross_entropy_with_logits(
-                    pred_obj, obj_target,
-                    pos_weight=torch.tensor([self.obj_pos_weight], device=device),
-                    reduction='sum')
-            else:
-                # Dense BCE over every cell against the soft targets. Background
-                # cells (target 0) are supervised here — previously they were not
-                # supervised at all, so their class logits drifted high and the
-                # confidence signal collapsed onto objectness.
-                total_cls += nn.functional.binary_cross_entropy_with_logits(
-                    cls_flat, cls_target, reduction='sum')
-
         if self.use_obj:
+            obj_flat = torch.cat([predictions[i][:, 4:5, :, :]
+                                  .permute(0, 2, 3, 1).reshape(B, -1, 1)
+                                  for i in range(n_levels)], dim=1)
+            total_obj = nn.functional.binary_cross_entropy_with_logits(
+                obj_flat, obj_target,
+                pos_weight=torch.tensor([self.obj_pos_weight], device=device),
+                reduction='sum')
             N = max(total_pos, 1)
             total_box = total_box / N
             total_cls = total_cls / N
             total_obj = total_obj / N
         else:
+            # Dense BCE over every anchor against the soft targets. Background
+            # anchors (target 0) are supervised here.
+            total_cls = nn.functional.binary_cross_entropy_with_logits(
+                cls_flat, cls_target, reduction='sum')
             N = torch.clamp(total_tgt, min=1.0)
             total_box = total_box / N
             total_cls = total_cls / N
@@ -1165,9 +1196,10 @@ class DetectionLoss(nn.Module):
         return total_loss, {
             'box': float(total_box.item()) if torch.is_tensor(total_box) else float(total_box),
             'cls': float(total_cls.item()) if torch.is_tensor(total_cls) else float(total_cls),
-            'obj': float(total_obj.item()),
+            'obj': float(total_obj.item()) if torch.is_tensor(total_obj) else float(total_obj),
             'total': float(total_loss.item()),
         }
+
 
 
 class ClassificationLoss(nn.Module):
@@ -1188,12 +1220,14 @@ class MultiTaskLoss(nn.Module):
     Unified loss wrapper for all TinyYOLO tasks.
     Jointly optimizes detection + sub-task (mask/kpt/angle).
     """
-    def __init__(self, task='det', nc=80, use_obj=False, box_mode='ltrb', center_radius=0.0):
+    def __init__(self, task='det', nc=80, use_obj=False, box_mode='ltrb', center_radius=0.0,
+                 assign_mode='global', topk=10):
         super().__init__()
         self.task = task
         self.nc = nc
         self.det_loss = DetectionLoss(nc=nc, use_obj=use_obj, box_mode=box_mode,
-                                      center_radius=center_radius)
+                                      center_radius=center_radius,
+                                      assign_mode=assign_mode, topk=topk)
         
         if task == 'cls':
             self.loss_fn = ClassificationLoss(nc=nc)
@@ -1357,6 +1391,8 @@ def train_single(args, imgsz, env):
           f"neck_k={args.neck_k}  head_k={args.head_k}")
     print(f"  Head:       obj={'on (legacy)' if args.use_obj else 'off (cls-as-confidence)'}  "
           f"box_mode={args.box_mode}  center_radius={args.center_radius}")
+    print(f"  Assign:     mode={args.assign_mode}  topk={args.topk}"
+          f"{'  (topk is pyramid-wide)' if args.assign_mode == 'global' else '  (topk PER LEVEL)'}")
 
     try:
         flops = estimate_flops(model, imgsz, 'cpu')
@@ -1486,7 +1522,8 @@ def train_single(args, imgsz, env):
     loss_fn = MultiTaskLoss(task=args.task, nc=nc,
                             use_obj=getattr(_head, 'use_obj', False),
                             box_mode=getattr(_head, 'box_mode', 'ltrb'),
-                            center_radius=args.center_radius).to(device)
+                            center_radius=args.center_radius,
+                            assign_mode=args.assign_mode, topk=args.topk).to(device)
 
     # EMA (Exponential Moving Average)
     ema_decay = getattr(args, 'ema_decay', 0.9998)

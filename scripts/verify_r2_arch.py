@@ -348,6 +348,101 @@ check("predicted class ids within range",
       bool((d_r2[0][:, 5] < NC).all() and (d_r2[0][:, 5] >= 0).all()))
 
 # --------------------------------------------------------------------------
+section("9. Step 3 — global assignment, topk budget, vectorised assigner")
+
+# 9a. Under 'level', topk applies at EVERY level independently, so one GT can
+# claim topk positives per level. Under 'global' it is a pyramid-wide budget.
+TOPK = 10
+loss_glob = tytrain.MultiTaskLoss(task='det', nc=NC, assign_mode='global', topk=TOPK)
+loss_lvl = tytrain.MultiTaskLoss(task='det', nc=NC, assign_mode='level', topk=TOPK)
+
+one_gt = torch.zeros(1, 8, 5)
+one_gt[0, 0] = torch.tensor([0.0, 0.5, 0.5, 0.45, 0.45])   # one large object
+
+probe, _ = build_model(task='det', variant='quantized', nc=NC)
+with torch.no_grad():
+    o = probe(torch.randn(1, 3, 320, 320))
+
+def count_pos(loss_mod, out, tgt):
+    loss_mod.det_loss.forward(out, tgt)
+    return None
+
+# instrument: monkeypatch assign to record how many positives it hands out
+counts = {}
+orig_assign = tytrain.TALAssigner.assign
+def counting_assign(self, *a, **kw):
+    r = orig_assign(self, *a, **kw)
+    counts.setdefault(id(self), []).append(int(r[0].sum().item()))
+    return r
+tytrain.TALAssigner.assign = counting_assign
+
+counts.clear(); loss_glob(o, one_gt)
+glob_total = sum(counts[id(loss_glob.det_loss.assigner)])
+counts.clear(); loss_lvl(o, one_gt)
+lvl_total = sum(counts[id(loss_lvl.det_loss.assigner)])
+tytrain.TALAssigner.assign = orig_assign
+
+print(f"    one GT, topk={TOPK}:  global -> {glob_total} positives   "
+      f"level -> {lvl_total} positives")
+check("global assignment respects the topk budget", glob_total <= TOPK,
+      f"{glob_total} > {TOPK}")
+
+# 9b. No hard level routing under 'global': a mid-size GT must be able to produce
+# positives, whereas 'level' routes it to exactly one level.
+mid = torch.zeros(1, 8, 5)
+mid[0, 0] = torch.tensor([0.0, 0.5, 0.5, 0.15, 0.15])    # size 0.15 -> P4 only
+t_g, p_g = loss_glob(o, mid)
+check("global mode produces a box loss for a mid-size GT", p_g['box'] > 0, str(p_g))
+
+# 9c. The vectorised scatter_reduce conflict resolution must agree with the old
+# nested-loop semantics: each cell keeps the GT with the highest metric.
+torch.manual_seed(0)
+n_gt, n_cells, topk = 5, 200, 10
+metrics = torch.rand(n_gt, n_cells)
+tm, ti = metrics.topk(topk, dim=1)
+
+ref_mask = torch.zeros(n_cells, dtype=torch.bool)
+ref_gt = torch.full((n_cells,), -1, dtype=torch.long)
+ref_metric = torch.zeros(n_cells)
+for g in range(n_gt):
+    for k in range(topk):
+        ci, mv = int(ti[g, k]), float(tm[g, k])
+        if mv <= 0:
+            continue
+        if not ref_mask[ci] or mv > ref_metric[ci]:
+            ref_mask[ci] = True; ref_gt[ci] = g; ref_metric[ci] = mv
+
+vec_mask = torch.zeros(n_cells, dtype=torch.bool)
+vec_gt = torch.full((n_cells,), -1, dtype=torch.long)
+vec_metric = torch.zeros(n_cells)
+fc, fm = ti.reshape(-1), tm.reshape(-1)
+fg = torch.arange(n_gt).unsqueeze(1).expand(n_gt, topk).reshape(-1)
+kp = fm > 0
+fc, fm, fg = fc[kp], fm[kp], fg[kp]
+vec_metric.scatter_reduce_(0, fc, fm, reduce='amax', include_self=False)
+vec_mask.scatter_(0, fc, True)
+win = fm >= vec_metric[fc]
+vec_gt.scatter_(0, fc[win], fg[win])
+
+check("vectorised assigner matches the old loop (pos mask)",
+      bool(torch.equal(vec_mask, ref_mask)))
+check("vectorised assigner matches the old loop (gt index)",
+      bool(torch.equal(vec_gt, ref_gt)),
+      f"{int((vec_gt != ref_gt).sum())} cells differ")
+check("vectorised assigner matches the old loop (metric)",
+      bool(torch.allclose(vec_metric, ref_metric)))
+
+# 9d. gradients still reach every scale under global assignment
+g_probe, _ = build_model(task='det', variant='quantized', nc=NC)
+og = g_probe(torch.randn(2, 3, 320, 320))
+tg, _ = tytrain.MultiTaskLoss(task='det', nc=NC, assign_mode='global')(og, tgt)
+tg.backward()
+gz2 = {n: (p.grad is not None and bool(p.grad.abs().sum() > 0))
+       for n, p in g_probe.named_parameters()}
+missing = [n for n, v in gz2.items() if 'reg_preds' in n and not v]
+check("global assignment: all scales' reg_preds get gradient", not missing, str(missing))
+
+# --------------------------------------------------------------------------
 section("Result")
 if FAILURES:
     print(f"  {len(FAILURES)} FAILED:")

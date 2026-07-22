@@ -3,7 +3,9 @@
 Review of `tinyYOLO/` against the YOLO lineage (v1 → YOLO26) and the sub-1M
 edge-detector literature (YOLO-Fastest, NanoDet, PicoDet, FastestDet, Damo-YOLO).
 
-Status: design proposal. Nothing here is implemented yet.
+Status: **partially implemented and measured.** Steps 1, 1b, 2a, 2b are in the
+codebase and validated by `scripts/verify_r2_arch.py`. Section 0b records what the
+measurements actually showed — including where this document was wrong.
 
 ---
 
@@ -43,6 +45,62 @@ Honest ceiling at the current size, from published sub-1M results at ~320 px:
 
 A correct 0.22 M model lands near YOLO-Fastest-v2. Anything above ~15 mAP50-95
 requires more capacity, not better tuning. Plan accordingly.
+
+---
+
+## 0b. Measured results (supersedes the reasoning below where they disagree)
+
+Single-class structural gate, coco128, train==val, 320px, batch 8, 150 epochs.
+`--single-cls` makes classification trivial so the box + confidence path is
+measured in isolation.
+
+| Configuration | box loss | mAP50 | mAP50-95 |
+|---|---:|---:|---:|
+| original (obj + `exp` + mosaic) | 0.627 **pinned** | 0.0112 | — |
+| + 2a/2b (obj removed, `ltrb`) | 0.494 | 0.0098 | — |
+| **+ mosaic off** | **0.290, still falling** | **0.3349** | **0.1623** |
+
+Three defects, each confirmed by the metric moving when it was fixed:
+
+1. **D3 (objectness) — confirmed.** The decisive evidence was the nc=1 run: with
+   classification trivially solved (cls loss 0.001) mAP50 was still 0.011. The
+   class head was never the binding constraint. Score was `obj x cls`; with cls
+   supervised at positives only it saturated near 1 everywhere, so the score
+   collapsed to `obj` alone, which then had to rank ~41 negatives per positive.
+2. **New defect, not in the original audit — `exp` codec unreachable targets.**
+   Centre reach under `2*sigmoid(t)-0.5` is (-0.5,+1.5) cells, but the assigner's
+   only spatial prior is "cell centre inside GT box". Edge cells of large objects
+   were assigned targets they physically could not emit. A gradient-descent probe
+   (`verify_r2_arch.py` section 6) fits one edge cell to a 5x5-cell GT: `exp`
+   caps at **IoU 0.614**, `ltrb` reaches **0.995**. That cap is the observed
+   box-loss floor.
+3. **Mosaic on a 128-image set.** Training on 4-image composites while evaluating
+   on clean images, with 128 images and a 0.25M model. Turning it off was worth
+   more than 2a and 2b combined (0.0098 -> 0.3349). This was flagged in the very
+   first review of the repo and then not acted on for several iterations.
+
+### Where this document was wrong
+
+- The original audit claimed the class head was "starved of features" and made D2
+  (backbone is 28% of params) the headline. The nc=1 gate disproved that as the
+  *binding* constraint. D2 remains true and still limits the ceiling, but it was
+  not what produced mAP 0.001.
+- D12 (add a P2/stride-4 level) was walked back after the competitive analysis —
+  both sub-1M leaders added stride **64**, not stride 4.
+- The staged plan put the backbone rewrite (step 4) ahead of anything about box
+  *quality*. The final numbers argue otherwise: mAP50 0.3349 against mAP50-95
+  0.1623 is a ratio of **0.48**, versus 0.65 for NanoDet-Plus and 0.71 for
+  YOLOv8n. Boxes are roughly right but not tight. **Light DFL (`reg_max=7`) should
+  be pulled forward**, ahead of the backbone work.
+
+### Loss-weight rescaling (easy to miss)
+
+Switching cls from positives-only to dense soft targets changed its magnitude
+~100x (positives-only ~4, dense ~100, because the normaliser is the summed soft
+target rather than the positive count). The inherited `box=2.0 / cls=1.0` weights
+left cls outweighing box **63:1**. R2 uses YOLOv8's `box=7.5 / cls=0.5`, which
+were tuned for exactly this formulation. `verify_r2_arch.py` now asserts the two
+weighted contributions stay within 20:1.
 
 ---
 
@@ -103,17 +161,17 @@ Severity: **S1** blocks accuracy fundamentally · **S2** significant · **S3** p
 
 | # | Defect | Sev | Where |
 |---|---|---|---|
-| D1 | **No SPP/SPPF.** P5 is 10×10 at 320 px and built from depthwise stacks, whose *effective* receptive field is far below the theoretical one. No global context anywhere in the network. | **S1** | `backbone.py` |
+| D1 ✅ FIXED | **No SPP/SPPF.** P5 is 10×10 at 320 px and built from depthwise stacks, whose *effective* receptive field is far below the theoretical one. No global context anywhere in the network. | **S1** | `backbone.py` |
 | D2 | **Backbone is 28 % of params.** Feature extraction is 61 k params for an 80-way problem. | **S1** | `models.py` |
-| D3 | **Objectness head retained.** v8/v10/v11/YOLO26 all removed it; confidence = cls score with TAL soft targets. Keeping obj forces positives-only cls BCE → 79 down-gradients per positive → class logits collapse to the prior. | **S1** | `heads.py`, `train.py:~1030` |
+| D3 ✅ FIXED | **Objectness head retained.** v8/v10/v11/YOLO26 all removed it; confidence = cls score with TAL soft targets. Keeping obj forces positives-only cls BCE → 79 down-gradients per positive → class logits collapse to the prior. | **S1** | `heads.py`, `train.py:~1030` |
 | D4 | **Ghost blocks below their operating regime.** GhostNet exploits redundancy at 160–960 ch. At 24–40 ch there is none to exploit. Worse, `GhostBottleneck` *narrows* (`mid = c2//2`) and `GhostConv` halves again → the information path through stage2 is **10 channels wide**. Inverted residuals (expand→dw→project) are the correct primitive at this width. | **S1** | `common.py` |
 | D5 | **Objectness head has no conv stem** — bare 1×1 off the neck while cls/reg each get two DWConv blocks. The hardest prediction gets the least capacity. | S2 | `heads.py:~72` |
 | D6 | **Neck fusion is one depthwise 3×3 per node.** v8 uses C2f (split + n bottlenecks + dense concat). Multi-scale reasoning happens here and there is almost none. | S2 | `neck.py` |
 | D7 | **No re-parameterization.** RepVGG-style train-time branches fuse to a single conv at export — free accuracy for an edge model, which is this repo's entire premise. | S2 | all |
 | D8 | **P3 is only 40 ch.** Small objects are where tiny detectors lose the most mAP, and they live on P3. The neck then *expands* it to 64 — a lateral conv doing upsizing is wasted compute. | S2 | `backbone.py` |
-| D9 | **`exp()` w/h regression.** High-variance, needs `clamp(max=4)` to not blow up. `ltrb` distance regression (FCOS/YOLOX/v8) is bounded, positive, stable, and pairs directly with CIoU. | S2 | `boxcodec.py` |
-| D10 | **Hard GT→level routing** (`_select_level_gts`, size thresholds 0.08/0.24) sends each GT to exactly one FPN level. Standard TAL assigns across all levels and lets the alignment metric decide. This band-aid exists to contain the objectness blow-up and becomes unnecessary once D3 is fixed. | S2 | `train.py:~935` |
-| D11 | **Assigner does a Python loop with `.item()` per assignment** — ~1000 GPU→CPU syncs per step. Correctness-neutral, throughput-fatal. | S2 | `train.py:~245` |
+| D9 ✅ FIXED | **`exp()` w/h regression.** High-variance, needs `clamp(max=4)` to not blow up. `ltrb` distance regression (FCOS/YOLOX/v8) is bounded, positive, stable, and pairs directly with CIoU. | S2 | `boxcodec.py` |
+| D10 ⏳ STEP 3 | **Hard GT→level routing** (`_select_level_gts`, size thresholds 0.08/0.24) sends each GT to exactly one FPN level. Standard TAL assigns across all levels and lets the alignment metric decide. This band-aid exists to contain the objectness blow-up and becomes unnecessary once D3 is fixed. | S2 | `train.py:~935` |
+| D11 ⏳ STEP 3 | **Assigner does a Python loop with `.item()` per assignment** — ~1000 GPU→CPU syncs per step. Correctness-neutral, throughput-fatal. | S2 | `train.py:~245` |
 | D12 | No P2 (/4) level and no option for one. | S3 | `backbone.py` |
 | D13 | `SEBlock` uses `nn.Linear` on pooled features and `ECABlock` uses `Conv1d`; both break on several edge NPU compilers. 1×1 `Conv2d` is the portable form. | S3 | `common.py` |
 | D14 | Attention only on P4/P5, none in the neck, and `attn3` is applied to `p4` (confusing off-by-one naming). | S3 | `backbone.py` |
